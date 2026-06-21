@@ -65,15 +65,18 @@ Before `accounting-data.js` runs, set (e.g. in `index.html`, or via your static 
 
 **Important:** use **HTTPS** or **http://localhost** so `crypto.subtle` and Supabase Auth behave reliably (same requirement as the existing CRM login).
 
-## 5. Sign in to Supabase in the app
+## 5. Sign in to the app
 
-When the three config variables are set, the **login** and **setup** screens show a **Cloud data (Supabase)** section.
+When the three config variables are set, you use **one sign-in** on the login screen:
 
-1. Enter your Supabase Auth email and password.
-2. Click **Connect cloud data**.
-3. The page reloads and loads your organization payload from Postgres.
+1. Enter your **Supabase Auth email** and **password** (the same account you created under Authentication → Users).
+2. Click **Sign in**.
 
-You can also sign in from the browser console (see older docs); the in-app form is preferred for production.
+That single step connects cloud data **and** opens the CRM. Module access comes from your `organization_members` row (`is_admin`, `allowed_modules`).
+
+On return visits, if your session is still valid, the app opens **without** asking you to sign in again. Use **Sign out** in the header to log out fully.
+
+For local-only mode (no Supabase config), the original CRM username/password login is still used.
 
 ## 6. Behaviour summary
 

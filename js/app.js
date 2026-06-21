@@ -547,6 +547,56 @@
     }
   }
 
+  function usesCloudLogin() {
+    if (isFileProtocol()) return false;
+    var ds = window.AccountingData;
+    return !!(ds && typeof ds.isSupabaseConfigured === 'function' && ds.isSupabaseConfigured());
+  }
+
+  function configureUnifiedLoginUI(cloudAuth) {
+    var loginSubtitle = document.querySelector('#login-screen .login-brand p');
+    var usernameLabel = document.querySelector('label[for="login-username"]');
+    var usernameInput = document.getElementById('login-username');
+    var supabasePanel = document.getElementById('supabase-cloud-panel');
+    var setupSupabasePanel = document.getElementById('setup-supabase-cloud-panel');
+    if (cloudAuth) {
+      if (loginSubtitle) loginSubtitle.textContent = 'Sign in with your company email';
+      if (usernameLabel) usernameLabel.textContent = 'Email';
+      if (usernameInput) {
+        usernameInput.type = 'email';
+        usernameInput.placeholder = 'you@company.com';
+        usernameInput.autocomplete = 'email';
+      }
+      if (supabasePanel) supabasePanel.classList.add('hidden');
+      if (setupSupabasePanel) setupSupabasePanel.classList.add('hidden');
+    } else {
+      if (loginSubtitle) loginSubtitle.textContent = 'Company CRM';
+      if (usernameLabel) usernameLabel.textContent = 'Username';
+      if (usernameInput) {
+        usernameInput.type = 'text';
+        usernameInput.placeholder = 'Enter username';
+        usernameInput.autocomplete = 'username';
+      }
+    }
+  }
+
+  function createCrmSessionFromSupabase() {
+    var ds = window.AccountingData;
+    if (!ds || typeof ds.fetchOrgMembership !== 'function') return Promise.resolve(false);
+    return ds.fetchOrgMembership().then(function (membership) {
+      if (!membership) return false;
+      var displayName = membership.email ? membership.email.split('@')[0] : 'User';
+      setSession({
+        userId: membership.userId,
+        username: membership.email || membership.userId,
+        displayName: displayName,
+        isAdmin: membership.isAdmin,
+        allowedModules: membership.allowedModules || []
+      });
+      return true;
+    });
+  }
+
   function initSetup() {
     var form = document.getElementById('setup-form');
     if (!form) return;
@@ -581,85 +631,6 @@
     });
   }
 
-  function initSupabaseCloudAuth() {
-    if (isFileProtocol()) return;
-    var ds = window.AccountingData;
-    if (!ds || typeof ds.isSupabaseConfigured !== 'function' || !ds.isSupabaseConfigured()) return;
-
-    var panels = [
-      {
-        panel: document.getElementById('supabase-cloud-panel'),
-        status: document.getElementById('supabase-cloud-status'),
-        form: document.getElementById('supabase-signin-form'),
-        error: document.getElementById('supabase-signin-error'),
-        email: document.getElementById('supabase-email'),
-        password: document.getElementById('supabase-password')
-      },
-      {
-        panel: document.getElementById('setup-supabase-cloud-panel'),
-        status: document.getElementById('setup-supabase-cloud-status'),
-        form: document.getElementById('setup-supabase-signin-form'),
-        error: document.getElementById('setup-supabase-signin-error'),
-        email: document.getElementById('setup-supabase-email'),
-        password: document.getElementById('setup-supabase-password')
-      }
-    ];
-
-    function updatePanelState(cfg) {
-      panels.forEach(function (cfg) {
-        if (!cfg.panel) return;
-        cfg.panel.classList.remove('hidden');
-        if (ds.isSupabaseMode && ds.isSupabaseMode()) {
-          cfg.panel.classList.add('is-connected');
-          if (cfg.status) cfg.status.textContent = 'Cloud data connected. Your workspace syncs automatically.';
-        } else if (ds.isSupabasePendingAuth && ds.isSupabasePendingAuth()) {
-          cfg.panel.classList.remove('is-connected');
-          if (cfg.status) cfg.status.textContent = 'Sign in with your Supabase account to load and save data online.';
-        } else {
-          cfg.panel.classList.remove('is-connected');
-          if (cfg.status) cfg.status.textContent = 'Cloud storage is configured. Sign in to sync data.';
-        }
-      });
-    }
-
-    function bindForm(cfg) {
-      if (!cfg.form) return;
-      cfg.form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        if (cfg.error) cfg.error.classList.add('hidden');
-        var email = cfg.email ? cfg.email.value.trim() : '';
-        var password = cfg.password ? cfg.password.value : '';
-        if (!email || !password) return;
-        if (typeof ds.signInToSupabase !== 'function') return;
-        ds.signInToSupabase(email, password).then(function (result) {
-          if (result.error) {
-            if (cfg.error) {
-              cfg.error.textContent = result.error.message || 'Could not sign in to Supabase.';
-              cfg.error.classList.remove('hidden');
-            }
-            return;
-          }
-          window.location.reload();
-        }).catch(function (err) {
-          if (cfg.error) {
-            cfg.error.textContent = (err && err.message) ? err.message : 'Could not sign in to Supabase.';
-            cfg.error.classList.remove('hidden');
-          }
-        });
-      });
-    }
-
-    panels.forEach(bindForm);
-
-    if (typeof ds.getSupabaseSession === 'function') {
-      ds.getSupabaseSession().then(function () {
-        updatePanelState();
-      });
-    } else {
-      updatePanelState();
-    }
-  }
-
   function initLogin() {
     var form = document.getElementById('login-form');
     var errorEl = document.getElementById('login-error');
@@ -667,6 +638,51 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (errorEl) errorEl.classList.add('hidden');
+
+      if (usesCloudLogin()) {
+        var ds = window.AccountingData;
+        var email = (document.getElementById('login-username') || {}).value.trim().toLowerCase();
+        var password = (document.getElementById('login-password') || {}).value;
+        if (!email || !password) return;
+        if (!ds || typeof ds.signInToSupabase !== 'function') return;
+        ds.signInToSupabase(email, password).then(function (result) {
+          if (result.error) {
+            if (errorEl) {
+              errorEl.textContent = result.error.message || 'Invalid email or password.';
+              errorEl.classList.remove('hidden');
+            }
+            return null;
+          }
+          if (typeof ds.activateSupabaseBackend !== 'function') return false;
+          return ds.activateSupabaseBackend();
+        }).then(function (activated) {
+          if (activated === null) return;
+          if (!activated) {
+            if (errorEl) {
+              errorEl.textContent = 'Signed in but could not load workspace data.';
+              errorEl.classList.remove('hidden');
+            }
+            return false;
+          }
+          return createCrmSessionFromSupabase();
+        }).then(function (ok) {
+          if (ok) {
+            startApp();
+          } else if (ok === false) {
+            if (errorEl) {
+              errorEl.textContent = 'Your account is not linked to this organization. Contact your administrator.';
+              errorEl.classList.remove('hidden');
+            }
+          }
+        }).catch(function (err) {
+          if (errorEl) {
+            errorEl.textContent = (err && err.message) ? err.message : 'Sign in failed.';
+            errorEl.classList.remove('hidden');
+          }
+        });
+        return;
+      }
+
       var username = (document.getElementById('login-username') || {}).value.trim().toLowerCase();
       var password = (document.getElementById('login-password') || {}).value;
       if (!username || !password) return;
@@ -710,11 +726,21 @@
     var btn = document.getElementById('logout-btn');
     if (btn) {
       btn.addEventListener('click', function () {
-        clearSession();
-        document.body.classList.remove('home-view');
-        var users = getUsers();
-        if (users.length === 0) showScreen('setup-screen');
-        else showScreen('login-screen');
+        var ds = window.AccountingData;
+        var signOutPromise = (ds && typeof ds.signOutFromSupabase === 'function')
+          ? ds.signOutFromSupabase()
+          : Promise.resolve();
+        signOutPromise.finally(function () {
+          clearSession();
+          document.body.classList.remove('home-view');
+          if (usesCloudLogin()) {
+            showScreen('login-screen');
+            return;
+          }
+          var users = getUsers();
+          if (users.length === 0) showScreen('setup-screen');
+          else showScreen('login-screen');
+        });
       });
     }
   }
@@ -990,6 +1016,26 @@
     if (isEmbeddedPreview()) return;
 
     function showAuthScreen() {
+      var ds = window.AccountingData;
+      var cloudAuth = usesCloudLogin();
+      configureUnifiedLoginUI(cloudAuth);
+
+      if (cloudAuth) {
+        if (ds && ds.isSupabaseMode && ds.isSupabaseMode()) {
+          if (getSession()) {
+            startApp();
+            return;
+          }
+          createCrmSessionFromSupabase().then(function (ok) {
+            if (ok) startApp();
+            else showScreen('login-screen');
+          });
+          return;
+        }
+        showScreen('login-screen');
+        return;
+      }
+
       var users = getUsers();
       var session = getSession();
       if (users.length === 0) {
@@ -999,7 +1045,6 @@
       } else {
         startApp();
       }
-      initSupabaseCloudAuth();
     }
 
     if (window.AccountingData && typeof window.AccountingData.init === 'function') {

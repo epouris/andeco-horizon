@@ -609,6 +609,38 @@ window.AccountingData = (function () {
     });
   }
 
+  function fetchOrgMembership() {
+    var client = ensureSupabaseClient();
+    var orgId = typeof window !== 'undefined' && window.ANDECO_ORG_ID;
+    if (!client || !orgId) return Promise.resolve(null);
+    return getSupabaseSession().then(function (session) {
+      if (!session) return null;
+      return client.from('organization_members')
+        .select('is_admin, allowed_modules')
+        .eq('org_id', orgId)
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+        .then(function (r) {
+          if (r.error || !r.data) return null;
+          return {
+            userId: session.user.id,
+            email: (session.user.email || '').toLowerCase(),
+            isAdmin: r.data.is_admin === true,
+            allowedModules: Array.isArray(r.data.allowed_modules) ? r.data.allowed_modules : []
+          };
+        });
+    });
+  }
+
+  function activateSupabaseBackend() {
+    return tryInitSupabase().then(function (payload) {
+      if (payload === null) return false;
+      supabasePendingAuth = false;
+      finishServerInit(payload, true);
+      return true;
+    });
+  }
+
   function loadFromFileHandle(handle) {
     return handle.getFile()
       .then(function (file) { return file.text(); })
@@ -735,6 +767,8 @@ window.AccountingData = (function () {
     signInToSupabase: signInToSupabase,
     signOutFromSupabase: signOutFromSupabase,
     getSupabaseSession: getSupabaseSession,
+    fetchOrgMembership: fetchOrgMembership,
+    activateSupabaseBackend: activateSupabaseBackend,
     notifyModulesDataLoaded: notifyModulesDataLoaded,
     refreshFromSupabase: refreshFromSupabase,
     openSharedFile: openSharedFile,
