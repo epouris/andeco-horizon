@@ -310,6 +310,9 @@
     if (moduleId === 'hr' && sectionId === 'overview') {
       if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
     }
+    if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'overview') {
+      if (typeof window.hrPayrollRefreshYTD === 'function') window.hrPayrollRefreshYTD();
+    }
     if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'ir63') {
       if (typeof window.updateEmployeeDropdowns === 'function') window.updateEmployeeDropdowns();
     }

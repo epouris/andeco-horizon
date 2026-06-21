@@ -27,14 +27,14 @@
     return n.toFixed(2);
   }
 
-  function getOverviewYear() {
-    var yearEl = document.getElementById('hr-overview-ytd-year');
+  function getPayrollYtdYear() {
+    var yearEl = document.getElementById('hr-payroll-ytd-year');
     if (yearEl && yearEl.value) return yearEl.value;
     return String(new Date().getFullYear());
   }
 
-  function ensureOverviewYearDefault() {
-    var yearEl = document.getElementById('hr-overview-ytd-year');
+  function ensurePayrollYtdYearDefault() {
+    var yearEl = document.getElementById('hr-payroll-ytd-year');
     if (!yearEl) return;
     var current = String(new Date().getFullYear());
     var hasOption = Array.prototype.some.call(yearEl.options, function (opt) {
@@ -57,8 +57,7 @@
     };
   }
 
-  function refreshOverview() {
-    ensureOverviewYearDefault();
+  function refreshOverviewMetrics() {
     var list = getEmployeesList();
     var metric = document.getElementById('hr-metric-employees');
     if (metric) metric.textContent = list.length;
@@ -73,12 +72,34 @@
     var newMonthEl = document.getElementById('hr-metric-new-month');
     if (openRoles) openRoles.textContent = String(active);
     if (newMonthEl) newMonthEl.textContent = String(newMonth);
+  }
 
+  function refreshOverviewTeam() {
+    var list = getEmployeesList();
     var tbody = document.getElementById('hr-overview-team-tbody');
-    var tfoot = document.getElementById('hr-overview-ytd-tfoot');
+    if (!tbody) return;
+    var activeList = list.filter(function (e) { return !e.ceasedDate; }).slice(0, 12);
+    if (!activeList.length) {
+      tbody.innerHTML = '<tr><td colspan="4">No employees yet. Add staff under Employees.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = activeList.map(function (emp) {
+      var hire = emp.hireDate ? new Date(emp.hireDate).toLocaleDateString('en-GB') : '—';
+      return '<tr><td>' + escapeHtml((emp.firstName || '') + ' ' + (emp.lastName || '')) + '</td>' +
+        '<td>' + escapeHtml(emp.employeeId || '—') + '</td>' +
+        '<td>Active</td>' +
+        '<td>' + escapeHtml(hire) + '</td></tr>';
+    }).join('');
+  }
+
+  function refreshHrPayrollYTD() {
+    ensurePayrollYtdYearDefault();
+    var tbody = document.getElementById('hr-payroll-ytd-tbody');
+    var tfoot = document.getElementById('hr-payroll-ytd-tfoot');
     if (!tbody) return;
 
-    var year = getOverviewYear();
+    var list = getEmployeesList();
+    var year = getPayrollYtdYear();
     var sorted = list.slice().sort(function (a, b) {
       var aName = ((a.lastName || '') + ' ' + (a.firstName || '')).toLowerCase();
       var bName = ((b.lastName || '') + ' ' + (b.firstName || '')).toLowerCase();
@@ -128,6 +149,12 @@
     }
   }
 
+  function refreshOverview() {
+    refreshOverviewMetrics();
+    refreshOverviewTeam();
+    refreshHrPayrollYTD();
+  }
+
   function hrEmployeesLoad() {
     refreshOverview();
     if (typeof window.loadEmployees === 'function') window.loadEmployees();
@@ -142,13 +169,14 @@
         if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     }
-    var yearEl = document.getElementById('hr-overview-ytd-year');
+    var yearEl = document.getElementById('hr-payroll-ytd-year');
     if (yearEl) {
-      yearEl.addEventListener('change', refreshOverview);
+      yearEl.addEventListener('change', refreshHrPayrollYTD);
     }
     window.hrEmployeesRefreshOverview = refreshOverview;
+    window.hrPayrollRefreshYTD = refreshHrPayrollYTD;
     window.hrEmployeesLoad = hrEmployeesLoad;
-    ensureOverviewYearDefault();
+    ensurePayrollYtdYearDefault();
     refreshOverview();
   }
 

@@ -1020,6 +1020,9 @@ body.home-view {
   border-top: 2px solid var(--border, #e5e7eb);
   background: var(--bg-app, #f9fafb);
 }
+.hr-payroll-ytd-panel {
+  margin-top: 0;
+}
 .info-grid {
   display: grid;
   grid-template-columns: 140px 1fr;

@@ -333,6 +333,9 @@
     if (sectionId === 'overview' && typeof window.hrEmployeesRefreshOverview === 'function') {
       window.hrEmployeesRefreshOverview();
     }
+    if (sectionId === 'payroll' && typeof window.hrPayrollRefreshYTD === 'function') {
+      window.hrPayrollRefreshYTD();
+    }
     if (window.AndecoModuleNav) {
       window.AndecoModuleNav.setActiveSectionOnSubtabs('hr', sectionId);
       window.AndecoModuleNav.activateSection('hr', sectionId);

@@ -1259,7 +1259,7 @@
             </div>
             <div class="module-description-panel">
               <h3 class="panel-title">Description</h3>
-              <p>Human resources and people. Manage employees under <strong>Employees</strong>; year-to-date payroll totals are listed below and in Accounting → Payroll.</p>
+              <p>Human resources and people. Manage employees under <strong>Employees</strong>; payroll summaries are under <strong>Payroll</strong>.</p>
             </div>
             <div class="module-cards-row">
               <div class="module-info-card">
@@ -1275,31 +1275,11 @@
               </div>
             </div>
             <div class="module-table-panel">
-              <div class="hr-overview-ytd-header">
-                <h3 class="panel-title">Employees — year to date</h3>
-                <div class="form-group hr-overview-ytd-year-wrap">
-                  <label for="hr-overview-ytd-year">Year</label>
-                  <select id="hr-overview-ytd-year" aria-label="Tax year for YTD totals">
-                    <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
-                  </select>
-                </div>
-              </div>
-              <p class="module-meta" style="margin-bottom: 0.75rem;">Totals from saved payslips for the selected year (same data as Accounting → Payroll → Year to date).</p>
+              <h3 class="panel-title">Team</h3>
               <div class="table-wrap">
-                <table class="data-table hr-overview-ytd-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Employee ID</th>
-                      <th>Gross pay</th>
-                      <th>Income tax</th>
-                      <th>Social insurance</th>
-                      <th>Holiday fund</th>
-                      <th>Net pay</th>
-                    </tr>
-                  </thead>
+                <table class="data-table">
+                  <thead><tr><th>Name</th><th>Employee ID</th><th>Status</th><th>Hired</th></tr></thead>
                   <tbody id="hr-overview-team-tbody"></tbody>
-                  <tfoot id="hr-overview-ytd-tfoot"></tfoot>
                 </table>
               </div>
             </div>
@@ -1307,7 +1287,36 @@
             <div id="hr-payroll-panel" class="hr-section-panel" data-section="payroll" style="display: none;" data-subsections-ready="1">
               <div class="module-subsection-panel active" data-subsection="overview">
                 <div class="page-header"><h2>Payroll</h2></div>
-                <p class="module-meta">Payslips and payroll runs are managed in <a href="#accounting" data-section-link="payroll">Accounting → Payroll</a>. Company details for payslips are in <a href="#settings" data-section-link="payroll">Settings → Payroll Settings</a>. Add and edit employees in <a href="#hr">HR → Employees</a>.</p>
+                <p class="module-meta" style="margin-bottom: 1rem;">Payslips and payroll runs are managed in <a href="#accounting" data-section-link="payroll">Accounting → Payroll</a>. Company details for payslips are in <a href="#settings" data-section-link="payroll">Settings → Payroll Settings</a>. Add and edit employees in <a href="#hr">HR → Employees</a>.</p>
+                <div class="module-table-panel hr-payroll-ytd-panel">
+                  <div class="hr-overview-ytd-header">
+                    <h3 class="panel-title">Employees — year to date</h3>
+                    <div class="form-group hr-overview-ytd-year-wrap">
+                      <label for="hr-payroll-ytd-year">Year</label>
+                      <select id="hr-payroll-ytd-year" aria-label="Tax year for YTD totals">
+                        <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+                      </select>
+                    </div>
+                  </div>
+                  <p class="module-meta" style="margin-bottom: 0.75rem;">Totals from saved payslips for the selected year (same data as Accounting → Payroll → Year to date).</p>
+                  <div class="table-wrap">
+                    <table class="data-table hr-overview-ytd-table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Employee ID</th>
+                          <th>Gross pay</th>
+                          <th>Income tax</th>
+                          <th>Social insurance</th>
+                          <th>Holiday fund</th>
+                          <th>Net pay</th>
+                        </tr>
+                      </thead>
+                      <tbody id="hr-payroll-ytd-tbody"></tbody>
+                      <tfoot id="hr-payroll-ytd-tfoot"></tfoot>
+                    </table>
+                  </div>
+                </div>
               </div>
               <div class="module-subsection-panel" data-subsection="ir63">
                 <div class="page-header"><h2>IR63 Form – Annual Taxation</h2></div>
