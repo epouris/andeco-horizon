@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Andeco Horizon CRM</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="favicon.svg">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/accounting-invoices.css">
+  <link rel="stylesheet" href="css/fleet-management.css">
+  <link rel="stylesheet" href="css/crew-management.css">
+  <link rel="stylesheet" href="css/shifts-management.css">
+  <link rel="stylesheet" href="css/payroll.css">
+  <script>
+    (function () {
+      if (location.protocol !== 'file:') return;
+      try {
+        var h = (location.hash || '').replace(/^#/, '').toLowerCase();
+        if (h) sessionStorage.setItem('andeco_crm_route', h);
+      } catch (e) {}
+      try {
+        if (location.hash) history.replaceState(null, '', location.pathname || 'index.html');
+      } catch (e2) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="embedded-file-blocker" class="embedded-file-blocker hidden" role="alert">
+    <div class="embedded-file-blocker-card">
+      <h2>Preview cannot run this app as a file</h2>
+      <p>Your editor opened <code>index.html</code> inside an embedded browser (<code>file://</code> + iframe). That mode blocks in-app navigation and causes console errors.</p>
+      <ol>
+        <li>Open a terminal in this project folder.</li>
+        <li>Run: <code>node server.js</code></li>
+        <li>In Chrome or Edge, open: <strong>http://localhost:3000</strong></li>
+      </ol>
+      <p class="embedded-file-blocker-hint">Or double-click <code>start-app.cmd</code> in this folder (Windows).</p>
+    </div>
+  </div>
+  <div id="file-protocol-banner" class="file-protocol-banner hidden" role="alert">
+    <p>This page was opened as a <strong>local file</strong> (<code>file://</code>). Browsers block some navigation and shared data in that mode. Run <code>node server.js</code> in this folder, then open <strong>http://localhost:3000</strong> (do not double-click the HTML file).</p>
+    <button type="button" class="btn btn-secondary btn-sm" id="file-protocol-banner-dismiss">Dismiss</button>
+  </div>
+  <!-- Initial setup (only when no users exist) -->
+  <div id="setup-screen" class="screen hidden">
+    <div class="login-card">
+      <div class="login-brand">
+        <img class="app-logo" src="favicon.svg" alt="" width="56" height="56">
+        <h1>Andeco Horizon</h1>
+        <p>Create administrator account</p>
+      </div>
+      <form id="setup-form" class="login-form">
+        <label for="setup-username">Username</label>
+        <input type="text" id="setup-username" placeholder="Choose a username" required autocomplete="username">
+        <label for="setup-password">Password</label>
+        <input type="password" id="setup-password" placeholder="Choose a password" required autocomplete="new-password">
+        <label for="setup-displayname">Display name</label>
+        <input type="text" id="setup-displayname" placeholder="Full name" required autocomplete="name">
+        <button type="submit" class="btn btn-primary">Create administrator</button>
+      </form>
+      <div id="setup-supabase-cloud-panel" class="supabase-cloud-panel hidden">
+        <p class="supabase-cloud-title">Cloud data (Supabase)</p>
+        <p id="setup-supabase-cloud-status" class="supabase-cloud-status">Connect Supabase before adding data so everything is saved online.</p>
+        <form id="setup-supabase-signin-form" class="login-form supabase-signin-form">
+          <label for="setup-supabase-email">Email</label>
+          <input type="email" id="setup-supabase-email" placeholder="Supabase account email" autocomplete="email">
+          <label for="setup-supabase-password">Password</label>
+          <input type="password" id="setup-supabase-password" placeholder="Supabase password" autocomplete="current-password">
+          <p id="setup-supabase-signin-error" class="login-error hidden"></p>
+          <button type="submit" class="btn btn-secondary">Connect cloud data</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login screen -->
+  <div id="login-screen" class="screen hidden">
+    <div class="login-card">
+      <div class="login-brand">
+        <img class="app-logo" src="favicon.svg" alt="" width="56" height="56">
+        <h1>Andeco Horizon</h1>
+        <p>Company CRM</p>
+      </div>
+      <form id="login-form" class="login-form">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" placeholder="Enter username" required autocomplete="username">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Enter password" required autocomplete="current-password">
+        <p id="login-error" class="login-error hidden">Invalid username or password.</p>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+      </form>
+      <div id="supabase-cloud-panel" class="supabase-cloud-panel hidden">
+        <p class="supabase-cloud-title">Cloud data (Supabase)</p>
+        <p id="supabase-cloud-status" class="supabase-cloud-status">Sign in to load and save your company data online.</p>
+        <form id="supabase-signin-form" class="login-form supabase-signin-form">
+          <label for="supabase-email">Email</label>
+          <input type="email" id="supabase-email" placeholder="Supabase account email" autocomplete="email">
+          <label for="supabase-password">Password</label>
+          <input type="password" id="supabase-password" placeholder="Supabase password" autocomplete="current-password">
+          <p id="supabase-signin-error" class="login-error hidden"></p>
+          <button type="submit" class="btn btn-secondary">Connect cloud data</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main app (after login) -->
+  <div id="app-screen" class="screen hidden">
+    <header class="app-header">
+      <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="header-brand">
+        <img class="app-logo app-logo--sm" src="favicon.svg" alt="" width="36" height="36">
+        <span>Andeco Horizon</span>
+      </div>
+      <div class="header-actions">
+        <div class="header-user">
+          <span class="header-user-label" id="user-badge">My Company</span>
+          <button type="button" class="header-avatar" id="header-avatar" aria-label="Account">
+            <span id="avatar-initial">U</span>
+          </button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-logout" id="logout-btn">Sign out</button>
+      </div>
+    </header>
+
+    <aside class="sidebar" id="sidebar">
+      <nav class="sidebar-nav">
+        <a href="#home" class="nav-item" id="sidebar-home-link">
+          <span class="nav-icon">⌂</span>
+          <span>Back to modules</span>
+        </a>
+        <div class="nav-divider" id="sidebar-divider"></div>
+        <p class="nav-label" id="sidebar-label"></p>
+        <div id="sidebar-module-sections"></div>
+      </nav>
+    </aside>
+
+    <main class="main-content" id="main-content">
+      <!-- Home: centered module grid, no sidebar -->
+      <section id="page-home" class="page active">
+        <div class="module-grid-wrap">
+        <div class="module-grid" id="module-grid">
+          <a href="#accounting" class="module-card module-card--tile" data-module="accounting">
+            <span class="module-icon-tile module-icon--blue">₿</span>
+            <span class="module-title">Accounting</span>
+          </a>
+          <a href="#clients" class="module-card module-card--tile" data-module="clients">
+            <span class="module-icon-tile module-icon--teal">👥</span>
+            <span class="module-title">Clients</span>
+          </a>
+          <a href="#fleet" class="module-card module-card--tile" data-module="fleet">
+            <span class="module-icon-tile module-icon--green">⊞</span>
+            <span class="module-title">Fleet Management</span>
+          </a>
+          <a href="#hr" class="module-card module-card--tile" data-module="hr">
+            <span class="module-icon-tile module-icon--orange">👥</span>
+            <span class="module-title">HR</span>
+          </a>
+          <a href="#crew" class="module-card module-card--tile" data-module="crew">
+            <span class="module-icon-tile module-icon--teal">⚓</span>
+            <span class="module-title">Crew Management</span>
+          </a>
+          <a href="#shifts" class="module-card module-card--tile" data-module="shifts">
+            <span class="module-icon-tile module-icon--orange">🕐</span>
+            <span class="module-title">Shifts</span>
+          </a>
+          <a href="#documents" class="module-card module-card--tile" data-module="documents">
+            <span class="module-icon-tile module-icon--purple">📁</span>
+            <span class="module-title">Document ISO</span>
+          </a>
+          <a href="#contacts" class="module-card module-card--tile" data-module="contacts">
+            <span class="module-icon-tile module-icon--teal">⊕</span>
+            <span class="module-title">Contacts</span>
+          </a>
+          <a href="#admin" class="module-card module-card--tile module-card--admin" data-module="admin">
+            <span class="module-icon-tile module-icon--purple">⚙</span>
+            <span class="module-title">Admin</span>
+          </a>
+          <a href="#settings" class="module-card module-card--tile module-card--admin" data-module="settings">
+            <span class="module-icon-tile module-icon--purple">⚙</span>
+            <span class="module-title">Settings</span>
+          </a>
+        </div>
+        </div>
+      </section>
+
+      <!-- Module pages — Creatio-style detail layout -->
+      <section id="page-accounting" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <aside class="module-copilot" id="copilot-accounting">
+            <div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div>
+            <div class="copilot-drafts-section">
+              <h4 class="copilot-drafts-title">Draft Invoices</h4>
+              <div id="copilot-drafts-list" class="copilot-drafts-list"></div>
+            </div>
+          </aside>
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Accounting</h1>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-accounting" aria-label="Subsections" hidden></nav>
+            <div id="accounting-subsection-overlay"></div>
+            <!-- Payroll: native YTD, Generate Payslip, Payslip Management -->
+            <div id="accounting-payroll-content" class="accounting-payroll-content" style="display: none;">
+              <input type="hidden" id="reportPeriod">
+              <div class="payroll-sub-panel" data-payroll-sub="ytd" style="display:block;">
+                <h2>Year to Date Balances</h2>
+                <div class="ytd-controls">
+                  <label for="ytdYear">Select Year:</label>
+                  <select id="ytdYear" onchange="typeof updateYTDDisplay==='function'&&updateYTDDisplay()">
+                    <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+                  </select>
+                  <label for="ytdEmployee">Select Employee:</label>
+                  <select id="ytdEmployee" onchange="typeof updateYTDDisplay==='function'&&updateYTDDisplay()">
+                    <option value="">All Employees</option>
+                  </select>
+                </div>
+                <div class="ytd-summary">
+                  <div class="summary-card"><h3>Total Gross Pay</h3><span id="totalGrossPay">€0.00</span></div>
+                  <div class="summary-card"><h3>Total Tax Deducted</h3><span id="totalTaxDeducted">€0.00</span></div>
+                  <div class="summary-card"><h3>Total Social Insurance</h3><span id="totalSocialInsurance">€0.00</span></div>
+                  <div class="summary-card"><h3>Total Holiday Fund</h3><span id="totalHolidayFund">€0.00</span></div>
+                </div>
+                <div class="ytd-details">
+                  <table id="ytdTable">
+                    <thead><tr><th>Employee</th><th>Gross Pay</th><th>Tax</th><th>Social Insurance</th><th>Holiday Fund</th><th>NHS</th><th>Net Pay</th></tr></thead>
+                    <tbody id="ytdTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="payroll-sub-panel" data-payroll-sub="payslip" style="display:none;">
+                <div class="form-header">
+                  <h2>Generate Payslip</h2>
+                  <button type="button" id="payslipButton" onclick="typeof generatePayslip==='function'&&generatePayslip()" class="generate-btn">Generate Payslip</button>
+                </div>
+                <div class="payslip-controls">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="payslipEmployee">Select Employee:</label>
+                      <select id="payslipEmployee" required><option value="">Select Employee</option></select>
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipMonth">Month:</label>
+                      <select id="payslipMonth" required>
+                        <option value="01">January</option><option value="02">February</option><option value="03">March</option><option value="04">April</option><option value="05">May</option><option value="06">June</option><option value="07">July</option><option value="08">August</option><option value="09">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipYear">Year:</label>
+                      <input type="number" id="payslipYear" value="2025" min="2020" max="2030" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipPayDate">Pay Date:</label>
+                      <input type="date" id="payslipPayDate" name="payDate" required>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group payslip-payroll-number-group">
+                      <label for="payslipPayrollNumberInput">Payroll #</label>
+                      <input type="text" id="payslipPayrollNumberInput" autocomplete="off" placeholder="Leave blank for automatic SLR/Year/Month/001…">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="payslipBasicSalary">Basic Monthly Salary (€):</label>
+                      <input type="number" id="payslipBasicSalary" step="0.01" value="0" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipStandardHoursInput">Standard Pay Hours:</label>
+                      <input type="number" id="payslipStandardHoursInput" step="0.01" value="0" placeholder="e.g., 170">
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipOvertimeHoursInput">Overtime Pay Hours:</label>
+                      <input type="number" id="payslipOvertimeHoursInput" step="0.01" value="0" placeholder="e.g., 10.00">
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipOvertime">Overtime (€):</label>
+                      <input type="number" id="payslipOvertime" step="0.01" value="0">
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipCommissionBonus">Commission &amp; Bonus (€):</label>
+                      <input type="number" id="payslipCommissionBonus" step="0.01" value="0">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="payslipOtherHourlyHoursInput">Other Hourly Pay — Hours:</label>
+                      <input type="number" id="payslipOtherHourlyHoursInput" step="0.01" value="" placeholder="e.g., 8">
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipOtherHourlyRateInput">Other Hourly Pay — Rate (€/hr):</label>
+                      <input type="number" id="payslipOtherHourlyRateInput" step="0.01" value="" placeholder="e.g., 12.50">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="payslipSickPay">Sick Pay (€):</label>
+                      <input type="number" id="payslipSickPay" step="0.01" value="0">
+                    </div>
+                    <div class="form-group">
+                      <label for="payslipExpenses">Expenses (€):</label>
+                      <input type="number" id="payslipExpenses" step="0.01" value="0">
+                    </div>
+                    <div class="form-group">
+                      <label><input type="checkbox" id="excludeHolidayFund" name="excludeHolidayFund"> Exclude Holiday Fund</label>
+                    </div>
+                    <div class="form-group">
+                      <label><input type="checkbox" id="excludeIncomeTax" name="excludeIncomeTax"> Exclude Income Tax</label>
+                    </div>
+                    <div class="form-group">
+                      <label><input type="checkbox" id="isHolidays" name="isHolidays"> Holidays (Zero Contributions &amp; Deductions)</label>
+                    </div>
+                    <div class="form-group">
+                      <label><input type="checkbox" id="payslipPension" name="payslipPension" onchange="if(this.checked){var h=document.getElementById('excludeHolidayFund');if(h)h.checked=true;}"> Pension</label>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label><input type="checkbox" id="excludeOvertimeFromDeductions" name="excludeOvertimeFromDeductions"> Exclude overtime pay from deductions &amp; contributions</label>
+                    </div>
+                    <div class="form-group">
+                      <label><input type="checkbox" id="excludeOtherHourlyFromDeductions" name="excludeOtherHourlyFromDeductions"> Exclude Other Hourly Pay from deductions &amp; contributions</label>
+                    </div>
+                  </div>
+                </div>
+                <div id="payslipResult" class="payslip-result" style="display: none;">
+                  <div class="payslip-container">
+                    <div class="payslip-header">
+                      <div class="company-info">
+                        <div class="company-logo">
+                          <img id="payslipCompanyLogo" alt="Company Logo" class="company-logo-img" style="max-height: 90px; max-width: 180px; display: none;">
+                          <div id="payslipCompanyLogoText" class="company-logo-text" style="display: none;">YOUR COMPANY</div>
+                        </div>
+                        <div class="company-details">
+                          <h1 class="company-name" id="payslipCompanyName">YOUR COMPANY NAME LTD</h1>
+                          <p class="company-address" id="payslipCompanyAddress">Your Company Address, City, Postal Code</p>
+                          <p class="company-contact" id="payslipCompanyContact">Phone: +357 XX XXX XXXX, Email: info@yourcompany.com</p>
+                        </div>
+                      </div>
+                      <div class="payslip-title">PAYSLIP</div>
+                    </div>
+                    <div class="info-section">
+                      <div class="info-block">
+                        <div class="info-header">EMPLOYEE INFORMATION</div>
+                        <div class="info-content">
+                          <div class="info-item"><span class="info-label">Employee Name:</span><span class="info-value" id="payslipEmployeeName">John Doe</span></div>
+                          <div class="info-item"><span class="info-label">Phone:</span><span class="info-value" id="payslipEmployeePhone">+357 99 40 97 25</span></div>
+                          <div class="info-item"><span class="info-label">Social Insurance No:</span><span class="info-value" id="payslipSocialInsuranceNo">1212885</span></div>
+                          <div class="info-item"><span class="info-label">I.D No:</span><span class="info-value" id="payslipEmployeeId">875497</span></div>
+                        </div>
+                      </div>
+                      <div class="info-block">
+                        <div class="info-header">PAYROLL DETAILS</div>
+                        <div class="info-content">
+                          <div class="info-row"><div class="info-label">PAY DATE</div><div class="info-value" id="payslipPayDateDisplay">31/07/2025</div></div>
+                          <div class="info-row"><div class="info-label">PAYROLL #</div><div class="info-value" id="payslipPayrollNumber">SLR/2025/07/001</div></div>
+                          <div class="info-row"><div class="info-label">PAY TYPE</div><div class="info-value">Monthly</div></div>
+                          <div class="info-row"><div class="info-label">PERIOD</div><div class="info-value" id="payslipPeriod">JULY</div></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="earnings-section">
+                      <h3>EARNINGS</h3>
+                      <table class="payslip-table payslip-cols-5">
+                        <colgroup><col><col><col><col class="payslip-col-money"><col class="payslip-col-money"></colgroup>
+                        <thead><tr><th>DESCRIPTION</th><th>HOURS</th><th>RATE</th><th>AMOUNT</th><th>YTD</th></tr></thead>
+                        <tbody>
+                          <tr><td>Standard Pay</td><td id="payslipStandardHours">170.00</td><td id="payslipStandardRate">5.88</td><td id="payslipStandardCurrent">€1,000.00</td><td id="payslipStandardYTD">€0.00</td></tr>
+                          <tr><td>Overtime Pay</td><td id="payslipOvertimeHours">0.00</td><td id="payslipOvertimeRate">0.00</td><td id="payslipOvertimeCurrent">€0.00</td><td id="payslipOvertimeYTD">€0.00</td></tr>
+                          <tr><td>Other Hourly Pay</td><td id="payslipOtherHourlyHours">0.00</td><td id="payslipOtherHourlyRate">0.00</td><td id="payslipOtherHourlyCurrent">€0.00</td><td id="payslipOtherHourlyYTD">€0.00</td></tr>
+                        </tbody>
+                      </table>
+                      <h4>Other Earnings</h4>
+                      <table class="payslip-table payslip-cols-3">
+                        <colgroup><col class="payslip-col-label"><col class="payslip-col-money"><col class="payslip-col-money"></colgroup>
+                        <thead><tr><th></th><th>AMOUNT</th><th>YTD</th></tr></thead>
+                        <tbody>
+                          <tr><td>Commission and Bonus</td><td id="payslipCommissionCurrent">€0.00</td><td id="payslipCommissionYTD">€0.00</td></tr>
+                          <tr><td>Sick Pay</td><td id="payslipSickPayCurrent">€0.00</td><td id="payslipSickPayYTD">€0.00</td></tr>
+                          <tr><td>Expenses</td><td id="payslipExpensesCurrent">€123.66</td><td id="payslipExpensesYTD">€0.00</td></tr>
+                          <tr class="total-row gross-pay-total"><td><strong>GROSS PAY</strong></td><td id="payslipGrossPayCurrent"><strong>€1,000.00</strong></td><td id="payslipGrossPayYTD"><strong>€0.00</strong></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="deductions-section">
+                      <h3>DEDUCTIONS</h3>
+                      <table class="payslip-table payslip-cols-3">
+                        <colgroup><col class="payslip-col-label"><col class="payslip-col-money"><col class="payslip-col-money"></colgroup>
+                        <thead><tr><th></th><th>AMOUNT</th><th>YTD</th></tr></thead>
+                        <tbody>
+                          <tr><td>Income TAX</td><td id="payslipIncomeTaxCurrent">€0.00</td><td id="payslipIncomeTaxYTD">€0.00</td></tr>
+                          <tr id="payslipIncomeTaxBreakdownRow" class="payslip-income-tax-breakdown-row" style="display: none;">
+                            <td colspan="3">
+                              <div id="payslipIncomeTaxBreakdown" class="payslip-income-tax-breakdown" aria-label="Income tax bracket breakdown"></div>
+                            </td>
+                          </tr>
+                          <tr><td>Social Insurance</td><td id="payslipSocialInsuranceCurrent">€95.04</td><td id="payslipSocialInsuranceYTD">€0.00</td></tr>
+                          <tr><td>GESI</td><td id="payslipGESICurrent">€28.62</td><td id="payslipGESITYD">€0.00</td></tr>
+                          <tr class="total-row"><td><strong>TOTAL DEDUCTIONS</strong></td><td id="payslipTotalDeductionsCurrent"><strong>€123.66</strong></td><td id="payslipTotalDeductionsYTD"><strong>€0.00</strong></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="contributions-section">
+                      <h3>CONTRIBUTIONS</h3>
+                      <table class="payslip-table payslip-cols-3">
+                        <colgroup><col class="payslip-col-label"><col class="payslip-col-money"><col class="payslip-col-money"></colgroup>
+                        <thead><tr><th></th><th>AMOUNT</th><th>YTD</th></tr></thead>
+                        <tbody>
+                          <tr><td>Social Insurance</td><td id="payslipEmployerSocialInsuranceCurrent">€95.04</td><td id="payslipEmployerSocialInsuranceYTD">€0.00</td></tr>
+                          <tr><td>Holidays Fund</td><td id="payslipHolidayFundCurrent">€80.00</td><td id="payslipHolidayFundYTD">€0.00</td></tr>
+                          <tr><td>Redundancy Fund</td><td id="payslipRedundancyCurrent">€12.96</td><td id="payslipRedundancyYTD">€0.00</td></tr>
+                          <tr><td>Human Resource</td><td id="payslipIndustrialTrainingCurrent">€5.40</td><td id="payslipIndustrialTrainingYTD">€0.00</td></tr>
+                          <tr><td>Social Cohesion</td><td id="payslipSocialCohesionCurrent">€21.60</td><td id="payslipSocialCohesionYTD">€0.00</td></tr>
+                          <tr><td>GESI</td><td id="payslipEmployerGESICurrent">€31.32</td><td id="payslipEmployerGESITYD">€0.00</td></tr>
+                          <tr class="total-row"><td><strong>TOTAL CONTRIBUTIONS</strong></td><td id="payslipTotalContributionsCurrent"><strong>€246.32</strong></td><td id="payslipTotalContributionsYTD"><strong>€0.00</strong></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="net-pay-section">
+                      <table class="payslip-table payslip-cols-3">
+                        <colgroup><col class="payslip-col-label"><col class="payslip-col-money"><col class="payslip-col-money"></colgroup>
+                        <thead><tr><th></th><th>AMOUNT</th><th>YTD</th></tr></thead>
+                        <tbody>
+                          <tr class="total-row payslip-net-pay-total"><td><strong>NET PAY</strong></td><td id="payslipNetPayCurrent">€1,000.00</td><td id="payslipNetPayYTD">€0.00</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="payment-details">
+                      <p><strong>Payment Method:</strong> <span id="payslipPaymentMethod">Bank Transfer</span></p>
+                      <p><strong>Bank:</strong> <span id="payslipBankName">Bank of Cyprus</span></p>
+                      <p><strong>IBAN:</strong> <span id="payslipBankIBAN">CY90002005540000001100935000</span></p>
+                    </div>
+                    <div class="signatures">
+                      <div class="signature-section"><div class="signature-space"><div class="signature-line"></div></div><div class="signature-label">Employee Signature</div></div>
+                      <div class="signature-section"><div class="signature-space"><div class="signature-line"></div></div><div class="signature-label">Director Signature</div></div>
+                    </div>
+                    <div class="payslip-footer">
+                      <p>If you have any questions about this payslip, please contact your HR department.</p>
+                    </div>
+                  </div>
+                  <div class="payslip-actions">
+                    <button type="button" onclick="typeof printPayslip==='function'&&printPayslip()">Print Payslip</button>
+                    <button type="button" onclick="typeof savePayslip==='function'&&savePayslip()">Save Payslip</button>
+                  </div>
+                </div>
+              </div>
+              <div class="payroll-sub-panel" data-payroll-sub="payslips" style="display:none;">
+                <h2>Payslip Management</h2>
+                <div class="payslip-management">
+                  <div class="management-controls">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="payslipFilterEmployee">Filter by Employee:</label>
+                        <select id="payslipFilterEmployee"><option value="">All Employees</option></select>
+                      </div>
+                      <div class="form-group">
+                        <label for="payslipFilterYear">Filter by Year:</label>
+                        <select id="payslipFilterYear"><option value="">All Years</option></select>
+                      </div>
+                      <div class="form-group">
+                        <label for="payslipFilterMonth">Filter by Month:</label>
+                        <select id="payslipFilterMonth">
+                          <option value="">All Months</option>
+                          <option value="01">January</option><option value="02">February</option><option value="03">March</option><option value="04">April</option><option value="05">May</option><option value="06">June</option><option value="07">July</option><option value="08">August</option><option value="09">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <button type="button" onclick="typeof loadPayslips==='function'&&loadPayslips()">Refresh</button>
+                        <button type="button" onclick="typeof clearPayslipFilters==='function'&&clearPayslipFilters()">Clear Filters</button>
+                        <button type="button" onclick="typeof fixAllPayrollSequences==='function'&&fixAllPayrollSequences()" style="background: #28a745; color: white;">Fix Sequences</button>
+                        <button type="button" onclick="typeof printBulkPayslips==='function'&&printBulkPayslips()" style="background: #007bff; color: white;">Print All Payslips (Month)</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="payslips-table">
+                    <table id="payslipsTable">
+                      <thead>
+                        <tr><th>Payroll #</th><th>Employee</th><th>Period</th><th>Pay Date</th><th>Gross Pay</th><th>Net Pay</th><th>Status</th><th>Actions</th></tr>
+                      </thead>
+                      <tbody id="payslipsTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Social Insurance: YTD overview & submissions -->
+            <div id="accounting-social-insurance-content" class="accounting-social-insurance-content" style="display: none;">
+              <div class="si-sub-panel" data-si-sub="overview" style="display: block;">
+                <h2>Social Insurance — Year to Date</h2>
+                <p class="module-meta si-intro">Employee and employer social insurance contributions from saved payslips.</p>
+                <div class="ytd-controls si-ytd-controls">
+                  <div class="form-group">
+                    <label for="siYtdYear">Year</label>
+                    <select id="siYtdYear" onchange="typeof updateSocialInsuranceYTDDisplay==='function'&&updateSocialInsuranceYTDDisplay()">
+                      <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="siYtdEmployee">Employee</label>
+                    <select id="siYtdEmployee" onchange="typeof updateSocialInsuranceYTDDisplay==='function'&&updateSocialInsuranceYTDDisplay()">
+                      <option value="">All employees</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="ytd-summary si-ytd-summary">
+                  <div class="summary-card summary-card--employee"><h3>Employee SI (YTD)</h3><span id="siTotalEmployee">—</span></div>
+                  <div class="summary-card summary-card--employer"><h3>Employer SI (YTD)</h3><span id="siTotalEmployer">—</span></div>
+                  <div class="summary-card summary-card--total"><h3>Total SI contributions</h3><span id="siTotalCombined">—</span></div>
+                  <div class="summary-card summary-card--gross"><h3>Insurable gross (YTD)</h3><span id="siTotalGross">—</span></div>
+                </div>
+                <div class="ytd-details si-ytd-details">
+                  <table id="siYtdTable" class="table-container">
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Social Insurance No.</th>
+                        <th>Gross pay</th>
+                        <th>Employee SI</th>
+                        <th>Employer SI</th>
+                        <th>Total SI</th>
+                      </tr>
+                    </thead>
+                    <tbody id="siYtdTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="si-sub-panel" data-si-sub="monthly" style="display: none;">
+                <h2>Social Insurance — Monthly return</h2>
+                <p class="module-meta si-intro">Select a month to prepare social insurance figures for your accountant.</p>
+                <div class="ytd-controls si-monthly-controls">
+                  <div class="form-group">
+                    <label for="siMonthlyPeriod">Month</label>
+                    <input type="month" id="siMonthlyPeriod" onchange="typeof updateSocialInsuranceMonthlyDisplay==='function'&&updateSocialInsuranceMonthlyDisplay()">
+                  </div>
+                  <div class="form-group si-monthly-actions">
+                    <button type="button" class="btn btn-primary" onclick="typeof updateSocialInsuranceMonthlyDisplay==='function'&&updateSocialInsuranceMonthlyDisplay()">Refresh</button>
+                    <button type="button" class="btn btn-secondary" onclick="typeof printSocialInsuranceMonthlyReport==='function'&&printSocialInsuranceMonthlyReport()">Print / PDF</button>
+                  </div>
+                </div>
+                <div id="siMonthlyReportContent" class="si-monthly-report"></div>
+              </div>
+            </div>
+            <!-- Reports subsection (visible when REPORTS tab is active) -->
+            <div id="accounting-reports-content" class="accounting-reports-content" style="display: none;">
+              <div class="page-header"><h2>Reports</h2></div>
+              <section class="reports-subsection">
+                <h3 class="reports-subsection-title">Customer Statement</h3>
+                <p class="reports-subsection-desc">Generate a statement of account for a customer (invoices and payments within a date range).</p>
+                <div class="invoice-form-container" style="max-width: 600px;">
+                  <form id="statement-form" class="invoice-form">
+                    <div class="form-section" style="margin-bottom: 1rem;">
+                      <div class="form-row">
+                        <div class="form-group full-width">
+                          <label>Select Customer</label>
+                          <select id="statement-client-select" required>
+                            <option value="">-- Select a customer --</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>From Date</label>
+                          <input type="date" id="statement-from-date" required>
+                        </div>
+                        <div class="form-group">
+                          <label>To Date</label>
+                          <input type="date" id="statement-to-date" required>
+                        </div>
+                      </div>
+                      <div class="form-actions" style="margin-top: 1rem;">
+                        <button type="button" class="btn btn-primary" onclick="window.app&&app.generateStatement()">Generate Statement</button>
+                        <button type="button" class="btn btn-secondary" id="print-statement-btn" style="display: none;" onclick="window.app&&app.printStatement()">Print Statement</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+                <div id="statement-content" style="display: none; margin-top: 1rem;"></div>
+              </section>
+              <section class="reports-subsection">
+                <h3 class="reports-subsection-title">IR63 Form – Annual Taxation</h3>
+                <p class="reports-subsection-desc">Generate IR63 emoluments certificates for the tax year. Uses employees and payroll data from Accounting → Payroll.</p>
+                <div class="invoice-form-container" style="max-width: 600px;">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="ir63Year">Tax Year:</label>
+                      <select id="ir63Year" onchange="typeof generateIR63==='function'&&generateIR63()">
+                        <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="ir63Employee">Select Employee:</label>
+                      <select id="ir63Employee" onchange="typeof generateIR63==='function'&&generateIR63()">
+                        <option value="">All Employees</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <button type="button" class="btn btn-primary" onclick="typeof generateIR63==='function'&&generateIR63()">Generate IR63</button>
+                      <button type="button" class="btn btn-secondary" onclick="typeof exportIR63==='function'&&exportIR63()">Export IR63</button>
+                      <button type="button" class="btn btn-secondary" onclick="typeof printIR63==='function'&&printIR63()">Print IR63</button>
+                    </div>
+                  </div>
+                </div>
+                <div id="ir63Result" class="ir63-result" style="margin-top: 1rem;"></div>
+              </section>
+            </div>
+            <!-- Invoices & Receipts (embedded in CRM) -->
+            <div id="accounting-invoice-app" class="accounting-embed" style="display:none;">
+              <div class="accounting-embed-inner">
+                <div id="dashboard" class="page">
+                  <div class="page-header"><h2>Dashboard</h2><div class="header-actions"><button type="button" class="btn btn-primary" data-action="show-create-invoice">➕ New Invoice</button></div></div>
+                  <div class="dashboard-stats">
+                    <div class="stat-card"><div class="stat-icon">📄</div><div class="stat-content"><h3 id="total-invoices">0</h3><p>Total Invoices</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-content"><h3 id="total-revenue">—</h3><p>Total Revenue</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-content"><h3 id="pending-invoices">0</h3><p>Pending</p></div></div>
+                    <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-content"><h3 id="paid-invoices">0</h3><p>Paid</p></div></div>
+                  </div>
+                  <div class="recent-section"><h3>Recent Invoices</h3><div id="recent-invoices-list"></div></div>
+                </div>
+                <div id="invoices" class="page active">
+                  <div class="page-header"><h2>Invoices</h2><div class="header-actions"><input type="text" id="invoice-search" placeholder="Search invoices..." class="search-input"><button type="button" class="btn btn-primary" data-action="show-create-invoice">➕ New Invoice</button></div></div>
+                  <div id="invoices-list" class="invoices-grid"></div>
+                </div>
+                <div id="create-invoice" class="page">
+                  <div class="page-header"><h2 id="invoice-form-title">Create New Invoice</h2><div class="header-actions"><button type="button" class="btn btn-secondary" data-action="show-invoices">← Back</button></div></div>
+                  <div class="invoice-form-container">
+                    <form id="invoice-form" class="invoice-form">
+                      <div class="form-sections-row">
+                        <div class="form-section form-section-half">
+                          <h3>Invoice Information</h3>
+                          <div class="form-row"><div class="form-group full-width"><label>Invoice Number</label><input type="text" id="invoice-number" placeholder="Assigned when sent (for drafts)"></div></div>
+                          <div class="form-row"><div class="form-group"><label>Date</label><input type="date" id="invoice-date" required></div><div class="form-group"><label>Due Date</label><input type="date" id="invoice-due-date" required></div></div>
+                        </div>
+                        <div class="form-section form-section-half">
+                          <h3>Bill To</h3>
+                          <div class="form-row"><div class="form-group full-width"><label>Select Client</label><select id="client-select" onchange="typeof app!=='undefined'&&app.selectClient(this.value)"><option value="">-- Select a client or enter new --</option></select></div></div>
+                          <div class="form-row"><div class="form-group"><label>Customer ID</label><input type="text" id="client-customer-id" placeholder="Auto-filled from client"></div><div class="form-group"><label>Company name</label><input type="text" id="client-name" required></div></div>
+                          <div class="form-row"><div class="form-group full-width"><label>Client Address</label><textarea id="client-address" rows="2"></textarea></div></div>
+                          <div class="form-row"><div class="form-group"><label>Email</label><input type="email" id="client-email"></div><div class="form-group"><label>Phone</label><input type="tel" id="client-phone"></div></div>
+                        </div>
+                      </div>
+                      <div class="form-section"><h3>Items</h3><div class="invoice-items-wrap"><div class="invoice-items-header"><span class="item-col-code">Code</span><span class="item-col-desc">Description</span><span class="item-col-qty">Qty</span><span class="item-col-hours">Hours</span><span class="item-col-price">Unit Price</span><span class="item-col-total">Amount</span><span class="item-col-action"></span></div><div id="invoice-items"></div></div><div class="invoice-items-actions"><button type="button" class="btn btn-secondary" id="btn-add-invoice-item">+ Add Item</button><button type="button" class="btn btn-secondary" id="btn-add-section-header">+ Add section header</button></div></div>
+                      <div class="form-section"><div class="totals-section"><div class="total-row"><span>Subtotal:</span><span id="invoice-subtotal">—</span></div><div class="total-row"><span>Tax Rate (%):</span><input type="number" id="tax-rate" min="0" max="100" step="0.01" value="0" onchange="typeof app!=='undefined'&&app.calculateTotals()"></div><div class="total-row"><span>Tax Amount:</span><span id="tax-amount">—</span></div><div class="total-row total-final"><span>Total:</span><span id="invoice-total">—</span></div></div></div>
+                      <div class="form-section"><h3>Additional Information</h3><div class="form-row"><div class="form-group full-width"><label>Notes</label><textarea id="invoice-notes" rows="3" placeholder="Payment terms, additional notes..."></textarea></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="invoice-status"><option value="draft">Draft</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></div></div></div>
+                      <div class="form-actions"><button type="button" class="btn btn-secondary" data-action="show-invoices">Cancel</button><button type="button" class="btn btn-danger" id="btn-delete-draft-invoice" style="display: none;">Delete draft</button><button type="submit" class="btn btn-primary">Save Invoice</button></div>
+                    </form>
+                  </div>
+                </div>
+                <div id="clients" class="page"><div class="page-header"><h2>Clients</h2><div class="header-actions"><input type="text" id="client-search" placeholder="Search clients..." class="search-input"><button type="button" class="btn btn-primary" data-action="show-client-form">➕ Add Client</button></div></div><div id="clients-list" class="invoices-grid"></div></div>
+                <div id="client-form-section" class="page" style="display:none;"><div class="page-header"><h2 id="client-form-title">Add New Client</h2><div class="header-actions"><button type="button" class="btn btn-secondary" data-action="show-clients-list">← Back</button></div></div><div class="invoice-form-container"><form id="client-form" class="invoice-form"><div class="form-section"><h3>Client Information</h3><div class="form-row"><div class="form-group"><label>Customer ID</label><input type="text" id="client-form-customer-id" placeholder="e.g., CUST001"></div><div class="form-group"><label>Company name *</label><input type="text" id="client-form-name" required placeholder="Client company name"></div></div><div class="form-row"><div class="form-group full-width"><label>Contact person</label><input type="text" id="client-form-contact" placeholder="Primary contact at this company"></div></div><div class="form-row"><div class="form-group full-width"><label>Address</label><textarea id="client-form-address" rows="3"></textarea></div></div><div class="form-row"><div class="form-group"><label>Email</label><input type="email" id="client-form-email"></div><div class="form-group"><label>Phone</label><input type="tel" id="client-form-phone"></div></div><div class="form-row"><div class="form-group"><label>Tax ID / VAT Number</label><input type="text" id="client-form-tax-id"></div><div class="form-group"><label>Website</label><input type="url" id="client-form-website"></div></div></div><div class="form-section"><h3>Additional Notes</h3><div class="form-row"><div class="form-group full-width"><label>Notes</label><textarea id="client-form-notes" rows="3"></textarea></div></div></div><div class="form-actions"><button type="button" class="btn btn-secondary" data-action="show-clients-list">Cancel</button><button type="submit" class="btn btn-primary">Save Client</button></div></form></div></div>
+                <div id="receipts" class="page"><div class="page-header"><h2>Receipts</h2><div class="header-actions"><button type="button" class="btn btn-primary" data-action="show-create-receipt">➕ New Receipt</button></div></div><div id="receipts-list" class="invoices-grid"></div></div>
+                <div id="create-receipt" class="page"><div class="page-header"><h2 id="receipt-form-title">Create New Receipt</h2><div class="header-actions"><button type="button" class="btn btn-secondary" data-action="show-receipts">← Back</button></div></div><div class="invoice-form-container"><form id="receipt-form" class="invoice-form"><div class="form-section"><h3>Receipt Information</h3><div class="form-row"><div class="form-group"><label>Receipt Number</label><input type="text" id="receipt-number" required></div><div class="form-group"><label>Receipt Date</label><input type="date" id="receipt-date" required></div></div></div><div class="form-section"><h3>Client</h3><div class="form-row"><div class="form-group full-width"><label>Select Client</label><select id="receipt-client-select" onchange="typeof app!=='undefined'&&app.filterInvoicesByClient(this.value)"><option value="">-- Select a client --</option></select></div></div></div><div class="form-section"><h3>Payment for</h3><div class="form-row"><div class="form-group"><label><input type="radio" name="receipt-payment-type" id="receipt-type-invoices" value="invoices" checked> Specific invoices</label></div><div class="form-group"><label><input type="radio" name="receipt-payment-type" id="receipt-type-on-account" value="onAccount"> On account balance</label></div></div><div id="receipt-invoices-section"><div class="form-row"><div class="form-group full-width"><label>Pending Invoices Included in Payment</label><div id="invoice-selection-list" class="invoice-selection-container"><p class="invoice-selection-empty">Please select a client first to see pending invoices.</p></div></div></div></div><div class="form-section"><h3>Payment Details</h3><div class="form-row"><div class="form-group"><label>Payment Amount</label><input type="number" id="receipt-amount" min="0" step="0.01" required></div><div class="form-group"><label>Payment Method</label><select id="receipt-payment-method"><option value="">-- Select --</option><option value="cash">Cash</option><option value="check">Check</option><option value="bank-transfer">Bank Transfer</option><option value="credit-card">Credit Card</option><option value="paypal">PayPal</option><option value="other">Other</option></select></div></div><div class="form-row"><div class="form-group full-width"><label>Notes</label><textarea id="receipt-notes" rows="3"></textarea></div></div></div><div class="form-actions"><button type="button" class="btn btn-secondary" data-action="show-receipts">Cancel</button><button type="submit" class="btn btn-primary">Save Receipt</button></div></form></div></div>
+              </div>
+            </div>
+            <div id="accounting-placeholder" class="accounting-placeholder">
+            <div class="accounting-placeholder-default">
+            <div class="module-status-row">
+              <span class="status-tag status--progress">In progress</span>
+              <span class="module-meta">Last activity: 2 days ago</span>
+              <span class="module-meta">Type: Invoice</span>
+              <span class="module-meta">Source: Manual</span>
+            </div>
+            <div class="module-metrics">
+              <div class="metric-card metric--blue"><span class="metric-value">16</span><span class="metric-label">Days in funnel</span></div>
+              <div class="metric-card metric--blue"><span class="metric-value">14</span><span class="metric-label">Days at stage</span></div>
+              <div class="metric-card metric--orange"><span class="metric-value">6</span><span class="metric-label">Documents</span></div>
+              <div class="metric-card metric--green"><span class="metric-value">4</span><span class="metric-label">Approvals</span></div>
+            </div>
+            <div class="module-info-panel">
+              <h3 class="panel-title">Details</h3>
+              <dl class="info-grid">
+                <dt>Name</dt><dd>Q4 2024 — Invoices batch</dd>
+                <dt>Contact</dt><dd><a href="#">Finance Team</a></dd>
+                <dt>Owner</dt><dd><a href="#">James Smith</a></dd>
+                <dt>Created on</dt><dd>8/4/2024 12:55 PM</dd>
+              </dl>
+            </div>
+            <div class="module-description-panel">
+              <h3 class="panel-title">Description</h3>
+              <p>Accounting records and pending approvals. Data is stored in your browser (local storage). You can expand this module with ledgers, invoices, and reports.</p>
+            </div>
+            <div class="module-cards-row">
+              <div class="module-info-card">
+                <h3 class="panel-title">Contact</h3>
+                <div class="card-avatar">JS</div>
+                <p class="card-name">James Smith</p>
+                <p class="card-role">Finance Lead</p>
+                <p class="card-contact">james.smith@company.com</p>
+              </div>
+              <div class="module-info-card">
+                <h3 class="panel-title">Account</h3>
+                <p class="card-name">Andeco Horizon</p>
+                <p class="card-muted">Internal</p>
+              </div>
+            </div>
+            <div class="module-table-panel">
+              <h3 class="panel-title">Related items</h3>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Name</th><th>Stage</th><th>Type</th><th>Created</th></tr></thead>
+                  <tbody>
+                    <tr><td>INV-2024-001</td><td><span class="status-tag status--done">Paid</span></td><td>Invoice</td><td>1/10/2024</td></tr>
+                    <tr><td>INV-2024-002</td><td><span class="status-tag status--progress">Pending</span></td><td>Invoice</td><td>2/10/2024</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Clients module: shared with Accounting (same DataStore clients) -->
+      <section id="page-clients" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Clients</h1>
+              <div class="module-detail-actions">
+                <button type="button" class="btn btn-primary" id="crm-clients-add-btn">➕ Add Client</button>
+              </div>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-clients" aria-label="Subsections" hidden></nav>
+            <div class="clients-section-panel" data-section="list">
+            <div id="crm-clients-list-wrap" class="accounting-embed-inner">
+              <div class="page-header">
+                <input type="text" id="crm-client-search" placeholder="Search clients..." class="search-input" style="max-width: 300px;">
+              </div>
+              <div id="crm-clients-list" class="invoices-grid"></div>
+            </div>
+            <div id="crm-client-form-wrap" style="display: none;">
+              <div class="page-header">
+                <h2 id="crm-client-form-title">Add New Client</h2>
+                <button type="button" class="btn btn-secondary" id="crm-clients-back-btn">← Back</button>
+              </div>
+              <div class="invoice-form-container">
+                <form id="crm-client-form" class="invoice-form">
+                  <div class="form-section">
+                    <div class="form-row">
+                      <div class="form-group"><label>Customer ID</label><input type="text" id="crm-client-customer-id" placeholder="e.g., CUST001"></div>
+                      <div class="form-group"><label>Company name *</label><input type="text" id="crm-client-name" required placeholder="Client company name"></div>
+                    </div>
+                    <div class="form-row"><div class="form-group full-width"><label>Contact person</label><input type="text" id="crm-client-contact" placeholder="Primary contact at this company"></div></div>
+                    <div class="form-row"><div class="form-group full-width"><label>Address</label><textarea id="crm-client-address" rows="3"></textarea></div></div>
+                    <div class="form-row">
+                      <div class="form-group"><label>Email</label><input type="email" id="crm-client-email"></div>
+                      <div class="form-group"><label>Phone</label><input type="tel" id="crm-client-phone"></div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group"><label>Tax ID / VAT</label><input type="text" id="crm-client-tax-id"></div>
+                      <div class="form-group"><label>Website</label><input type="url" id="crm-client-website"></div>
+                    </div>
+                    <div class="form-row"><div class="form-group full-width"><label>Notes</label><textarea id="crm-client-notes" rows="3"></textarea></div></div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="crm-clients-cancel-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Client</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings module (admin only): Company Information, Payroll Settings, Accounting Settings, backup/restore -->
+      <section id="page-settings" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Settings</h1>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-settings" aria-label="Subsections" hidden></nav>
+            <div class="settings-container">
+              <div class="settings-section-panel" data-section="payroll" style="display: none;">
+                <div class="form-section">
+                  <h3>Payroll Settings</h3>
+                  <p class="module-meta" style="margin-bottom: 1rem;">Company details used on payslips, IR63, and payroll documents.</p>
+                  <div class="form-container invoice-form-container">
+                    <form id="companyForm" class="invoice-form">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label for="companyName">Company name</label>
+                          <input type="text" id="companyName" name="companyName" required>
+                        </div>
+                        <div class="form-group">
+                          <label for="companyRegistration">Registration number</label>
+                          <input type="text" id="companyRegistration" name="companyRegistration">
+                        </div>
+                        <div class="form-group">
+                          <label for="companyTaxId">Company TIN</label>
+                          <input type="text" id="companyTaxId" name="companyTaxId" placeholder="Company TIN">
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group full-width">
+                          <label for="companyAddress">Address</label>
+                          <textarea id="companyAddress" name="companyAddress" rows="3" required></textarea>
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label for="companyPhone">Phone</label>
+                          <input type="tel" id="companyPhone" name="companyPhone" required>
+                        </div>
+                        <div class="form-group">
+                          <label for="companyEmail">Email</label>
+                          <input type="email" id="companyEmail" name="companyEmail" required>
+                        </div>
+                        <div class="form-group">
+                          <label for="companyWebsite">Website</label>
+                          <input type="url" id="companyWebsite" name="companyWebsite">
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label for="companyLogo">Company logo</label>
+                          <input type="file" id="companyLogo" name="companyLogo" accept="image/*" onchange="typeof previewLogo==='function'&&previewLogo()">
+                          <small class="module-meta">PNG, JPG, or SVG. Prefer under 200KB.</small>
+                        </div>
+                      </div>
+                      <div class="form-row" id="logoPreview" style="display: none;">
+                        <div class="form-group">
+                          <label>Logo preview</label>
+                          <div class="logo-preview-container">
+                            <img id="logoPreviewImg" alt="Logo preview" style="max-height: 100px; max-width: 200px; border: 1px solid #ddd; padding: 5px;">
+                          </div>
+                        </div>
+                      </div>
+                      <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save payroll settings</button>
+                        <button type="button" class="btn btn-secondary" onclick="typeof clearCompanyForm==='function'&&clearCompanyForm()">Clear</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+                <div class="form-section data-management" style="margin-top: 2rem;">
+                  <h3>Payroll data backup</h3>
+                  <div class="form-row" style="align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
+                    <div class="form-group">
+                      <button type="button" class="btn btn-primary" onclick="typeof exportAllData==='function'&&exportAllData()">Export all payroll data</button>
+                      <p class="module-meta">Employees, payslips, and company settings (JSON).</p>
+                    </div>
+                    <div class="form-group">
+                      <input type="file" id="importFile" accept=".json" style="display: none;" onchange="typeof importAllData==='function'&&importAllData(this)">
+                      <button type="button" class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Import backup</button>
+                    </div>
+                    <div class="form-group">
+                      <button type="button" class="btn btn-danger" onclick="typeof clearAllData==='function'&&clearAllData()">Clear all payroll data</button>
+                      <p class="module-meta">Removes employees, payslips, and company settings.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-section company-preview" style="margin-top: 2rem;">
+                  <h3>Payslip header preview</h3>
+                  <div class="preview-container" style="border: 1px solid var(--border-color, #dee2e6); border-radius: 8px; padding: 1rem; background: var(--surface, #fff);">
+                    <div class="preview-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+                      <div class="preview-company-info" style="display: flex; gap: 1rem; align-items: flex-start;">
+                        <div class="preview-logo">
+                          <div id="previewLogoText" style="display:none;">COMPANY</div>
+                        </div>
+                        <div class="preview-company-details">
+                          <h4 id="previewCompanyName">Your company name</h4>
+                          <p id="previewAddress">Your address</p>
+                          <p id="previewContact">Phone, email</p>
+                        </div>
+                      </div>
+                      <div class="preview-payslip-title" style="font-weight: 700;">PAYSLIP</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <form id="settings-form" class="settings-form" novalidate>
+                <div class="settings-section-panel" data-section="company">
+                  <div class="form-section">
+                    <h3>Company Information</h3>
+                    <div class="form-row">
+                      <div class="form-group full-width"><label>Company Name</label><input type="text" id="company-name" required></div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group full-width"><label>Company Address</label><textarea id="company-address" rows="3"></textarea></div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group"><label>Email</label><input type="email" id="company-email"></div>
+                      <div class="form-group"><label>Phone</label><input type="tel" id="company-phone"></div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group"><label>VAT / Tax ID Number</label><input type="text" id="company-tax-id"></div>
+                      <div class="form-group"><label>Registration Number</label><input type="text" id="company-registration" placeholder="Company registration (e.g. for IR63)"></div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group"><label>Website</label><input type="url" id="company-website"></div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group full-width">
+                        <label>Company Logo</label>
+                        <div class="logo-upload-section">
+                          <div class="logo-preview" id="logo-preview">
+                            <img id="logo-image" src="" alt="Company Logo" style="display: none;">
+                            <span id="logo-placeholder">No logo uploaded</span>
+                          </div>
+                          <div class="logo-upload-controls">
+                            <input type="file" id="logo-upload" accept="image/*" style="display: none;">
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('logo-upload').click()">Upload Logo</button>
+                            <button type="button" class="btn btn-danger" id="remove-logo" style="display: none;">Remove Logo</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-section-panel" data-section="accounting" style="display: none;">
+                  <div class="form-section">
+                    <h3>Bank Accounts</h3>
+                    <div class="form-row">
+                      <div class="form-group full-width">
+                        <div id="banks-list"></div>
+                        <button type="button" class="btn btn-secondary" onclick="typeof app!=='undefined'&&app.addBankAccount()" style="margin-top: 1rem;">➕ Add Bank Account</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-section">
+                    <h3>Invoice Settings</h3>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label>Invoice Sequence Number</label>
+                        <input type="number" id="invoice-sequence-number" min="1" placeholder="1000">
+                      </div>
+                      <div class="form-group">
+                        <label>Receipt Sequence Number</label>
+                        <input type="number" id="receipt-sequence-number" min="1" placeholder="1000">
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label>Default Tax Rate (%)</label>
+                        <input type="number" id="default-tax-rate" min="0" max="100" step="0.01">
+                      </div>
+                      <div class="form-group">
+                        <label>Currency</label>
+                        <select id="company-currency">
+                          <option value="USD">USD - US Dollar ($)</option>
+                          <option value="EUR">EUR - Euro (€)</option>
+                          <option value="GBP">GBP - British Pound (£)</option>
+                          <option value="CAD">CAD - Canadian Dollar (C$)</option>
+                          <option value="AUD">AUD - Australian Dollar (A$)</option>
+                          <option value="JPY">JPY - Japanese Yen (¥)</option>
+                          <option value="CHF">CHF - Swiss Franc</option>
+                          <option value="CNY">CNY - Chinese Yuan (¥)</option>
+                          <option value="INR">INR - Indian Rupee (₹)</option>
+                          <option value="BRL">BRL - Brazilian Real (R$)</option>
+                          <option value="MXN">MXN - Mexican Peso</option>
+                          <option value="ZAR">ZAR - South African Rand</option>
+                          <option value="SGD">SGD - Singapore Dollar</option>
+                          <option value="HKD">HKD - Hong Kong Dollar</option>
+                          <option value="NZD">NZD - New Zealand Dollar</option>
+                          <option value="SEK">SEK - Swedish Krona</option>
+                          <option value="NOK">NOK - Norwegian Krone</option>
+                          <option value="DKK">DKK - Danish Krone</option>
+                          <option value="PLN">PLN - Polish Zloty</option>
+                          <option value="RUB">RUB - Russian Ruble</option>
+                          <option value="TRY">TRY - Turkish Lira</option>
+                          <option value="AED">AED - UAE Dirham</option>
+                          <option value="SAR">SAR - Saudi Riyal</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Default Payment Terms (days)</label>
+                        <input type="number" id="default-payment-terms" min="1">
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group full-width">
+                        <label>Default Invoice Notes</label>
+                        <textarea id="default-invoice-notes" rows="3"></textarea>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-section">
+                    <h3>Preset Products</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">Add products by code. When creating an invoice, entering a product code will fill description and unit price.</p>
+                    <div class="form-row" style="align-items: flex-end;">
+                      <div class="form-group">
+                        <label>Code</label>
+                        <input type="text" id="product-code" placeholder="e.g. WIDGET-01">
+                      </div>
+                      <div class="form-group" style="flex: 1;">
+                        <label>Description</label>
+                        <input type="text" id="product-description" placeholder="Product description">
+                      </div>
+                      <div class="form-group">
+                        <label>Unit Price</label>
+                        <input type="number" id="product-price" min="0" step="0.01" placeholder="0.00">
+                      </div>
+                      <div class="form-group">
+                        <button type="button" class="btn btn-primary" id="btn-add-product">Add Product</button>
+                      </div>
+                    </div>
+                    <div id="products-list" class="products-list"></div>
+                  </div>
+                </div>
+                <div class="form-actions" id="settings-form-save-bar">
+                  <button type="submit" class="btn btn-primary">Save Settings</button>
+                </div>
+              </form>
+            </div>
+            <div class="settings-container settings-container--backup">
+              <div class="form-section">
+                <h3>Data Backup &amp; Restore</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">Export or import all app data (accounting, fleet, crew) to a single file.</p>
+                <div class="form-actions" style="justify-content: flex-start; gap: 1rem; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-primary" onclick="typeof app!=='undefined'&&app.exportData()">📥 Export Data</button>
+                  <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-file-input').click()">📤 Import Data</button>
+                  <button type="button" class="btn btn-secondary" id="shared-file-use-btn" onclick="typeof app!=='undefined'&&app.useSharedDataFile()">📂 Use shared data file</button>
+                  <button type="button" class="btn btn-secondary" onclick="typeof app!=='undefined'&&app.saveDataToFile()">💾 Save data to file</button>
+                  <button type="button" class="btn btn-ghost" id="shared-file-refresh-btn" style="display: none;" onclick="typeof app!=='undefined'&&app.refreshFromSharedFile()">🔄 Refresh from file</button>
+                  <button type="button" class="btn btn-ghost" id="shared-file-stop-btn" style="display: none;" onclick="typeof app!=='undefined'&&app.clearSharedDataFile()">Stop using shared file</button>
+                  <input type="file" id="import-file-input" accept=".json" style="display: none;" onchange="typeof app!=='undefined'&&app.importData(event)">
+                </div>
+                <p id="shared-file-status" style="display: none; color: var(--text-secondary); font-size: 0.75rem; margin: 0.5rem 0 0 0;"></p>
+                <small style="color: var(--text-secondary); font-size: 0.75rem; display: block; margin-top: 0.5rem;">⚠️ Import replaces existing data. Export a backup first.</small>
+                <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.75rem;">💡 <strong>Share data without a server:</strong> Put the app folder in a cloud drive (OneDrive, Dropbox, etc.). Each user clicks <strong>Use shared data file</strong> and selects <code>andeco_data.json</code> in that folder. (Works in Chrome/Edge. In other browsers, use <strong>Import Data</strong> and <strong>Save data to file</strong> or <strong>Export Data</strong>.)</p>
+                <p style="color: #c2410c; font-size: 0.75rem; margin-top: 0.5rem;">⚠️ <strong>Two users at once:</strong> The app does not lock the file. If two people edit and save at the same time, the last save overwrites the other. Avoid editing together, or refresh from file before you start and save quickly so others can refresh after you.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-fleet" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail fleet-module">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title" id="fleet-title">Fleet Management</h1>
+              <div class="module-detail-actions">
+                <button type="button" class="btn btn-ghost" id="fleet-back-to-list-btn" style="display: none;">← Back to list</button>
+              </div>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-fleet" aria-label="Subsections" hidden></nav>
+            <div id="fleet-dashboard-wrap" class="fleet-section-wrap fleet-section-panel" data-section="dashboard" style="display: none;">
+              <div class="fleet-dashboard-metrics" id="fleet-dashboard-metrics"></div>
+              <div class="fleet-dashboard-alerts" id="fleet-dashboard-alerts"></div>
+            </div>
+            <div class="fleet-section-panel" data-section="vessels">
+            <div id="fleet-vessel-list-wrap" class="fleet-section-wrap">
+              <div class="fleet-toolbar">
+                <button type="button" class="btn btn-primary" id="fleet-add-vessel">+ Add vessel</button>
+                <div class="fleet-metrics" id="fleet-metrics"></div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table" id="fleet-vessels-table">
+                  <thead><tr><th>Photo</th><th>Name</th><th>IMO</th><th>Flag</th><th>Type</th><th>Build year</th><th></th></tr></thead>
+                  <tbody id="fleet-vessels-tbody"></tbody>
+                </table>
+              </div>
+              <p class="fleet-empty" id="fleet-empty-msg" style="display: none;">No vessels. Add your first vessel to get started.</p>
+            </div>
+            <div id="fleet-vessel-detail-wrap" class="fleet-section-wrap fleet-detail-wrap" style="display: none;">
+              <nav class="module-tabs fleet-vessel-tabs">
+                <a href="#" class="module-tab active" data-fleet-tab="profile">Profile &amp; photo</a>
+                <a href="#" class="module-tab" data-fleet-tab="specsheet">Specification sheet</a>
+                <a href="#" class="module-tab" data-fleet-tab="documents">Documents</a>
+                <a href="#" class="module-tab" data-fleet-tab="maintenance">Maintenance</a>
+                <a href="#" class="module-tab" data-fleet-tab="inventory">Inventory</a>
+                <a href="#" class="module-tab" data-fleet-tab="logbooks">Logbooks</a>
+                <a href="#" class="module-tab" data-fleet-tab="crew">Crew</a>
+              </nav>
+              <div id="fleet-profile-panel" class="fleet-vessel-panel" data-fleet-tab="profile">
+                <div class="fleet-vessel-photo-section">
+                  <div class="fleet-photo-main-wrap"><img id="fleet-vessel-photo-img" src="" alt="Vessel" class="fleet-vessel-photo-main"><div class="fleet-photo-placeholder" id="fleet-photo-placeholder">No photo</div><input type="file" id="fleet-vessel-photo-input" accept="image/*" style="display: none;"><button type="button" class="btn btn-secondary" id="fleet-vessel-photo-btn">Upload main photo</button></div>
+                  <button type="button" class="btn btn-secondary" id="fleet-add-gallery-photo">+ Add to gallery</button>
+                  <div class="fleet-photo-gallery" id="fleet-photo-gallery"></div>
+                </div>
+                <div class="fleet-specs-form" id="fleet-specs-form"></div>
+                <button type="button" class="btn btn-primary" id="fleet-save-specs">Save specifications</button>
+              </div>
+              <div id="fleet-specsheet-panel" class="fleet-vessel-panel" data-fleet-tab="specsheet" style="display: none;">
+                <p class="fleet-specsheet-intro">Fill in the fields below to populate the Specification Sheet PDF. All fields are optional.</p>
+                <div id="fleet-specsheet-form" class="fleet-specsheet-form"></div>
+                <div class="fleet-specsheet-actions">
+                  <button type="button" class="btn btn-primary" id="fleet-save-specsheet">Save specification data</button>
+                  <button type="button" class="btn btn-secondary" id="fleet-download-spec-pdf">Download Specification Sheet (PDF)</button>
+                </div>
+              </div>
+              <div id="fleet-documents-panel" class="fleet-vessel-panel" data-fleet-tab="documents" style="display: none;">
+                <div class="fleet-expiry-alerts" id="fleet-expiry-alerts"></div>
+                <button type="button" class="btn btn-secondary" id="fleet-add-document">+ Add document / certificate</button>
+                <div class="table-wrap"><table class="data-table" id="fleet-documents-table"><thead><tr><th>Name</th><th>Type</th><th>Issue date</th><th>Expiry date</th><th>Status</th><th></th></tr></thead><tbody id="fleet-documents-tbody"></tbody></table></div>
+              </div>
+              <div id="fleet-maintenance-panel" class="fleet-vessel-panel" data-fleet-tab="maintenance" style="display: none;">
+                <ul class="fleet-sub-tabs"><li><a href="#" class="fleet-sub-tab active" data-fleet-sub="history">History</a></li><li><a href="#" class="fleet-sub-tab" data-fleet-sub="drydock">Dry dock</a></li></ul>
+                <div class="fleet-maintenance-history" data-fleet-sub-panel="history"><button type="button" class="btn btn-secondary" id="fleet-add-maintenance">+ Add maintenance record</button><div class="table-wrap"><table class="data-table" id="fleet-maintenance-table"><thead><tr><th>Date</th><th>Type</th><th>Status</th><th>Description</th><th></th></tr></thead><tbody id="fleet-maintenance-tbody"></tbody></table></div></div>
+                <div class="fleet-drydock-panel" data-fleet-sub-panel="drydock" style="display: none;"><button type="button" class="btn btn-secondary" id="fleet-add-drydock">+ Schedule dry dock</button><div class="table-wrap"><table class="data-table" id="fleet-drydock-table"><thead><tr><th>Scheduled</th><th>Completed</th><th>Yard / Location</th><th>Status</th><th></th></tr></thead><tbody id="fleet-drydock-tbody"></tbody></table></div></div>
+              </div>
+              <div id="fleet-inventory-panel" class="fleet-vessel-panel" data-fleet-tab="inventory" style="display: none;">
+                <div class="fleet-low-stock-alerts" id="fleet-low-stock-alerts"></div>
+                <button type="button" class="btn btn-secondary" id="fleet-add-inventory">+ Add item</button>
+                <div class="table-wrap"><table class="data-table" id="fleet-inventory-table"><thead><tr><th>Item</th><th>Part no.</th><th>Quantity</th><th>Min / Max</th><th>Location</th><th></th></tr></thead><tbody id="fleet-inventory-tbody"></tbody></table></div>
+              </div>
+              <div id="fleet-logbooks-panel" class="fleet-vessel-panel" data-fleet-tab="logbooks" style="display: none;">
+                <select id="fleet-logbook-type-filter"><option value="">All types</option><option value="voyage">Voyage</option><option value="engine">Engine</option><option value="maintenance">Maintenance</option><option value="deck">Deck</option><option value="general">General</option></select>
+                <button type="button" class="btn btn-secondary" id="fleet-add-logbook">+ Add log entry</button>
+                <div class="table-wrap"><table class="data-table" id="fleet-logbooks-table"><thead><tr><th>Date</th><th>Type</th><th>Entry</th><th>Author</th><th></th></tr></thead><tbody id="fleet-logbooks-tbody"></tbody></table></div>
+              </div>
+              <div id="fleet-crew-panel" class="fleet-vessel-panel" data-fleet-tab="crew" style="display: none;">
+                <button type="button" class="btn btn-secondary" id="fleet-add-crew">+ Add crew</button>
+                <div class="table-wrap"><table class="data-table" id="fleet-crew-table"><thead><tr><th>Name</th><th>Role / Rank</th><th>Certifications</th><th>Joining date</th><th></th></tr></thead><tbody id="fleet-crew-tbody"></tbody></table></div>
+              </div>
+            </div>
+            </div>
+            <div id="fleet-modal-overlay" class="fleet-modal-overlay" style="display: none;">
+              <div class="fleet-modal"><div class="fleet-modal-body" id="fleet-modal-body"></div><div class="fleet-modal-actions"><button type="button" class="btn btn-ghost" id="fleet-modal-cancel">Cancel</button><button type="button" class="btn btn-primary" id="fleet-modal-save">Save</button></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-hr" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">HR / People</h1>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-hr" aria-label="Subsections" hidden></nav>
+            <div id="hr-employees-panel" class="hr-section-panel" data-section="employees" style="display: none;">
+              <div class="page-header"><h2>Employees</h2><div class="header-actions"><button type="button" class="btn btn-primary" id="hr-employee-add-btn">Add Employee</button></div></div>
+              <p class="module-meta" style="margin-bottom: 1rem;">Manage employee records here — hire dates, tax, banking, and IR63 fields. The same data is used for payslips under Accounting → Payroll.</p>
+              <div class="form-container invoice-form-container" id="payrollEmployeeFormAnchor">
+                <form id="employeeForm" class="invoice-form">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="employeeId">Employee ID</label>
+                      <input type="text" id="employeeId" name="employeeId" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="firstName">First name</label>
+                      <input type="text" id="firstName" name="firstName" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="lastName">Last name</label>
+                      <input type="text" id="lastName" name="lastName" required>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="email">Email</label>
+                      <input type="email" id="email" name="email">
+                    </div>
+                    <div class="form-group">
+                      <label for="phone">Phone</label>
+                      <input type="tel" id="phone" name="phone">
+                    </div>
+                    <div class="form-group">
+                      <label for="hireDate">Hire date</label>
+                      <input type="date" id="hireDate" name="hireDate">
+                    </div>
+                    <div class="form-group">
+                      <label for="ceasedDate">Employment ceased</label>
+                      <input type="date" id="ceasedDate" name="ceasedDate">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="taxCode">Tax code</label>
+                      <select id="taxCode" name="taxCode">
+                        <option value="">Select tax code</option>
+                        <option value="0">0 - Single, no children</option>
+                        <option value="1">1 - Single, 1 child</option>
+                        <option value="2">2 - Single, 2 children</option>
+                        <option value="3">3 - Single, 3 children</option>
+                        <option value="4">4 - Single, 4+ children</option>
+                        <option value="5">5 - Married, no children</option>
+                        <option value="6">6 - Married, 1 child</option>
+                        <option value="7">7 - Married, 2 children</option>
+                        <option value="8">8 - Married, 3 children</option>
+                        <option value="9">9 - Married, 4+ children</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="socialInsurance">Social insurance no.</label>
+                      <input type="text" id="socialInsurance" name="socialInsurance">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="paymentMethod">Payment method</label>
+                      <select id="paymentMethod" name="paymentMethod">
+                        <option value="">Select</option>
+                        <option value="Bank Transfer">Bank transfer</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Check">Check</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="bankName">Bank name</label>
+                      <input type="text" id="bankName" name="bankName">
+                    </div>
+                    <div class="form-group">
+                      <label for="bankIBAN">IBAN</label>
+                      <input type="text" id="bankIBAN" name="bankIBAN" placeholder="CY00 0000 0000 0000 0000 0000 0000">
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group full-width">
+                      <label for="residentialAddress">Residential address</label>
+                      <textarea id="residentialAddress" name="residentialAddress" rows="3" placeholder="Full residential address"></textarea>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="taxId">Tax ID (TIN)</label>
+                      <input type="text" id="taxId" name="taxId" placeholder="Tax identification number">
+                    </div>
+                    <div class="form-group">
+                      <label for="officerStatus">Officer (Αξιωματούχος)</label>
+                      <select id="officerStatus" name="officerStatus">
+                        <option value="">Select</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save employee</button>
+                    <button type="button" class="btn btn-secondary" onclick="typeof clearForm==='function'&&clearForm()">Clear</button>
+                  </div>
+                </form>
+              </div>
+              <div class="employees-list module-table-panel" style="margin-top:2rem;">
+                <h3 class="panel-title">Employee list</h3>
+                <div class="table-wrap">
+                  <table id="employeesTable" class="data-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Tax code</th>
+                        <th>Social insurance</th>
+                        <th>TIN</th>
+                        <th>Hire date</th>
+                        <th>Ceased</th>
+                        <th>Payment</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="employeesTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div id="hr-overview-panel" class="hr-section-panel" data-section="overview">
+            <div class="module-status-row">
+              <span class="status-tag status--progress">Active</span>
+              <span class="module-meta">Last activity: Today</span>
+              <span class="module-meta">Department: Operations</span>
+            </div>
+            <div class="module-metrics">
+              <div class="metric-card metric--blue"><span class="metric-value" id="hr-metric-employees">0</span><span class="metric-label">Employees</span></div>
+              <div class="metric-card metric--blue"><span class="metric-value" id="hr-metric-open-roles">0</span><span class="metric-label">Active staff</span></div>
+              <div class="metric-card metric--orange"><span class="metric-value">5</span><span class="metric-label">Leave this week</span></div>
+              <div class="metric-card metric--green"><span class="metric-value" id="hr-metric-new-month">0</span><span class="metric-label">New this month</span></div>
+            </div>
+            <div class="module-info-panel">
+              <h3 class="panel-title">Details</h3>
+              <dl class="info-grid">
+                <dt>Name</dt><dd>HR — Andeco Horizon</dd>
+                <dt>Owner</dt><dd><a href="#">HR Team</a></dd>
+                <dt>Created on</dt><dd>8/4/2024</dd>
+              </dl>
+            </div>
+            <div class="module-description-panel">
+              <h3 class="panel-title">Description</h3>
+              <p>Human resources and people. Manage employees under <strong>Employees</strong>; payslips and YTD are under Accounting → Payroll.</p>
+            </div>
+            <div class="module-cards-row">
+              <div class="module-info-card">
+                <h3 class="panel-title">Contact person</h3>
+                <div class="card-avatar">HR</div>
+                <p class="card-name">HR Team</p>
+                <p class="card-role">Human Resources</p>
+              </div>
+              <div class="module-info-card">
+                <h3 class="panel-title">Department</h3>
+                <p class="card-name">Operations</p>
+                <p class="card-muted">All departments</p>
+              </div>
+            </div>
+            <div class="module-table-panel">
+              <h3 class="panel-title">Team</h3>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Name</th><th>Employee ID</th><th>Department</th><th>Hired</th></tr></thead>
+                  <tbody id="hr-overview-team-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            </div>
+            <div id="hr-payroll-panel" class="hr-section-panel" data-section="payroll" style="display: none;">
+              <p class="module-meta">Payslips and payroll runs are managed in <a href="#accounting" data-section-link="payroll">Accounting → Payroll</a>. Company details for payslips are in <a href="#settings" data-section-link="payroll">Settings → Payroll Settings</a>. Add and edit employees in <a href="#hr">HR → Employees</a>.</p>
+            </div>
+            <div id="hr-history-panel" class="hr-section-panel" data-section="history" style="display: none;">
+              <p class="module-meta">History and audit trail. (Placeholder.)</p>
+            </div>
+          </div>
+          <aside class="module-copilot"><div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div><p class="copilot-prompt">Ask about people, leave, or payroll.</p></aside>
+        </div>
+      </section>
+
+      <section id="page-crew" class="page module-detail-page">
+        <div class="module-detail-wrap crew-module">
+          <div class="module-detail crew-section-wrap">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title" id="crew-title">Crew Management</h1>
+              <div class="module-detail-actions">
+                <button type="button" class="btn btn-ghost" id="crew-back-to-list-btn" style="display: none;">← Back to list</button>
+              </div>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-crew" aria-label="Subsections" hidden></nav>
+            <div class="crew-section-panel" data-section="roster">
+            <div id="crew-list-wrap" class="crew-section-wrap">
+              <div class="crew-expiry-alerts" id="crew-expiry-alerts" style="display: none;"></div>
+              <div class="crew-toolbar">
+                <button type="button" class="btn btn-primary" id="crew-add-member">+ Add crew member</button>
+                <div class="crew-metrics" id="crew-metrics"></div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table" id="crew-roster-table">
+                  <thead><tr><th>Name</th><th>Role / Rank</th><th>Contact</th><th>Documents</th><th>Next expiry</th><th>Vessels</th><th></th></tr></thead>
+                  <tbody id="crew-roster-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="crew-detail-wrap" class="crew-section-wrap crew-detail-wrap" style="display: none;">
+              <div class="crew-detail-panel">
+                <h3 class="panel-title">Profile</h3>
+                <div id="crew-detail-profile"></div>
+              </div>
+              <div class="crew-detail-panel">
+                <h3 class="panel-title">Documents &amp; certificates</h3>
+                <div class="crew-expiry-alerts" id="crew-detail-expiry-alerts" style="display: none;"></div>
+                <button type="button" class="btn btn-secondary" id="crew-add-document">+ Add document</button>
+                <div class="table-wrap">
+                  <table class="data-table" id="crew-documents-table">
+                    <thead><tr><th>Name</th><th>Type</th><th>Issue date</th><th>Expiry date</th><th>Status</th><th></th></tr></thead>
+                    <tbody id="crew-documents-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="crew-detail-panel">
+                <h3 class="panel-title">Vessel assignments</h3>
+                <button type="button" class="btn btn-secondary" id="crew-assign-vessel">+ Assign to vessel</button>
+                <div class="table-wrap">
+                  <table class="data-table" id="crew-assignments-table">
+                    <thead><tr><th>Vessel</th><th>Role on vessel</th><th>Joining date</th><th></th></tr></thead>
+                    <tbody id="crew-assignments-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            </div>
+            <div id="crew-modal-overlay" class="crew-modal-overlay" style="display: none;">
+              <div class="crew-modal">
+                <div class="crew-modal-body" id="crew-modal-body"></div>
+                <div class="crew-modal-actions">
+                  <button type="button" class="btn btn-ghost" id="crew-modal-cancel">Cancel</button>
+                  <button type="button" class="btn btn-primary" id="crew-modal-save">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <aside class="module-copilot"><div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div><p class="copilot-prompt">Ask about crew, documents, or vessel assignments.</p></aside>
+        </div>
+      </section>
+
+      <section id="page-shifts" class="page module-detail-page">
+        <div class="module-detail-wrap shifts-module">
+          <div class="module-detail shifts-section-wrap">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Shifts &amp; time off</h1>
+            </div>
+            <p class="module-meta" style="margin-bottom: 0.75rem;">Log shifts, request holidays and sick leave, and see the team calendar so schedules do not clash.</p>
+            <div class="shifts-toolbar">
+              <label for="shifts-staff-filter">View</label>
+              <select id="shifts-staff-filter" aria-label="Filter by team member"></select>
+              <label for="shifts-hours-month">Month</label>
+              <input type="month" id="shifts-hours-month" aria-label="Month for hours and shifts">
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-shifts" aria-label="Subsections" hidden></nav>
+            <div id="shifts-panel-dashboard" class="shifts-section-panel active" data-section="dashboard">
+              <div class="shifts-metrics" id="shifts-dashboard-metrics"></div>
+              <div class="shifts-alerts" id="shifts-dashboard-alerts"></div>
+              <div class="module-info-panel">
+                <h3 class="panel-title">Away today</h3>
+                <ul class="shifts-availability-list" id="shifts-off-today-list"></ul>
+              </div>
+              <div class="module-info-panel" style="margin-top: 1rem;">
+                <h3 class="panel-title">Pending approvals</h3>
+                <ul class="shifts-availability-list" id="shifts-pending-list"></ul>
+              </div>
+              <div class="shifts-toolbar" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-primary" id="shifts-add-shift">+ Log shift</button>
+                <button type="button" class="btn btn-secondary" id="shifts-add-request">+ Request time off</button>
+              </div>
+            </div>
+            <div id="shifts-panel-calendar" class="shifts-section-panel" data-section="calendar">
+              <div class="shifts-calendar-nav">
+                <button type="button" class="btn btn-ghost" id="shifts-cal-prev" aria-label="Previous month">←</button>
+                <h3 id="shifts-cal-title"></h3>
+                <button type="button" class="btn btn-ghost" id="shifts-cal-next" aria-label="Next month">→</button>
+              </div>
+              <p class="module-meta">Click a day to log a shift. Colours show shifts and time off.</p>
+              <div class="shifts-calendar-grid" id="shifts-calendar-grid"></div>
+              <div class="shifts-legend">
+                <span class="leg-shift">Shift</span>
+                <span class="leg-dayoff">Day off</span>
+                <span class="leg-holiday">Holiday</span>
+                <span class="leg-sick">Sick</span>
+              </div>
+            </div>
+            <div id="shifts-panel-log" class="shifts-section-panel" data-section="log-shifts">
+              <div class="shifts-toolbar">
+                <button type="button" class="btn btn-primary" id="shifts-add-shift-2">+ Log shift</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Date</th><th>Employee</th><th>Time</th><th>Hours</th><th>Notes</th><th></th></tr></thead>
+                  <tbody id="shifts-log-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="shifts-panel-requests" class="shifts-section-panel" data-section="requests">
+              <div class="shifts-toolbar">
+                <button type="button" class="btn btn-primary" id="shifts-add-request-2">+ Request time off</button>
+              </div>
+              <p class="module-meta">All requests are visible to the team. Approve or reject pending items to avoid clashes.</p>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Status</th><th>Notes</th><th></th></tr></thead>
+                  <tbody id="shifts-requests-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="shifts-panel-hours" class="shifts-section-panel" data-section="hours">
+              <div class="shifts-toolbar">
+                <button type="button" class="btn btn-secondary" id="shifts-export-csv">Export CSV</button>
+              </div>
+              <p class="module-meta" id="shifts-hours-summary"></p>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Employee</th><th>Shifts</th><th>Hours worked</th><th>Overtime (approx.)</th><th>Sick days</th><th>Holidays</th><th>Days off</th></tr></thead>
+                  <tbody id="shifts-hours-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="shifts-panel-availability" class="shifts-section-panel" data-section="availability">
+              <div class="shifts-toolbar">
+                <label for="shifts-avail-date">Date</label>
+                <input type="date" id="shifts-avail-date">
+              </div>
+              <p class="module-meta">Who is working, away, or free on the selected day.</p>
+              <ul class="shifts-availability-list" id="shifts-avail-list"></ul>
+            </div>
+            <div id="shifts-panel-settings" class="shifts-section-panel" data-section="settings">
+              <div class="shifts-toolbar">
+                <button type="button" class="btn btn-primary" id="shifts-add-staff">+ Add team member</button>
+                <button type="button" class="btn btn-secondary" id="shifts-import-hr">Import from HR</button>
+                <button type="button" class="btn btn-secondary" id="shifts-save-settings">Save settings</button>
+              </div>
+              <div class="form-row" style="max-width: 640px; margin-bottom: 1rem;">
+                <div class="form-group"><label>Standard hours per day</label><input type="number" id="shifts-settings-standard-hours" min="1" max="24" step="0.5"></div>
+                <div class="form-group"><label>Weekly hours threshold (overtime hint)</label><input type="number" id="shifts-settings-overtime" min="1" max="80"></div>
+              </div>
+              <div class="form-group" style="max-width: 640px; margin-bottom: 1rem;">
+                <label>Company holidays (one date per line, YYYY-MM-DD)</label>
+                <textarea id="shifts-company-holidays" rows="4" placeholder="2026-01-01&#10;2026-12-25"></textarea>
+              </div>
+              <h3 class="panel-title">Team roster</h3>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Name</th><th>Department</th><th>HR ID</th><th>Colour</th><th></th></tr></thead>
+                  <tbody id="shifts-staff-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="shifts-modal-overlay" class="shifts-modal-overlay" style="display: none;">
+              <div class="shifts-modal">
+                <div class="shifts-modal-body" id="shifts-modal-body"></div>
+                <div class="shifts-modal-actions">
+                  <button type="button" class="btn btn-ghost" id="shifts-modal-cancel">Cancel</button>
+                  <button type="button" class="btn btn-primary" id="shifts-modal-save">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <aside class="module-copilot"><div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div><p class="copilot-prompt">Ask about shifts, leave, or monthly hours.</p></aside>
+        </div>
+      </section>
+
+      <section id="page-documents" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Document ISO / Organisation</h1>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-documents" aria-label="Subsections" hidden></nav>
+            <div class="docs-section-panel" data-section="overview">
+            <div class="module-status-row">
+              <span class="status-tag status--progress">In review</span>
+              <span class="module-meta">Last update: 1 day ago</span>
+              <span class="module-meta">Standard: ISO 9001</span>
+            </div>
+            <div class="module-metrics">
+              <div class="metric-card metric--blue"><span class="metric-value">42</span><span class="metric-label">Documents</span></div>
+              <div class="metric-card metric--blue"><span class="metric-value">8</span><span class="metric-label">Folders</span></div>
+              <div class="metric-card metric--orange"><span class="metric-value">3</span><span class="metric-label">Pending review</span></div>
+              <div class="metric-card metric--green"><span class="metric-value">38</span><span class="metric-label">Approved</span></div>
+            </div>
+            <div class="module-info-panel">
+              <h3 class="panel-title">Details</h3>
+              <dl class="info-grid">
+                <dt>Name</dt><dd>ISO 9001 — Quality</dd>
+                <dt>Owner</dt><dd><a href="#">Quality Team</a></dd>
+                <dt>Created on</dt><dd>8/4/2024</dd>
+              </dl>
+            </div>
+            <div class="module-description-panel">
+              <h3 class="panel-title">Description</h3>
+              <p>ISO document organisation and control. Structure by standard and folder. Data is stored in local storage.</p>
+            </div>
+            <div class="module-cards-row">
+              <div class="module-info-card">
+                <h3 class="panel-title">Responsible</h3>
+                <div class="card-avatar">QT</div>
+                <p class="card-name">Quality Team</p>
+                <p class="card-role">Document control</p>
+              </div>
+              <div class="module-info-card">
+                <h3 class="panel-title">Standard</h3>
+                <p class="card-name">ISO 9001</p>
+                <p class="card-muted">Quality management</p>
+              </div>
+            </div>
+            <div class="module-table-panel">
+              <h3 class="panel-title">Recent documents</h3>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Name</th><th>Status</th><th>Updated</th></tr></thead>
+                  <tbody>
+                    <tr><td>Quality manual v2</td><td><span class="status-tag status--progress">In review</span></td><td>2/28/2025</td></tr>
+                    <tr><td>Procedure 4.1</td><td><span class="status-tag status--done">Approved</span></td><td>2/20/2025</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            </div>
+            <div class="docs-section-panel" data-section="folders" style="display: none;">
+              <p class="module-meta">Browse and manage document folders. Use the subsections above when you build this area.</p>
+            </div>
+            <div class="docs-section-panel" data-section="history" style="display: none;">
+              <p class="module-meta">Document revision history and audit trail.</p>
+            </div>
+          </div>
+          <aside class="module-copilot"><div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div><p class="copilot-prompt">Ask about documents or ISO structure.</p></aside>
+        </div>
+      </section>
+
+      <section id="page-contacts" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Contacts / Andrew Baker, Accom</h1>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-contacts" aria-label="Subsections" hidden></nav>
+            <div class="contacts-section-panel" data-section="overview">
+            <div class="module-status-row">
+              <span class="status-tag status--progress">In progress</span>
+              <span class="module-meta">Last activity: 2 days ago</span>
+              <span class="module-meta">Source: LinkedIn</span>
+              <span class="module-meta">Score: 87%</span>
+            </div>
+            <div class="module-metrics">
+              <div class="metric-card metric--blue"><span class="metric-value">16</span><span class="metric-label">Days in funnel</span></div>
+              <div class="metric-card metric--blue"><span class="metric-value">14</span><span class="metric-label">Days at stage</span></div>
+              <div class="metric-card metric--orange"><span class="metric-value">6</span><span class="metric-label">Emails sent</span></div>
+              <div class="metric-card metric--green"><span class="metric-value">4</span><span class="metric-label">Calls</span></div>
+            </div>
+            <div class="module-info-panel">
+              <h3 class="panel-title">Lead information</h3>
+              <dl class="info-grid">
+                <dt>Customer need</dt><dd>Marketing software</dd>
+                <dt>Name</dt><dd>Andrew Baker, Accom</dd>
+                <dt>Contact</dt><dd><a href="#">Andrew Baker</a></dd>
+                <dt>Account</dt><dd><a href="#">Accom</a></dd>
+                <dt>Owner</dt><dd><a href="#">James Smith</a></dd>
+                <dt>Created on</dt><dd>8/4/2024 12:55 PM</dd>
+              </dl>
+            </div>
+            <div class="module-description-panel">
+              <h3 class="panel-title">Description</h3>
+              <p>The lead was generated at our latest event. The contact has a high purchasing potential based on the information from our partner.</p>
+            </div>
+            <div class="module-cards-row">
+              <div class="module-info-card">
+                <h3 class="panel-title">Contact person</h3>
+                <div class="card-avatar">AB</div>
+                <p class="card-name">Andrew Baker</p>
+                <p class="card-role">Marketing Coordinator</p>
+                <p class="card-contact">andrew.baker@accom.com</p>
+                <p class="card-contact">+1 555 0123</p>
+              </div>
+              <div class="module-info-card">
+                <h3 class="panel-title">Account</h3>
+                <p class="card-name">Accom</p>
+                <p class="card-muted">Accom-Westhouse</p>
+              </div>
+            </div>
+            <div class="module-table-panel">
+              <h3 class="panel-title">Similar leads</h3>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Name</th><th>Stage</th><th>Contact</th><th>Created</th></tr></thead>
+                  <tbody>
+                    <tr><td>Marketing / Jane Doe</td><td><span class="status-tag status--progress">Qualified</span></td><td>Jane Doe</td><td>9/1/2024</td></tr>
+                    <tr><td>Sales / John Smith</td><td><span class="status-tag status--done">Customer</span></td><td>John Smith</td><td>8/15/2024</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            </div>
+            <div class="contacts-section-panel" data-section="activities" style="display: none;">
+              <p class="module-meta">Contact activities and tasks. Use the subsections above when you build this area.</p>
+            </div>
+            <div class="contacts-section-panel" data-section="history" style="display: none;">
+              <p class="module-meta">Contact history and communications log.</p>
+            </div>
+          </div>
+          <aside class="module-copilot">
+            <div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div>
+            <p class="copilot-prompt">Please enter your question or request here.</p>
+            <div class="copilot-suggestions">
+              <button type="button" class="copilot-suggestion">Funnel overview</button>
+              <button type="button" class="copilot-suggestion">My KPIs overview</button>
+              <button type="button" class="copilot-suggestion">Current opportunity overview</button>
+            </div>
+            <div class="copilot-response">
+              <p class="copilot-response-label">Response</p>
+              <div class="copilot-cards">
+                <span class="copilot-card">Scheduled tasks: 0</span>
+                <span class="copilot-card">Days in funnel: 16</span>
+                <span class="copilot-card">Probability: Medium</span>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- Admin: user management (admin-only) -->
+      <section id="page-admin" class="page">
+        <div class="page-header">
+          <h1>User management</h1>
+          <p class="page-subtitle">Register users and assign modules. Only administrators can access this page.</p>
+        </div>
+        <div class="admin-actions">
+          <button type="button" class="btn btn-primary" id="admin-add-user-btn">Add user</button>
+        </div>
+        <div class="module-info-panel">
+          <h3 class="panel-title">Users</h3>
+          <div id="admin-user-list" class="admin-user-list">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+        <div id="admin-user-form-wrap" class="admin-form-wrap hidden">
+          <div class="module-info-panel">
+            <h3 class="panel-title" id="admin-form-title">Add user</h3>
+            <form id="admin-user-form" class="admin-user-form">
+              <input type="hidden" id="admin-user-id" value="">
+              <label for="admin-username">Username</label>
+              <input type="text" id="admin-username" required placeholder="Login name">
+              <label for="admin-password">Password <span class="label-optional" id="admin-password-optional">(leave blank to keep current)</span></label>
+              <input type="password" id="admin-password" placeholder="Password">
+              <label for="admin-displayname">Display name</label>
+              <input type="text" id="admin-displayname" required placeholder="Full name">
+              <label class="admin-check-label">
+                <input type="checkbox" id="admin-is-admin"> Administrator (access all modules + this page)
+              </label>
+              <p class="panel-title" style="margin-top:16px;margin-bottom:8px">Modules this user can access</p>
+              <div class="admin-module-checkboxes">
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="accounting"> Accounting</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="clients"> Clients</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="fleet"> Fleet Management</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="hr"> HR</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="crew"> Crew Management</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="shifts"> Shifts</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="documents"> Document ISO</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="contacts"> Contacts</label>
+              </div>
+              <div class="admin-form-buttons">
+                <button type="submit" class="btn btn-primary">Save user</button>
+                <button type="button" class="btn btn-ghost" id="admin-cancel-btn">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal for Invoice/Receipt view & print (Accounting) -->
+  <div id="invoice-modal" class="modal accounting-modal">
+    <div class="modal-content invoice-print-view">
+      <div class="modal-header">
+        <h2 id="modal-title">Invoice Preview</h2>
+        <div class="modal-actions" id="modal-actions">
+          <button type="button" class="btn btn-primary" id="modal-edit-btn">✏️ Edit</button>
+          <button type="button" class="btn btn-secondary" id="modal-print-btn">🖨️ Print</button>
+          <button type="button" class="btn btn-danger" id="modal-delete-btn">🗑️ Delete</button>
+          <button type="button" class="btn btn-secondary" id="modal-close-btn" onclick="window.app&&app.closeInvoiceModal()">✕ Close</button>
+        </div>
+      </div>
+      <div id="invoice-preview-content"></div>
+    </div>
+  </div>
+
+  <!-- Supabase (optional, skipped on file://); see SUPABASE.md -->
+  <script>
+    window.ANDECO_SUPABASE_URL = 'https://mtoqqoatzrzfrhzfvhgi.supabase.co';
+    window.ANDECO_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10b3Fxb2F0enJ6ZnJoemZ2aGdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTI3MzcsImV4cCI6MjA5MjI4ODczN30.jonAbRO0fBnl89tP5ZuuVSiI9axIjTzwhuXrc-JEotw';
+    window.ANDECO_ORG_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    if (window.location.protocol !== 'file:') {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+      document.head.appendChild(s);
+    }
+  </script>
+  <script src="js/accounting-data.js" defer></script>
+  <script src="js/accounting-invoices.js" defer></script>
+  <script src="js/clients-module.js" defer></script>
+  <script src="js/hr-employees.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="js/payroll.js" defer></script>
+  <script src="js/fleet-management.js" defer></script>
+  <script src="js/crew-management.js" defer></script>
+  <script src="js/shifts-management.js" defer></script>
+  <script src="js/module-navigation.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script>
+    (function(){
+      var appEl = document.getElementById('accounting-invoice-app');
+      var placeholder = document.querySelector('.accounting-placeholder');
+      if (appEl && placeholder) {
+        appEl.addEventListener('click', function(e) {
+          var action = e.target.getAttribute('data-action');
+          if (!action || typeof window.app === 'undefined') return;
+          if (action === 'show-create-invoice') window.app.showPage('create-invoice');
+          else if (action === 'show-invoices') window.app.showPage('invoices');
+          else if (action === 'show-clients') window.app.showClientsList();
+          else if (action === 'show-client-form') window.app.showClientForm();
+          else if (action === 'show-clients-list') window.app.showClientsList();
+          else if (action === 'show-create-receipt') window.app.showPage('create-receipt');
+          else if (action === 'show-receipts') window.app.showPage('receipts');
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

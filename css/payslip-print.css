@@ -1,0 +1,483 @@
+/* Payslip print window: same style as on-screen view, one page only */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { margin: 0; padding: 0; background: #fff; font-family: Arial, sans-serif; }
+
+/* Professional Payslip Styles (match on-screen view) */
+.payslip-result {
+    background: white;
+    margin-top: 2rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.payslip-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: white;
+    font-family: 'Arial', sans-serif;
+    line-height: 1.4;
+    --payslip-money-col: 7.25rem;
+}
+
+.payslip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #333;
+}
+
+.company-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.company-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 180px;
+    height: 90px;
+}
+
+.company-logo-img {
+    max-height: 90px;
+    max-width: 180px;
+    object-fit: contain;
+}
+
+.company-logo-text {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #007bff;
+    text-align: center;
+    display: none;
+}
+
+.company-logo-img[style*="display: block"] ~ .company-logo-text,
+.company-logo-img[style*="display:block"] ~ .company-logo-text,
+.company-logo-img[data-logo-present="true"] ~ .company-logo-text,
+.company-logo-img[src]:not([src=""]) ~ .company-logo-text {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+.company-name {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #000;
+    margin: 0 0 0.5rem 0;
+}
+
+.company-address,
+.company-contact {
+    margin: 0.2rem 0;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.payslip-title {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #007bff;
+    text-align: right;
+}
+
+.info-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.info-block {
+    border: 1px solid #ddd;
+}
+
+.info-header {
+    background: #007bff;
+    color: white;
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.info-content {
+    padding: 1rem;
+}
+
+.info-item {
+    margin-bottom: 0.5rem;
+}
+
+.info-label {
+    font-weight: bold;
+    margin-right: 0.5rem;
+}
+
+.info-value {
+    font-weight: bold;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.payslip-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    table-layout: fixed;
+}
+
+.payslip-container .payslip-cols-3 th:nth-child(2),
+.payslip-container .payslip-cols-3 th:nth-child(3),
+.payslip-container .payslip-cols-3 td:nth-child(2),
+.payslip-container .payslip-cols-3 td:nth-child(3) {
+    width: var(--payslip-money-col);
+    min-width: var(--payslip-money-col);
+    max-width: var(--payslip-money-col);
+    box-sizing: border-box;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.payslip-container .payslip-cols-5 th:nth-child(4),
+.payslip-container .payslip-cols-5 th:nth-child(5),
+.payslip-container .payslip-cols-5 td:nth-child(4),
+.payslip-container .payslip-cols-5 td:nth-child(5) {
+    width: var(--payslip-money-col);
+    min-width: var(--payslip-money-col);
+    max-width: var(--payslip-money-col);
+    box-sizing: border-box;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.payslip-table th {
+    background: #f8f9fa;
+    padding: 0.5rem;
+    text-align: center;
+    font-weight: bold;
+    border: 1px solid #ddd;
+    font-size: 0.9rem;
+}
+
+.payslip-table td {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.payslip-table td:first-child {
+    text-align: left;
+    font-weight: bold;
+}
+
+.payslip-table td:nth-child(2),
+.payslip-table td:nth-child(3),
+.payslip-table td:nth-child(4),
+.payslip-table td:nth-child(5),
+.payslip-table th:nth-child(2),
+.payslip-table th:nth-child(3),
+.payslip-table th:nth-child(4),
+.payslip-table th:nth-child(5) {
+    text-align: right;
+}
+
+.earnings-section h3,
+.deductions-section h3,
+.contributions-section h3 {
+    background: #333;
+    color: white;
+    padding: 0.5rem 1rem;
+    margin: 0 0 1rem 0;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.earnings-section h4 {
+    background: #f8f9fa;
+    color: #333;
+    padding: 0.3rem 1rem;
+    margin: 1rem 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.payslip-table .total-row {
+    background: #f8f9fa;
+    font-weight: bold;
+}
+
+.payslip-table .total-row td {
+    background: #f8f9fa;
+    font-weight: bold;
+    padding: 0.5rem;
+    border-top: 2px solid #333;
+}
+
+.payslip-table .gross-pay-total {
+    background: #f0f8f0;
+}
+
+.payslip-table .gross-pay-total td {
+    background: #f0f8f0;
+    padding: 0.5rem;
+}
+
+.net-pay-section {
+    margin: 2rem 0;
+}
+
+.net-pay-section .payslip-table {
+    border: none;
+}
+
+.payment-details {
+    margin: 2rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+}
+
+.payment-details p {
+    margin: 0.3rem 0;
+    font-size: 0.9rem;
+}
+
+.signatures {
+    display: flex;
+    justify-content: space-between;
+    margin: 4rem 0;
+    padding-top: 4rem;
+    margin-top: 6rem;
+}
+
+.signature-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 30%;
+}
+
+.signature-space {
+    margin-bottom: 0.5rem;
+}
+
+.signature-line {
+    width: 200px;
+    height: 30px;
+    border-bottom: 1px solid #333;
+    margin-bottom: 10px;
+}
+
+.signature-label {
+    font-size: 0.9rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+.payslip-footer {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #ddd;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Print: one page only, compact layout to fit A4 */
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 0.3in;
+    }
+    body {
+        margin: 0;
+        padding: 0;
+        background: #fff;
+    }
+    .payslip-container {
+        max-width: 100%;
+        padding: 0.3in 0.2in 0.2in 0.2in;
+        line-height: 1.15;
+        page-break-inside: avoid;
+        --payslip-money-col: 24mm;
+    }
+    .payslip-container::after {
+        display: none !important;
+    }
+    .payslip-header {
+        margin-bottom: 0.6rem;
+        padding-top: 0.4rem;
+        padding-bottom: 0.5rem;
+        min-height: 1.2in;
+    }
+    .company-logo {
+        min-width: 1in;
+        height: 0.6in;
+    }
+    .company-logo-img {
+        max-height: 24px;
+        max-width: 24px;
+    }
+    .company-name {
+        font-size: 0.95rem;
+        margin: 0 0 0.1rem 0;
+    }
+    .company-address,
+    .company-contact {
+        margin: 0.05rem 0;
+        font-size: 0.6rem;
+    }
+    .payslip-title {
+        font-size: 1rem;
+    }
+    .info-section {
+        gap: 0.35rem;
+        margin-bottom: 0.3rem;
+    }
+    .info-header {
+        padding: 0.12rem 0.3rem;
+        font-size: 0.6rem;
+    }
+    .info-content {
+        padding: 0.2rem 0.35rem;
+    }
+    .info-item,
+    .info-row {
+        margin-bottom: 0;
+        padding: 0.08rem 0;
+        font-size: 0.65rem;
+    }
+    .payslip-table {
+        margin-bottom: 0.2rem;
+    }
+    .payslip-table th,
+    .payslip-table td {
+        padding: 0.12rem 0.25rem;
+        font-size: 0.6rem;
+    }
+    .earnings-section h3,
+    .deductions-section h3,
+    .contributions-section h3 {
+        padding: 0.12rem 0.35rem;
+        margin: 0 0 0.2rem 0;
+        font-size: 0.7rem;
+    }
+    .earnings-section h4 {
+        padding: 0.08rem 0.35rem;
+        margin: 0.25rem 0 0.12rem 0;
+        font-size: 0.65rem;
+    }
+    .payslip-table {
+        table-layout: fixed;
+    }
+    
+    .payslip-table .total-row td {
+        padding: 0.12rem 0.25rem;
+        font-size: 0.65rem;
+    }
+    
+    .payslip-table .gross-pay-total td {
+        padding: 0.12rem 0.25rem;
+    }
+    .net-pay-section {
+        margin: 0.3rem 0;
+    }
+    .payment-details {
+        margin: 0.25rem 0;
+        padding: 0.2rem 0.35rem;
+    }
+    .payment-details p {
+        margin: 0.08rem 0;
+        font-size: 0.6rem;
+    }
+    .signatures {
+        margin: 1rem 0 0;
+        padding-top: 1rem;
+    }
+    .signature-line {
+        width: 90px;
+        height: 14px;
+        margin-bottom: 4px;
+    }
+    .signature-label {
+        font-size: 0.55rem;
+    }
+    .payslip-footer {
+        margin-top: 0.25rem;
+        padding-top: 0.2rem;
+        font-size: 0.55rem;
+    }
+
+    .payslip-income-tax-breakdown-row {
+        display: none !important;
+    }
+
+    .payslip-income-tax-breakdown-row > td {
+        padding-top: 0;
+        padding-bottom: 0.2rem;
+        vertical-align: top;
+    }
+    .payslip-income-tax-breakdown {
+        font-size: 0.55rem;
+        color: #333;
+        line-height: 1.25;
+        margin: 0.05rem 0 0.15rem;
+    }
+    .payslip-tax-breakdown-title {
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+    }
+    .payslip-tax-breakdown-note {
+        margin: 0 0 0.25rem;
+        font-size: 0.5rem;
+        color: #444;
+    }
+    .payslip-tax-breakdown-muted {
+        margin: 0;
+        font-size: 0.5rem;
+        color: #666;
+        font-style: italic;
+    }
+    .payslip-tax-breakdown-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.5rem;
+        margin-top: 0.1rem;
+    }
+    .payslip-tax-breakdown-table th,
+    .payslip-tax-breakdown-table td {
+        padding: 0.08rem 0.15rem;
+        border: 1px solid #ccc;
+    }
+    .payslip-tax-breakdown-table th {
+        background: #f0f0f0;
+        font-weight: 600;
+    }
+    .payslip-tax-breakdown-num {
+        text-align: right;
+        white-space: nowrap;
+    }
+    .payslip-tax-breakdown-adj td {
+        background: #fff9e6;
+        font-size: 0.48rem;
+    }
+    .payslip-tax-breakdown-total td {
+        background: #e8e8e8;
+        font-weight: 600;
+    }
+}

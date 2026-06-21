@@ -1,0 +1,145 @@
+/* Crew Management — Roster, documents with expiry, vessel assignments */
+
+.crew-section-wrap {
+  margin-top: 0.5rem;
+}
+
+.crew-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.crew-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.crew-metric {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #555);
+}
+
+#crew-roster-tbody tr[data-id] {
+  cursor: pointer;
+}
+
+#crew-roster-tbody tr[data-id]:hover {
+  background: #f8f9fa;
+}
+
+.crew-expiry-alerts {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #0b6bcb;
+}
+
+.crew-expiry-alerts .panel-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.crew-expiry-item {
+  font-size: 0.85rem;
+  padding: 0.25rem 0;
+}
+
+.crew-alert--expired {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.crew-alert--warn {
+  color: #c2410c;
+}
+
+.crew-alert--info {
+  color: #0b6bcb;
+}
+
+.crew-doc-expired {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.crew-doc-warn {
+  color: #c2410c;
+}
+
+.crew-doc-info {
+  color: #0b6bcb;
+}
+
+.crew-detail-wrap {
+  margin-top: 0.5rem;
+}
+
+.crew-detail-wrap .panel-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.crew-detail-wrap .table-wrap {
+  margin-top: 0.5rem;
+}
+
+.crew-detail-panel {
+  margin-bottom: 1.5rem;
+}
+
+.crew-detail-panel .panel-title {
+  margin-bottom: 0.5rem;
+}
+
+.crew-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.crew-modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 520px;
+  width: 90%;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.crew-modal-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+}
+
+.crew-modal-body {
+  padding: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.crew-modal-body .form-group {
+  margin-bottom: 0;
+}
+
+.crew-modal-body .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.crew-modal-actions {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

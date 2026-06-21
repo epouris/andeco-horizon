@@ -1,0 +1,477 @@
+/* Fleet Management — Vessel database, documents, maintenance, inventory, logbooks, crew, photos */
+
+.fleet-section-wrap {
+  margin-top: 0.5rem;
+}
+
+.fleet-dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.fleet-dashboard-alerts {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #0b6bcb;
+}
+
+.fleet-alert-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.fleet-alert-list li {
+  margin: 0.25rem 0;
+}
+
+.fleet-thumb-cell {
+  width: 48px;
+  padding: 0.35rem !important;
+  vertical-align: middle;
+}
+
+.fleet-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+}
+
+.fleet-thumb-placeholder {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  background: #eee;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  text-align: center;
+  line-height: 40px;
+  color: #999;
+}
+
+.fleet-vessel-photo-section {
+  margin-bottom: 1.5rem;
+}
+
+.fleet-photo-main-wrap {
+  margin-bottom: 0.75rem;
+}
+
+.fleet-vessel-photo-main {
+  max-width: 280px;
+  max-height: 180px;
+  object-fit: contain;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.fleet-photo-placeholder {
+  width: 200px;
+  height: 120px;
+  background: #f0f0f0;
+  border: 1px dashed #ccc;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.fleet-photo-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.fleet-gallery-item {
+  position: relative;
+}
+
+.fleet-gallery-item img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  display: block;
+}
+
+.fleet-gallery-item .fleet-del-photo {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.fleet-sub-tabs {
+  list-style: none;
+  margin: 0 0 0.75rem 0;
+  padding: 0;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.fleet-sub-tab {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  color: var(--text-secondary, #555);
+  border-radius: 4px;
+  background: #f0f0f0;
+}
+
+.fleet-sub-tab:hover,
+.fleet-sub-tab.active {
+  background: var(--sidebar-purple, #6366f1);
+  color: #fff;
+}
+
+.fleet-low-stock-alerts {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #fff8f0;
+  border-radius: 6px;
+  border-left: 4px solid #c2410c;
+}
+
+.fleet-low-stock-alerts .panel-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.fleet-row-low {
+  background: #fff8f0;
+}
+
+.fleet-module .fleet-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.fleet-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.fleet-metric {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #555);
+}
+
+.fleet-metric--warn {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.fleet-metric--info {
+  color: #0b6bcb;
+}
+
+.fleet-empty {
+  color: var(--text-secondary, #555);
+  padding: 2rem;
+  text-align: center;
+}
+
+.fleet-vessel-link {
+  color: var(--sidebar-purple, #6366f1);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.fleet-vessel-link:hover {
+  text-decoration: underline;
+}
+
+.fleet-detail-wrap {
+  margin-top: 0.5rem;
+}
+
+.fleet-vessel-tabs {
+  margin-bottom: 1rem;
+}
+
+.fleet-vessel-panel {
+  margin-top: 0.5rem;
+}
+
+.fleet-specs-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.fleet-specs-form .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.fleet-expiry-alerts {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #0b6bcb;
+}
+
+.fleet-expiry-alerts h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.fleet-expiry-item {
+  font-size: 0.85rem;
+  padding: 0.25rem 0;
+}
+
+.fleet-alert--expired {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.fleet-alert--warn {
+  color: #c2410c;
+}
+
+.fleet-alert--info {
+  color: #0b6bcb;
+}
+
+.fleet-doc-expired {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.fleet-doc-warn {
+  color: #c2410c;
+}
+
+.fleet-doc-info {
+  color: #0b6bcb;
+}
+
+.fleet-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fleet-modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 520px;
+  width: 90%;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.fleet-modal-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+}
+
+.fleet-modal-body {
+  padding: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.fleet-modal-body .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.fleet-modal-actions {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* Specification sheet form */
+.fleet-specsheet-intro {
+  margin-bottom: 1rem;
+  color: var(--text-secondary, #555);
+  font-size: 0.9rem;
+}
+
+.fleet-specsheet-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.fleet-specsheet-section {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.fleet-specsheet-section-title {
+  grid-column: 1 / -1;
+  margin: 1rem 0 0.35rem 0;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #ddd;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.fleet-specsheet-section:first-child .fleet-specsheet-section-title {
+  margin-top: 0;
+}
+
+.fleet-specsheet-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* PDF content (hidden, used for html2pdf) */
+.fleet-spec-pdf {
+  font-family: Arial, sans-serif;
+  font-size: 9pt;
+  color: #333;
+  padding: 8mm;
+  box-sizing: border-box;
+}
+
+.spec-pdf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6mm;
+  padding-bottom: 4mm;
+  border-bottom: 2px solid #1a365d;
+}
+
+.spec-pdf-brand {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+}
+
+.spec-pdf-logo {
+  width: 8mm;
+  height: 8mm;
+  background: #2d5a27;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 5pt;
+}
+
+.spec-pdf-company {
+  font-size: 7pt;
+  font-weight: bold;
+  color: #333;
+  line-height: 1.2;
+}
+
+.spec-pdf-title {
+  font-size: 14pt;
+  font-weight: bold;
+  color: #1a365d;
+  margin: 0;
+}
+
+.spec-pdf-vessel {
+  margin-bottom: 6mm;
+}
+
+.spec-pdf-vessel-name {
+  font-size: 14pt;
+  font-weight: bold;
+  color: #444;
+}
+
+.spec-pdf-vessel-type {
+  font-size: 9pt;
+  color: #555;
+}
+
+.spec-pdf-columns {
+  display: flex;
+  gap: 8mm;
+  margin-bottom: 6mm;
+}
+
+.spec-pdf-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.spec-block {
+  margin-bottom: 4mm;
+}
+
+.spec-heading {
+  font-size: 8pt;
+  font-weight: bold;
+  color: #1a365d;
+  margin-bottom: 1.5mm;
+  text-transform: uppercase;
+}
+
+.spec-row {
+  font-size: 8pt;
+  margin-bottom: 0.75mm;
+  display: flex;
+  gap: 2mm;
+}
+
+.spec-label {
+  flex: 0 0 auto;
+  font-weight: bold;
+  color: #444;
+}
+
+.spec-value {
+  color: #333;
+}
+
+.spec-pdf-footer {
+  margin-top: 6mm;
+  padding-top: 4mm;
+  border-top: 1px solid #ccc;
+}
+
+.spec-pdf-contact-title {
+  font-weight: bold;
+  font-size: 9pt;
+  margin-bottom: 2mm;
+}
+
+.spec-pdf-contact {
+  font-size: 8pt;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4mm 8mm;
+}

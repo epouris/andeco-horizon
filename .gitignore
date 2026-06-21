@@ -1,0 +1,20 @@
+# Local data backup (company data lives in Supabase when online)
+andeco_data.json
+
+# Dependencies / tooling
+node_modules/
+.npm/
+
+# OS & editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# Secrets (never commit)
+.env
+.env.*
+*.pem
