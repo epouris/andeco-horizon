@@ -654,7 +654,7 @@
 
 /* IR63 Styles */
 #accounting-payroll-content .ir63-result,
-#accounting-reports-content .ir63-result {
+#hr-payroll-panel .ir63-result {
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 8px;
@@ -663,7 +663,7 @@
 }
 
 #accounting-payroll-content .ir63-actions,
-#accounting-reports-content .ir63-actions {
+#hr-payroll-panel .ir63-actions {
     display: flex;
     gap: 1rem;
     justify-content: center;
@@ -674,6 +674,7 @@
 #accounting-payroll-content .ytd-controls,
 #accounting-payroll-content .payslip-controls,
 #accounting-payroll-content .ir63-controls,
+#hr-payroll-panel .ir63-controls,
 #accounting-payroll-content .reports-controls {
     display: flex;
     gap: 1rem;
@@ -688,6 +689,7 @@
 #accounting-payroll-content .ytd-controls .form-group,
 #accounting-payroll-content .payslip-controls .form-group,
 #accounting-payroll-content .ir63-controls .form-group,
+#hr-payroll-panel .ir63-controls .form-group,
 #accounting-payroll-content .reports-controls .form-group {
     margin-bottom: 0;
 }
@@ -871,6 +873,7 @@
     #accounting-payroll-content .ytd-controls,
     #accounting-payroll-content .payslip-controls,
     #accounting-payroll-content .ir63-controls,
+    #hr-payroll-panel .ir63-controls,
     #accounting-payroll-content .reports-controls {
         flex-direction: column;
         align-items: stretch;

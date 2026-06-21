@@ -67,7 +67,7 @@
       ],
       payroll: [
         { id: 'overview', label: 'Overview' },
-        { id: 'links', label: 'Payroll links' }
+        { id: 'ir63', label: 'IR63 Form' }
       ],
       history: [
         { id: 'audit', label: 'Audit trail' },
@@ -306,6 +306,9 @@
     }
     if (moduleId === 'hr' && sectionId === 'employees' && subsectionId === 'list') {
       if (typeof window.hrEmployeesLoad === 'function') window.hrEmployeesLoad();
+    }
+    if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'ir63') {
+      if (typeof window.updateEmployeeDropdowns === 'function') window.updateEmployeeDropdowns();
     }
     if (moduleId === 'shifts' && typeof window.ShiftsManagement !== 'undefined') {
       if (window.ShiftsManagement.onSubsectionChange) window.ShiftsManagement.onSubsectionChange(sectionId, subsectionId);

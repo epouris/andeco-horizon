@@ -584,32 +584,6 @@
                 </div>
                 <div id="statement-content" style="display: none; margin-top: 1rem;"></div>
               </section>
-              <section class="reports-subsection">
-                <h3 class="reports-subsection-title">IR63 Form – Annual Taxation</h3>
-                <p class="reports-subsection-desc">Generate IR63 emoluments certificates for the tax year. Uses employees and payroll data from Accounting → Payroll.</p>
-                <div class="invoice-form-container" style="max-width: 600px;">
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label for="ir63Year">Tax Year:</label>
-                      <select id="ir63Year" onchange="typeof generateIR63==='function'&&generateIR63()">
-                        <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label for="ir63Employee">Select Employee:</label>
-                      <select id="ir63Employee" onchange="typeof generateIR63==='function'&&generateIR63()">
-                        <option value="">All Employees</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <button type="button" class="btn btn-primary" onclick="typeof generateIR63==='function'&&generateIR63()">Generate IR63</button>
-                      <button type="button" class="btn btn-secondary" onclick="typeof exportIR63==='function'&&exportIR63()">Export IR63</button>
-                      <button type="button" class="btn btn-secondary" onclick="typeof printIR63==='function'&&printIR63()">Print IR63</button>
-                    </div>
-                  </div>
-                </div>
-                <div id="ir63Result" class="ir63-result" style="margin-top: 1rem;"></div>
-              </section>
             </div>
             <!-- Invoices & Receipts (embedded in CRM) -->
             <div id="accounting-invoice-app" class="accounting-embed" style="display:none;">
@@ -1310,8 +1284,37 @@
               </div>
             </div>
             </div>
-            <div id="hr-payroll-panel" class="hr-section-panel" data-section="payroll" style="display: none;">
-              <p class="module-meta">Payslips and payroll runs are managed in <a href="#accounting" data-section-link="payroll">Accounting → Payroll</a>. Company details for payslips are in <a href="#settings" data-section-link="payroll">Settings → Payroll Settings</a>. Add and edit employees in <a href="#hr">HR → Employees</a>.</p>
+            <div id="hr-payroll-panel" class="hr-section-panel" data-section="payroll" style="display: none;" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="overview">
+                <div class="page-header"><h2>Payroll</h2></div>
+                <p class="module-meta">Payslips and payroll runs are managed in <a href="#accounting" data-section-link="payroll">Accounting → Payroll</a>. Company details for payslips are in <a href="#settings" data-section-link="payroll">Settings → Payroll Settings</a>. Add and edit employees in <a href="#hr">HR → Employees</a>.</p>
+              </div>
+              <div class="module-subsection-panel" data-subsection="ir63">
+                <div class="page-header"><h2>IR63 Form – Annual Taxation</h2></div>
+                <p class="module-meta" style="margin-bottom: 1rem;">Generate IR63 emoluments certificates for the tax year. Uses employee records from HR and payroll data from Accounting → Payroll.</p>
+                <div class="invoice-form-container ir63-controls" style="max-width: 100%;">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="ir63Year">Tax Year:</label>
+                      <select id="ir63Year" onchange="typeof generateIR63==='function'&&generateIR63()">
+                        <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="ir63Employee">Select Employee:</label>
+                      <select id="ir63Employee" onchange="typeof generateIR63==='function'&&generateIR63()">
+                        <option value="">All Employees</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <button type="button" class="btn btn-primary" onclick="typeof generateIR63==='function'&&generateIR63()">Generate IR63</button>
+                      <button type="button" class="btn btn-secondary" onclick="typeof exportIR63==='function'&&exportIR63()">Export IR63</button>
+                      <button type="button" class="btn btn-secondary" onclick="typeof printIR63==='function'&&printIR63()">Print IR63</button>
+                    </div>
+                  </div>
+                </div>
+                <div id="ir63Result" class="ir63-result"></div>
+              </div>
             </div>
             <div id="hr-history-panel" class="hr-section-panel" data-section="history" style="display: none;">
               <p class="module-meta">History and audit trail. (Placeholder.)</p>
