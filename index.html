@@ -1259,7 +1259,7 @@
             </div>
             <div class="module-description-panel">
               <h3 class="panel-title">Description</h3>
-              <p>Human resources and people. Manage employees under <strong>Employees</strong>; payslips and YTD are under Accounting → Payroll.</p>
+              <p>Human resources and people. Manage employees under <strong>Employees</strong>; year-to-date payroll totals are listed below and in Accounting → Payroll.</p>
             </div>
             <div class="module-cards-row">
               <div class="module-info-card">
@@ -1275,11 +1275,31 @@
               </div>
             </div>
             <div class="module-table-panel">
-              <h3 class="panel-title">Team</h3>
+              <div class="hr-overview-ytd-header">
+                <h3 class="panel-title">Employees — year to date</h3>
+                <div class="form-group hr-overview-ytd-year-wrap">
+                  <label for="hr-overview-ytd-year">Year</label>
+                  <select id="hr-overview-ytd-year" aria-label="Tax year for YTD totals">
+                    <option value="2030">2030</option><option value="2029">2029</option><option value="2028">2028</option><option value="2027">2027</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+                  </select>
+                </div>
+              </div>
+              <p class="module-meta" style="margin-bottom: 0.75rem;">Totals from saved payslips for the selected year (same data as Accounting → Payroll → Year to date).</p>
               <div class="table-wrap">
-                <table class="data-table">
-                  <thead><tr><th>Name</th><th>Employee ID</th><th>Department</th><th>Hired</th></tr></thead>
+                <table class="data-table hr-overview-ytd-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Employee ID</th>
+                      <th>Gross pay</th>
+                      <th>Income tax</th>
+                      <th>Social insurance</th>
+                      <th>Holiday fund</th>
+                      <th>Net pay</th>
+                    </tr>
+                  </thead>
                   <tbody id="hr-overview-team-tbody"></tbody>
+                  <tfoot id="hr-overview-ytd-tfoot"></tfoot>
                 </table>
               </div>
             </div>

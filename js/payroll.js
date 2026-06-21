@@ -2342,6 +2342,33 @@ function updateYTDDisplay() {
     document.getElementById('totalHolidayFund').textContent = `${formatMoney(totalHolidayFund)}`;
 }
 
+function getEmployeePayrollYTDTotals(employeeId, year) {
+    const y = String(year);
+    const totals = {
+        grossSalary: 0,
+        incomeTax: 0,
+        socialInsurance: 0,
+        holidayFund: 0,
+        nhs: 0,
+        netPay: 0
+    };
+    for (let month = 1; month <= 12; month++) {
+        const monthStr = month.toString().padStart(2, '0');
+        const payrollKey = `${employeeId}_${y}_${monthStr}`;
+        if (payrollData[payrollKey]) {
+            const data = payrollData[payrollKey];
+            totals.grossSalary += data.grossSalary || 0;
+            totals.incomeTax += data.incomeTax || 0;
+            totals.socialInsurance += data.socialInsurance || 0;
+            totals.holidayFund += data.holidayFund || 0;
+            totals.nhs += data.nhs || 0;
+        }
+    }
+    totals.netPay = totals.grossSalary - totals.incomeTax - totals.socialInsurance - totals.nhs;
+    return totals;
+}
+window.getEmployeePayrollYTDTotals = getEmployeePayrollYTDTotals;
+
 function updateSocialInsuranceYTDDisplay() {
     const yearEl = document.getElementById('siYtdYear');
     const employeeEl = document.getElementById('siYtdEmployee');

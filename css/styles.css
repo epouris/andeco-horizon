@@ -988,6 +988,38 @@ body.home-view {
   color: var(--text-primary);
   margin-bottom: 14px;
 }
+.hr-overview-ytd-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-bottom: 4px;
+}
+.hr-overview-ytd-header .panel-title {
+  margin-bottom: 0;
+}
+.hr-overview-ytd-year-wrap {
+  margin: 0;
+}
+.hr-overview-ytd-year-wrap label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.hr-overview-ytd-year-wrap select {
+  min-width: 6rem;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border, #e5e7eb);
+}
+.hr-overview-ytd-table tfoot .hr-overview-ytd-total-row th,
+.hr-overview-ytd-table tfoot .hr-overview-ytd-total-row td {
+  font-weight: 600;
+  border-top: 2px solid var(--border, #e5e7eb);
+  background: var(--bg-app, #f9fafb);
+}
 .info-grid {
   display: grid;
   grid-template-columns: 140px 1fr;
