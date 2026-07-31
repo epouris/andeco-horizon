@@ -1,17 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Andeco Horizon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Andeco Horizon Suite">
   <defs>
-    <linearGradient id="bg" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#4338ca"/>
-      <stop offset="1" stop-color="#6366f1"/>
+    <linearGradient id="ah-bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0b1f33"/>
+      <stop offset="1" stop-color="#123a56"/>
     </linearGradient>
-    <linearGradient id="sun" x1="18" y1="6" x2="26" y2="16" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fde68a"/>
-      <stop offset="1" stop-color="#fbbf24"/>
+    <linearGradient id="ah-accent" x1="12" y1="20" x2="52" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#38bdf8"/>
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="8" fill="url(#bg)"/>
-  <circle cx="22.5" cy="10.5" r="4.25" fill="url(#sun)"/>
-  <path d="M5 20.5c3.8-3.2 6.4-3.2 11 0s7.2 3.2 11 0" fill="none" stroke="#c7d2fe" stroke-width="1.4" stroke-linecap="round"/>
-  <path d="M6 22.5h20" stroke="#eef2ff" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M11.2 21.2 13.6 13.8 16 21.2M12.1 18.8h3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="64" height="64" rx="14" fill="url(#ah-bg)"/>
+  <!-- subtle compass ring -->
+  <circle cx="32" cy="30" r="16" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="1.25"/>
+  <circle cx="32" cy="30" r="11.5" fill="none" stroke="rgba(148,163,184,0.22)" stroke-width="1"/>
+  <!-- horizon -->
+  <path d="M12 38c6.5-4.5 11.5-4.5 20 0s13.5 4.5 20 0" fill="none" stroke="url(#ah-accent)" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M14 42h36" stroke="rgba(226,232,240,0.9)" stroke-width="2" stroke-linecap="round"/>
+  <!-- refined vessel mark -->
+  <path d="M26 35.5 32 22l6 13.5" fill="none" stroke="#f8fafc" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28.2 31.5h7.6" stroke="#f8fafc" stroke-width="2" stroke-linecap="round"/>
+  <!-- north mark -->
+  <path d="M32 16.5v3.2" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M32 40.2v2.4" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round"/>
 </svg>

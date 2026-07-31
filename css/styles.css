@@ -468,11 +468,11 @@ body.home-view {
 .app-logo {
   display: block;
   border-radius: 10px;
-  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
+  box-shadow: 0 4px 12px rgba(11, 31, 51, 0.28);
 }
 .app-logo--sm {
   margin-right: 10px;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 2px 8px rgba(11, 31, 51, 0.22);
 }
 .header-brand {
   display: flex;
