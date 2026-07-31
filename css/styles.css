@@ -234,11 +234,60 @@ body.home-view {
 
 .auth-company-logo {
   display: block;
-  width: auto;
-  max-width: min(220px, 70%);
-  height: auto;
-  max-height: 56px;
+  width: 96px;
+  height: 96px;
+  max-width: 96px;
+  max-height: 96px;
   object-fit: contain;
+  border-radius: 50%;
+  background: #0b0b0b;
+}
+
+.auth-form.login-form input,
+.auth-screen .auth-form input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 48px 14px 48px !important;
+  border: 1.5px solid var(--auth-line);
+  border-radius: 999px;
+  font-family: var(--font);
+  font-size: 0.98rem;
+  background: #fff;
+  color: var(--auth-ink);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.auth-field-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.auth-toggle-password {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
 }
 
 .auth-wordmark h1 {
@@ -276,53 +325,15 @@ body.home-view {
   position: relative;
 }
 
-.auth-field-icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9ca3af;
-  display: flex;
-  pointer-events: none;
-}
-
-.auth-form input {
-  width: 100%;
-  padding: 14px 44px 14px 44px;
-  border: 1.5px solid var(--auth-line);
-  border-radius: 999px;
-  font-family: var(--font);
-  font-size: 0.98rem;
-  background: #fff;
-  color: var(--auth-ink);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
 .auth-form input::placeholder {
   color: #9ca3af;
 }
 
-.auth-form input:focus {
+.auth-form.login-form input:focus,
+.auth-screen .auth-form input:focus {
   outline: none;
   border-color: var(--auth-accent);
   box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.12);
-}
-
-.auth-toggle-password {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #9ca3af;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .auth-toggle-password:hover {
