@@ -20,17 +20,19 @@ No Node.js is required for Option 1.
 
 Data is stored in localStorage under keys prefixed with `andeco_inv_` (invoices, receipts, clients, company settings).
 
-**Cloud backend (Railway):** Node server + Postgres — see [RAILWAY.md](RAILWAY.md). Optional legacy Supabase setup: [SUPABASE.md](SUPABASE.md).
+**Cloud backend (Railway):** relational Postgres + Node API — see [RAILWAY.md](RAILWAY.md).
 
 ## Project structure
 
 ```
 Andeco Horizon/
 ├── index.html              # Single entry point
-├── server.js               # Serves app + /api/data|/api/save (Postgres when DATABASE_URL set)
+├── server.js               # Serves app + /api/data|/api/save
+├── lib/
+│   └── pg-store.js         # Assembles/disassembles relational Postgres tables
 ├── package.json
 ├── railway/
-│   └── schema.sql          # Postgres table for workspace JSON
+│   └── schema.sql          # Full relational schema
 ├── supabase/
 │   └── migrations/         # Legacy Supabase SQL (optional)
 ├── css/

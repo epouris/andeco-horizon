@@ -1,14 +1,14 @@
 /**
  * Andeco Horizon Suite server.
- * - Local / no DB: serves static files + andeco_data.json (GET/POST).
- * - Railway: set DATABASE_URL → payload stored in Postgres (app_data table).
- * Run: npm start   then open http://localhost:3000
+ * - Local / no DB: static files + andeco_data.json
+ * - Railway: DATABASE_URL → relational Postgres tables (see railway/schema.sql + lib/pg-store.js)
  */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
+const pgStore = require('./lib/pg-store');
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE
@@ -39,37 +39,11 @@ const MIME = {
   '.woff2': 'font/woff2'
 };
 
-const EMPTY_PAYLOAD = {
-  invoices: [],
-  receipts: [],
-  clients: [],
-  companySettings: {},
-  products: [],
-  fleet: {
-    vessels: [],
-    vesselPhotos: [],
-    documents: [],
-    maintenance: [],
-    drydock: [],
-    inventory: [],
-    logbooks: [],
-    crew: []
-  },
-  crew: {
-    crewMembers: [],
-    crewDocuments: [],
-    crewAssignments: []
-  },
-  shifts: { staff: [], shifts: [], requests: [], settings: {} },
-  payroll: { employees: [], payrollData: {}, companySettings: {} },
-  crm: { users: [] }
-};
-
 let pool = null;
 let usePostgres = false;
 
 function emptyPayload() {
-  return JSON.parse(JSON.stringify(EMPTY_PAYLOAD));
+  return pgStore.emptyPayload();
 }
 
 function readDataFile() {
@@ -100,91 +74,25 @@ function writeDataFile(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function rowToCrmUser(row) {
-  return {
-    id: row.id,
-    username: row.username,
-    passwordHash: row.password_hash,
-    displayName: row.display_name || '',
-    isAdmin: row.is_admin === true,
-    allowedModules: Array.isArray(row.allowed_modules) ? row.allowed_modules : []
-  };
-}
-
-async function listUsers() {
-  const r = await pool.query(
-    `SELECT id, username, password_hash, display_name, is_admin, allowed_modules
-     FROM users ORDER BY username`
-  );
-  return r.rows.map(rowToCrmUser);
-}
-
 async function ensureAdminUser() {
   const count = await pool.query('SELECT COUNT(*)::int AS n FROM users');
   if (count.rows[0].n > 0) {
-    console.log('Postgres users: ' + count.rows[0].n + ' account(s) already exist');
+    console.log('Postgres users: ' + count.rows[0].n + ' account(s)');
     return;
   }
-  const id = 'u-admin';
-  const passwordHash = sha256Hex(ADMIN_PASSWORD);
   await pool.query(
     `INSERT INTO users (id, username, password_hash, display_name, is_admin, allowed_modules)
      VALUES ($1, $2, $3, $4, true, $5::jsonb)
      ON CONFLICT (username) DO NOTHING`,
-    [id, ADMIN_USERNAME, passwordHash, ADMIN_DISPLAY_NAME, JSON.stringify(ALL_MODULES)]
+    [
+      'u-admin',
+      ADMIN_USERNAME,
+      sha256Hex(ADMIN_PASSWORD),
+      ADMIN_DISPLAY_NAME,
+      JSON.stringify(ALL_MODULES)
+    ]
   );
-  console.log('Postgres users: seeded admin "' + ADMIN_USERNAME + '" (change ANDECO_ADMIN_PASSWORD on Railway after first login)');
-}
-
-async function syncUsersFromPayload(data) {
-  const users = data && data.crm && Array.isArray(data.crm.users) ? data.crm.users : [];
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const keepIds = [];
-    for (const u of users) {
-      if (!u || !u.username || !u.passwordHash) continue;
-      const id = String(u.id || ('u' + Date.now() + Math.random().toString(16).slice(2)));
-      keepIds.push(id);
-      await client.query(
-        `INSERT INTO users (id, username, password_hash, display_name, is_admin, allowed_modules, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
-         ON CONFLICT (id) DO UPDATE SET
-           username = EXCLUDED.username,
-           password_hash = EXCLUDED.password_hash,
-           display_name = EXCLUDED.display_name,
-           is_admin = EXCLUDED.is_admin,
-           allowed_modules = EXCLUDED.allowed_modules,
-           updated_at = now()`,
-        [
-          id,
-          String(u.username).trim().toLowerCase(),
-          String(u.passwordHash),
-          String(u.displayName || u.username || ''),
-          u.isAdmin === true,
-          JSON.stringify(Array.isArray(u.allowedModules) ? u.allowedModules : [])
-        ]
-      );
-    }
-    if (keepIds.length > 0) {
-      await client.query('DELETE FROM users WHERE NOT (id = ANY($1::text[]))', [keepIds]);
-    } else {
-      // Never wipe all users on a bad/empty save — keep DB users
-    }
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
-}
-
-async function attachUsersToPayload(payload) {
-  const users = await listUsers();
-  if (!payload.crm || typeof payload.crm !== 'object') payload.crm = { users: [] };
-  payload.crm.users = users;
-  return payload;
+  console.log('Postgres users: seeded admin "' + ADMIN_USERNAME + '"');
 }
 
 async function initPostgres() {
@@ -199,37 +107,18 @@ async function initPostgres() {
   await pool.query(schemaSql);
   usePostgres = true;
   await ensureAdminUser();
-  console.log('Postgres: connected (app_data + users ready)');
+  await pgStore.migrateLegacyPayloadIfNeeded(pool);
+  console.log('Postgres: relational schema ready');
 }
 
 async function readPayload() {
-  if (usePostgres) {
-    const r = await pool.query('SELECT payload FROM app_data WHERE id = 1');
-    let payload = r.rows[0] && r.rows[0].payload;
-    if (!payload || typeof payload !== 'object' || Object.keys(payload).length === 0) {
-      payload = emptyPayload();
-    } else {
-      payload = JSON.parse(JSON.stringify(payload));
-    }
-    return attachUsersToPayload(payload);
-  }
+  if (usePostgres) return pgStore.loadPayload(pool);
   return readDataFile();
 }
 
 async function writePayload(data) {
   if (usePostgres) {
-    const copy = JSON.parse(JSON.stringify(data || {}));
-    await syncUsersFromPayload(copy);
-    // Keep payload.crm.users aligned with DB after sync
-    copy.crm = copy.crm || {};
-    copy.crm.users = await listUsers();
-    await pool.query(
-      `INSERT INTO app_data (id, payload, updated_at)
-       VALUES (1, $1::jsonb, now())
-       ON CONFLICT (id) DO UPDATE
-       SET payload = EXCLUDED.payload, updated_at = now()`,
-      [JSON.stringify(copy)]
-    );
+    await pgStore.savePayload(pool, data);
     return;
   }
   writeDataFile(data);
@@ -268,7 +157,6 @@ function injectConfigIntoHtml(html) {
     ANDECO_SAVE_API_URL: '/api/save',
     ANDECO_PREFER_SERVER_DATA: preferServer,
     ANDECO_API_TOKEN: API_TOKEN || '',
-    // Disable Supabase on Railway / this server
     ANDECO_SUPABASE_URL: '',
     ANDECO_SUPABASE_ANON_KEY: '',
     ANDECO_ORG_ID: ''
@@ -309,17 +197,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url === '/api/health') {
-      let userCount = null;
-      if (usePostgres) {
-        const r = await pool.query('SELECT COUNT(*)::int AS n FROM users');
-        userCount = r.rows[0].n;
-      }
-      sendJson(res, 200, {
+      const health = {
         ok: true,
-        storage: usePostgres ? 'postgres' : 'file',
-        authRequired: !!API_TOKEN,
-        users: userCount
-      });
+        storage: usePostgres ? 'postgres-relational' : 'file',
+        authRequired: !!API_TOKEN
+      };
+      if (usePostgres) {
+        health.tables = await pgStore.tableInventory(pool);
+        health.users = health.tables.users;
+      }
+      sendJson(res, 200, health);
       return;
     }
 
@@ -385,7 +272,7 @@ async function main() {
   }
   server.listen(PORT, () => {
     console.log('Andeco Horizon Suite at http://localhost:' + PORT);
-    console.log('Storage:', usePostgres ? 'Postgres (DATABASE_URL)' : 'file (' + DATA_FILE + ')');
+    console.log('Storage:', usePostgres ? 'Postgres relational tables' : 'file (' + DATA_FILE + ')');
     if (API_TOKEN) console.log('API token: required (ANDECO_API_TOKEN)');
   });
 }

@@ -66,10 +66,17 @@ On first boot with an empty `users` table, the server creates an administrator.
 
 Login at your Railway URL with that username/password. After you’re in, change the password under **Admin → User management** (or reset by clearing the `users` table and redeploying with new env vars).
 
-Tables created automatically:
+Tables created automatically on deploy (relational):
 
-- `app_data` — full CRM workspace JSON  
-- `users` — CRM login accounts (`username`, `password_hash`, `is_admin`, …)
+- **Auth:** `users`
+- **Accounting:** `company_settings`, `company_banks`, `clients`, `products`, `invoices`, `invoice_items`, `receipts`, `receipt_invoices`
+- **Fleet:** `vessels`, `vessel_photos`, `vessel_documents`, `vessel_maintenance`, `vessel_drydock`, `vessel_inventory`, `vessel_logbooks`, `vessel_crew_legacy`
+- **Crew:** `crew_members`, `crew_documents`, `crew_assignments`
+- **Shifts:** `shift_staff`, `shift_entries`, `shift_requests`, `shift_settings`
+- **Payroll/HR:** `hr_employees`, `payslips`, `payroll_company_settings`
+- **Legacy snapshot:** `app_data` (JSON backup of last save; not the primary store)
+
+The browser still uses `/api/data` + `/api/save`; the server maps that JSON onto these tables.
 
 ## 6. Optional API token
 
@@ -85,7 +92,7 @@ Open: `https://YOUR-DOMAIN/api/health`
 You want something like:
 
 ```json
-{ "ok": true, "storage": "postgres", "authRequired": false, "users": 1 }
+{ "ok": true, "storage": "postgres-relational", "users": 1, "tables": { "clients": 0, "invoices": 0, "...": "..." } }
 ```
 
 ## Local development with Postgres (optional)
