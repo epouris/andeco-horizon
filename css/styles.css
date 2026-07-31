@@ -226,9 +226,19 @@ body.home-view {
 
 .auth-wordmark {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
   margin-bottom: 12px;
+}
+
+.auth-company-logo {
+  display: block;
+  width: auto;
+  max-width: min(220px, 70%);
+  height: auto;
+  max-height: 56px;
+  object-fit: contain;
 }
 
 .auth-wordmark h1 {
@@ -538,7 +548,7 @@ body.home-view {
     text-align: center;
   }
   .auth-wordmark {
-    justify-content: center;
+    align-items: center;
   }
   .auth-tagline {
     margin-left: auto;
