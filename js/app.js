@@ -732,15 +732,190 @@
     });
   }
 
-  function startApp() {
+  function closeProfileModal() {
+    var modal = document.getElementById('profile-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function openProfileModal() {
     var session = getSession();
     if (!session) return;
-    showScreen('app-screen');
+    var users = getUsers();
+    var user = users.filter(function (u) { return u.id === session.userId; })[0];
+    if (!user) {
+      user = users.filter(function (u) { return u.username === session.username; })[0];
+    }
+    if (!user) return;
+
+    var modal = document.getElementById('profile-modal');
+    var usernameEl = document.getElementById('profile-username');
+    var displayEl = document.getElementById('profile-displayname');
+    var currentPw = document.getElementById('profile-current-password');
+    var newPw = document.getElementById('profile-new-password');
+    var confirmPw = document.getElementById('profile-confirm-password');
+    var err = document.getElementById('profile-error');
+    var ok = document.getElementById('profile-success');
+    if (!modal) return;
+
+    if (usernameEl) usernameEl.value = user.username || '';
+    if (displayEl) displayEl.value = user.displayName || session.displayName || '';
+    if (currentPw) currentPw.value = '';
+    if (newPw) newPw.value = '';
+    if (confirmPw) confirmPw.value = '';
+    if (err) err.classList.add('hidden');
+    if (ok) ok.classList.add('hidden');
+    modal.classList.remove('hidden');
+    if (displayEl) displayEl.focus();
+  }
+
+  function refreshHeaderUser(session) {
+    session = session || getSession();
+    if (!session) return;
     var badge = document.getElementById('user-badge');
     if (badge) badge.textContent = session.displayName || session.username;
     var initial = document.getElementById('avatar-initial');
     var name = session.displayName || session.username || '';
     if (initial) initial.textContent = name.charAt(0) ? name.charAt(0).toUpperCase() : 'U';
+  }
+
+  function initProfileMenu() {
+    var trigger = document.getElementById('header-user-trigger');
+    var dropdown = document.getElementById('header-user-dropdown');
+    var editBtn = document.getElementById('header-edit-profile-btn');
+    var modal = document.getElementById('profile-modal');
+    var form = document.getElementById('profile-form');
+    var closeBtn = document.getElementById('profile-modal-close');
+    var cancelBtn = document.getElementById('profile-cancel-btn');
+
+    function setMenuOpen(open) {
+      if (!dropdown || !trigger) return;
+      dropdown.classList.toggle('hidden', !open);
+      trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    if (trigger && dropdown) {
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setMenuOpen(dropdown.classList.contains('hidden'));
+      });
+      document.addEventListener('click', function (e) {
+        var menu = document.getElementById('header-user-menu');
+        if (menu && !menu.contains(e.target)) setMenuOpen(false);
+      });
+    }
+
+    if (editBtn) {
+      editBtn.addEventListener('click', function () {
+        setMenuOpen(false);
+        openProfileModal();
+      });
+    }
+
+    function hideModal() { closeProfileModal(); }
+    if (closeBtn) closeBtn.addEventListener('click', hideModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', hideModal);
+    if (modal) {
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) hideModal();
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var err = document.getElementById('profile-error');
+        var ok = document.getElementById('profile-success');
+        function showError(msg) {
+          if (ok) ok.classList.add('hidden');
+          if (err) {
+            err.textContent = msg;
+            err.classList.remove('hidden');
+          }
+        }
+        function showOk() {
+          if (err) err.classList.add('hidden');
+          if (ok) ok.classList.remove('hidden');
+        }
+
+        var session = getSession();
+        if (!session) return;
+        var users = getUsers();
+        var user = users.filter(function (u) { return u.id === session.userId; })[0]
+          || users.filter(function (u) { return u.username === session.username; })[0];
+        if (!user) {
+          showError('Your account could not be found.');
+          return;
+        }
+
+        var displayName = (document.getElementById('profile-displayname') || {}).value.trim();
+        var currentPassword = (document.getElementById('profile-current-password') || {}).value;
+        var newPassword = (document.getElementById('profile-new-password') || {}).value;
+        var confirmPassword = (document.getElementById('profile-confirm-password') || {}).value;
+        if (!displayName) {
+          showError('Display name is required.');
+          return;
+        }
+
+        var changingPassword = !!(currentPassword || newPassword || confirmPassword);
+        if (changingPassword) {
+          if (!currentPassword || !newPassword) {
+            showError('Enter your current password and a new password.');
+            return;
+          }
+          if (newPassword.length < 6) {
+            showError('New password must be at least 6 characters.');
+            return;
+          }
+          if (newPassword !== confirmPassword) {
+            showError('New password and confirmation do not match.');
+            return;
+          }
+        }
+
+        function finishSave(passwordHash) {
+          user.displayName = displayName;
+          if (passwordHash) user.passwordHash = passwordHash;
+          saveUsers(users);
+          setSession({
+            userId: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            isAdmin: user.isAdmin === true,
+            allowedModules: user.allowedModules || []
+          });
+          refreshHeaderUser();
+          showOk();
+          if (document.getElementById('profile-current-password')) document.getElementById('profile-current-password').value = '';
+          if (document.getElementById('profile-new-password')) document.getElementById('profile-new-password').value = '';
+          if (document.getElementById('profile-confirm-password')) document.getElementById('profile-confirm-password').value = '';
+        }
+
+        if (!changingPassword) {
+          finishSave(null);
+          return;
+        }
+
+        hashPassword(currentPassword).then(function (currentHash) {
+          if (user.passwordHash !== currentHash) {
+            showError('Current password is incorrect.');
+            return null;
+          }
+          return hashPassword(newPassword);
+        }).then(function (newHash) {
+          if (!newHash) return;
+          finishSave(newHash);
+        }).catch(function () {
+          showError('Could not update password. Try again.');
+        });
+      });
+    }
+  }
+
+  function startApp() {
+    var session = getSession();
+    if (!session) return;
+    showScreen('app-screen');
+    refreshHeaderUser(session);
     applyVisibility(session);
     route();
   }
@@ -1032,6 +1207,7 @@
     initLogin();
     initPasswordToggle();
     initLogout();
+    initProfileMenu();
     initAdmin();
     initNavigation();
     initMenuToggle();

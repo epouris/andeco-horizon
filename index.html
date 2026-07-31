@@ -144,11 +144,16 @@
         <span>Andeco Horizon Suite</span>
       </div>
       <div class="header-actions">
-        <div class="header-user">
-          <span class="header-user-label" id="user-badge">My Company</span>
-          <button type="button" class="header-avatar" id="header-avatar" aria-label="Account">
-            <span id="avatar-initial">U</span>
+        <div class="header-user" id="header-user-menu">
+          <button type="button" class="header-user-trigger" id="header-user-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="header-user-dropdown">
+            <span class="header-user-label" id="user-badge">My Company</span>
+            <span class="header-avatar" aria-hidden="true">
+              <span id="avatar-initial">U</span>
+            </span>
           </button>
+          <div class="header-user-dropdown hidden" id="header-user-dropdown" role="menu">
+            <button type="button" class="header-user-menu-item" id="header-edit-profile-btn" role="menuitem">Edit profile</button>
+          </div>
         </div>
         <button type="button" class="btn btn-ghost btn-logout" id="logout-btn">Sign out</button>
       </div>
@@ -1801,6 +1806,41 @@
   </div>
 
   <!-- Modal for Invoice/Receipt view & print (Accounting) -->
+  <!-- Profile edit modal -->
+  <div id="profile-modal" class="modal profile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+    <div class="modal-content profile-modal-content">
+      <div class="modal-header">
+        <h2 id="profile-modal-title">My profile</h2>
+        <button type="button" class="btn btn-secondary" id="profile-modal-close" aria-label="Close">✕ Close</button>
+      </div>
+      <form id="profile-form" class="profile-form">
+        <label for="profile-username">Username</label>
+        <input type="text" id="profile-username" readonly autocomplete="username">
+
+        <label for="profile-displayname">Display name</label>
+        <input type="text" id="profile-displayname" required autocomplete="name" placeholder="Your name">
+
+        <div class="profile-password-block">
+          <h3>Change password</h3>
+          <p class="profile-hint">Leave password fields blank to keep your current password.</p>
+          <label for="profile-current-password">Current password</label>
+          <input type="password" id="profile-current-password" autocomplete="current-password" placeholder="Required to change password">
+          <label for="profile-new-password">New password</label>
+          <input type="password" id="profile-new-password" autocomplete="new-password" placeholder="New password">
+          <label for="profile-confirm-password">Confirm new password</label>
+          <input type="password" id="profile-confirm-password" autocomplete="new-password" placeholder="Confirm new password">
+        </div>
+
+        <p id="profile-error" class="login-error hidden"></p>
+        <p id="profile-success" class="profile-success hidden">Profile updated.</p>
+        <div class="profile-form-actions">
+          <button type="button" class="btn btn-secondary" id="profile-cancel-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="invoice-modal" class="modal accounting-modal">
     <div class="modal-content invoice-print-view">
       <div class="modal-header">
