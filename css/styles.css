@@ -987,6 +987,16 @@ body.home-view {
   margin-bottom: 12px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
+.module-icon-tile svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+  flex-shrink: 0;
+}
+#app-screen.home-view .module-icon-tile svg {
+  width: 24px;
+  height: 24px;
+}
 .module-icon--blue  { background: var(--tile-blue);  color: #fff; }
 .module-icon--green { background: var(--tile-green); color: #fff; }
 .module-icon--orange { background: var(--tile-orange); color: #fff; }
