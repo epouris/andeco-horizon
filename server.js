@@ -7,6 +7,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 3000;
@@ -15,6 +16,16 @@ const DATA_FILE = process.env.DATA_FILE
   : path.join(__dirname, 'andeco_data.json');
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const API_TOKEN = process.env.ANDECO_API_TOKEN || '';
+const ADMIN_USERNAME = (process.env.ANDECO_ADMIN_USERNAME || 'admin').trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ANDECO_ADMIN_PASSWORD || 'AndecoAdmin1!';
+const ADMIN_DISPLAY_NAME = process.env.ANDECO_ADMIN_DISPLAY_NAME || 'Administrator';
+const ALL_MODULES = [
+  'accounting', 'clients', 'fleet', 'hr', 'crew', 'shifts', 'documents', 'contacts', 'settings'
+];
+
+function sha256Hex(text) {
+  return crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
+}
 
 const MIME = {
   '.html': 'text/html',
@@ -89,6 +100,93 @@ function writeDataFile(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function rowToCrmUser(row) {
+  return {
+    id: row.id,
+    username: row.username,
+    passwordHash: row.password_hash,
+    displayName: row.display_name || '',
+    isAdmin: row.is_admin === true,
+    allowedModules: Array.isArray(row.allowed_modules) ? row.allowed_modules : []
+  };
+}
+
+async function listUsers() {
+  const r = await pool.query(
+    `SELECT id, username, password_hash, display_name, is_admin, allowed_modules
+     FROM users ORDER BY username`
+  );
+  return r.rows.map(rowToCrmUser);
+}
+
+async function ensureAdminUser() {
+  const count = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+  if (count.rows[0].n > 0) {
+    console.log('Postgres users: ' + count.rows[0].n + ' account(s) already exist');
+    return;
+  }
+  const id = 'u-admin';
+  const passwordHash = sha256Hex(ADMIN_PASSWORD);
+  await pool.query(
+    `INSERT INTO users (id, username, password_hash, display_name, is_admin, allowed_modules)
+     VALUES ($1, $2, $3, $4, true, $5::jsonb)
+     ON CONFLICT (username) DO NOTHING`,
+    [id, ADMIN_USERNAME, passwordHash, ADMIN_DISPLAY_NAME, JSON.stringify(ALL_MODULES)]
+  );
+  console.log('Postgres users: seeded admin "' + ADMIN_USERNAME + '" (change ANDECO_ADMIN_PASSWORD on Railway after first login)');
+}
+
+async function syncUsersFromPayload(data) {
+  const users = data && data.crm && Array.isArray(data.crm.users) ? data.crm.users : [];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const keepIds = [];
+    for (const u of users) {
+      if (!u || !u.username || !u.passwordHash) continue;
+      const id = String(u.id || ('u' + Date.now() + Math.random().toString(16).slice(2)));
+      keepIds.push(id);
+      await client.query(
+        `INSERT INTO users (id, username, password_hash, display_name, is_admin, allowed_modules, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
+         ON CONFLICT (id) DO UPDATE SET
+           username = EXCLUDED.username,
+           password_hash = EXCLUDED.password_hash,
+           display_name = EXCLUDED.display_name,
+           is_admin = EXCLUDED.is_admin,
+           allowed_modules = EXCLUDED.allowed_modules,
+           updated_at = now()`,
+        [
+          id,
+          String(u.username).trim().toLowerCase(),
+          String(u.passwordHash),
+          String(u.displayName || u.username || ''),
+          u.isAdmin === true,
+          JSON.stringify(Array.isArray(u.allowedModules) ? u.allowedModules : [])
+        ]
+      );
+    }
+    if (keepIds.length > 0) {
+      await client.query('DELETE FROM users WHERE NOT (id = ANY($1::text[]))', [keepIds]);
+    } else {
+      // Never wipe all users on a bad/empty save — keep DB users
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+async function attachUsersToPayload(payload) {
+  const users = await listUsers();
+  if (!payload.crm || typeof payload.crm !== 'object') payload.crm = { users: [] };
+  payload.crm.users = users;
+  return payload;
+}
+
 async function initPostgres() {
   if (!DATABASE_URL) return;
   const { Pool } = require('pg');
@@ -100,29 +198,37 @@ async function initPostgres() {
   const schemaSql = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(schemaSql);
   usePostgres = true;
-  console.log('Postgres: connected (app_data table ready, empty until first save)');
+  await ensureAdminUser();
+  console.log('Postgres: connected (app_data + users ready)');
 }
 
 async function readPayload() {
   if (usePostgres) {
     const r = await pool.query('SELECT payload FROM app_data WHERE id = 1');
-    const payload = r.rows[0] && r.rows[0].payload;
+    let payload = r.rows[0] && r.rows[0].payload;
     if (!payload || typeof payload !== 'object' || Object.keys(payload).length === 0) {
-      return emptyPayload();
+      payload = emptyPayload();
+    } else {
+      payload = JSON.parse(JSON.stringify(payload));
     }
-    return payload;
+    return attachUsersToPayload(payload);
   }
   return readDataFile();
 }
 
 async function writePayload(data) {
   if (usePostgres) {
+    const copy = JSON.parse(JSON.stringify(data || {}));
+    await syncUsersFromPayload(copy);
+    // Keep payload.crm.users aligned with DB after sync
+    copy.crm = copy.crm || {};
+    copy.crm.users = await listUsers();
     await pool.query(
       `INSERT INTO app_data (id, payload, updated_at)
        VALUES (1, $1::jsonb, now())
        ON CONFLICT (id) DO UPDATE
        SET payload = EXCLUDED.payload, updated_at = now()`,
-      [JSON.stringify(data)]
+      [JSON.stringify(copy)]
     );
     return;
   }
@@ -203,10 +309,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url === '/api/health') {
+      let userCount = null;
+      if (usePostgres) {
+        const r = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+        userCount = r.rows[0].n;
+      }
       sendJson(res, 200, {
         ok: true,
         storage: usePostgres ? 'postgres' : 'file',
-        authRequired: !!API_TOKEN
+        authRequired: !!API_TOKEN,
+        users: userCount
       });
       return;
     }

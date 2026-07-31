@@ -52,21 +52,40 @@ On first boot the server runs `railway/schema.sql` and creates an **empty** `app
 
 You should see the normal CRM login / first-time setup. There is **no** company data until you create it in the app.
 
-## 5. Optional API token
+## 5. Admin user (first login)
+
+On first boot with an empty `users` table, the server creates an administrator.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ANDECO_ADMIN_USERNAME` | `admin` | Login username |
+| `ANDECO_ADMIN_PASSWORD` | `AndecoAdmin1!` | Login password (set your own on Railway) |
+| `ANDECO_ADMIN_DISPLAY_NAME` | `Administrator` | Display name |
+
+**Recommended:** on the web service → **Variables**, set your own `ANDECO_ADMIN_PASSWORD`, then redeploy.
+
+Login at your Railway URL with that username/password. After you’re in, change the password under **Admin → User management** (or reset by clearing the `users` table and redeploying with new env vars).
+
+Tables created automatically:
+
+- `app_data` — full CRM workspace JSON  
+- `users` — CRM login accounts (`username`, `password_hash`, `is_admin`, …)
+
+## 6. Optional API token
 
 To stop strangers from calling `/api/data` and `/api/save` if they find your URL:
 
 1. Web service → **Variables** → add `ANDECO_API_TOKEN` = a long random string.
 2. Redeploy. The server injects the token into the page for the browser; API calls require it.
 
-## 6. Confirm storage
+## 7. Confirm storage
 
 Open: `https://YOUR-DOMAIN/api/health`
 
 You want something like:
 
 ```json
-{ "ok": true, "storage": "postgres", "authRequired": false }
+{ "ok": true, "storage": "postgres", "authRequired": false, "users": 1 }
 ```
 
 ## Local development with Postgres (optional)
