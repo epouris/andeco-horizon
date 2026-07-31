@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Andeco Horizon CRM</title>
+  <title>Andeco Horizon Suite</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="favicon.svg">
   <meta name="theme-color" content="#4f46e5">
@@ -51,7 +51,7 @@
     <div class="login-card">
       <div class="login-brand">
         <img class="app-logo" src="favicon.svg" alt="" width="56" height="56">
-        <h1>Andeco Horizon</h1>
+        <h1>Andeco Horizon Suite</h1>
         <p>Create administrator account</p>
       </div>
       <form id="setup-form" class="login-form">
@@ -83,7 +83,7 @@
     <div class="login-card">
       <div class="login-brand">
         <img class="app-logo" src="favicon.svg" alt="" width="56" height="56">
-        <h1>Andeco Horizon</h1>
+        <h1>Andeco Horizon Suite</h1>
         <p>Company CRM</p>
       </div>
       <form id="login-form" class="login-form">
@@ -117,7 +117,7 @@
       </button>
       <div class="header-brand">
         <img class="app-logo app-logo--sm" src="favicon.svg" alt="" width="36" height="36">
-        <span>Andeco Horizon</span>
+        <span>Andeco Horizon Suite</span>
       </div>
       <div class="header-actions">
         <div class="header-user">
@@ -670,7 +670,7 @@
               </div>
               <div class="module-info-card">
                 <h3 class="panel-title">Account</h3>
-                <p class="card-name">Andeco Horizon</p>
+                <p class="card-name">Andeco Horizon Suite</p>
                 <p class="card-muted">Internal</p>
               </div>
             </div>
@@ -1252,7 +1252,7 @@
             <div class="module-info-panel">
               <h3 class="panel-title">Details</h3>
               <dl class="info-grid">
-                <dt>Name</dt><dd>HR — Andeco Horizon</dd>
+                <dt>Name</dt><dd>HR — Andeco Horizon Suite</dd>
                 <dt>Owner</dt><dd><a href="#">HR Team</a></dd>
                 <dt>Created on</dt><dd>8/4/2024</dd>
               </dl>
@@ -1772,12 +1772,17 @@
     </div>
   </div>
 
-  <!-- Supabase (optional, skipped on file://); see SUPABASE.md -->
+  <!-- Railway injects config here when served by server.js. See RAILWAY.md -->
+  <!-- ANDECO_RUNTIME_CONFIG -->
   <script>
-    window.ANDECO_SUPABASE_URL = 'https://mtoqqoatzrzfrhzfvhgi.supabase.co';
-    window.ANDECO_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10b3Fxb2F0enJ6ZnJoemZ2aGdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTI3MzcsImV4cCI6MjA5MjI4ODczN30.jonAbRO0fBnl89tP5ZuuVSiI9axIjTzwhuXrc-JEotw';
-    window.ANDECO_ORG_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-    if (window.location.protocol !== 'file:') {
+    // Defaults for static open / local file. Railway overrides via injected config.
+    window.ANDECO_DATA_FILE_URL = window.ANDECO_DATA_FILE_URL || '/api/data';
+    window.ANDECO_SAVE_API_URL = window.ANDECO_SAVE_API_URL || '/api/save';
+    // Leave empty to use Railway Postgres via the Node API (no Supabase).
+    window.ANDECO_SUPABASE_URL = window.ANDECO_SUPABASE_URL || '';
+    window.ANDECO_SUPABASE_ANON_KEY = window.ANDECO_SUPABASE_ANON_KEY || '';
+    window.ANDECO_ORG_ID = window.ANDECO_ORG_ID || '';
+    if (window.ANDECO_SUPABASE_URL && window.location.protocol !== 'file:') {
       var s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
       document.head.appendChild(s);

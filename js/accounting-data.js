@@ -1,7 +1,7 @@
 /**
  * Accounting data layer — invoices, receipts, clients, company settings.
- * Single-file mode: load from andeco_data.json, save via POST /api/save (when server runs).
- * Supabase: set ANDECO_SUPABASE_URL, ANDECO_SUPABASE_ANON_KEY, ANDECO_ORG_ID + sign in with Supabase Auth (see SUPABASE.md).
+ * Server/Railway: load via GET /api/data, save via POST /api/save (Postgres when DATABASE_URL is set).
+ * Supabase (optional): set ANDECO_SUPABASE_URL, ANDECO_SUPABASE_ANON_KEY, ANDECO_ORG_ID — see SUPABASE.md.
  * Fallback: localStorage (andeco_inv_*) when file/server not available.
  */
 window.AccountingData = (function () {
@@ -14,6 +14,17 @@ window.AccountingData = (function () {
   var useFileStorage = false;
   var useSupabase = false;
   var supabasePendingAuth = false;
+
+  function apiHeaders(extra) {
+    var h = extra ? Object.assign({}, extra) : {};
+    var token = typeof window !== 'undefined' && window.ANDECO_API_TOKEN;
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+
+  function preferServerData() {
+    return !!(typeof window !== 'undefined' && window.ANDECO_PREFER_SERVER_DATA);
+  }
   var sharedFileHandle = null;
   var memory = {
     invoices: [],
@@ -178,7 +189,7 @@ window.AccountingData = (function () {
     if (!useFileStorage) return Promise.resolve();
     return fetch(SAVE_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(buildFullPayload())
     }).catch(function () {});
   }
@@ -373,7 +384,7 @@ window.AccountingData = (function () {
 
   /** When shared file is empty but this browser still has old localStorage (e.g. after switching file:// → localhost). */
   function finishServerInit(data, useSupabaseBackend) {
-    if (!useSupabaseBackend && isServerPayloadAccountingEmpty(data) && hasLocalAccountingData()) {
+    if (!useSupabaseBackend && !preferServerData() && isServerPayloadAccountingEmpty(data) && hasLocalAccountingData()) {
       loadMemoryFromLocalInvKeys();
       var saved = {
         invoices: memory.invoices,
@@ -515,7 +526,7 @@ window.AccountingData = (function () {
         }
         return;
       }
-      return fetch(DATA_FILE_URL, { cache: 'no-store' })
+      return fetch(DATA_FILE_URL, { cache: 'no-store', headers: apiHeaders() })
         .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
         .then(function (data) {
           finishServerInit(data, false);

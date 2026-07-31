@@ -1,0 +1,17 @@
+{
+  "name": "andeco-horizon-suite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Andeco Horizon Suite — Node server with Railway Postgres",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.16.0"
+  }
+}

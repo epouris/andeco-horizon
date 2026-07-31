@@ -131,7 +131,11 @@ const app = {
             return;
         }
         var url = ANDECO_DATA_FILE_URL;
-        fetch(url, { cache: 'no-store' })
+        var headers = {};
+        if (typeof window !== 'undefined' && window.ANDECO_API_TOKEN) {
+            headers['Authorization'] = 'Bearer ' + window.ANDECO_API_TOKEN;
+        }
+        fetch(url, { cache: 'no-store', headers: headers })
             .then(function (res) { return res.ok ? res.json() : null; })
             .then(function (data) {
                 if (!data || typeof DataStore === 'undefined') return;

@@ -1,4 +1,4 @@
-# Andeco Horizon CRM
+# Andeco Horizon Suite
 
 A no-install, browser-based CRM for your company. All data is stored in the browser’s local storage. No server or software installation required on user computers.
 
@@ -6,8 +6,9 @@ A no-install, browser-based CRM for your company. All data is stored in the brow
 
 - **Option 1 (easiest):** Double-click `index.html` or drag it into your browser.  
 - **Option 2:** Put the whole folder on a shared drive or simple web server (IIS, Apache, nginx, etc.) and open the URL in any browser.
+- **Option 3 (server + Postgres):** `npm install` then `npm start` — see [RAILWAY.md](RAILWAY.md) for Railway.
 
-No Node.js, npm, or other installs are needed.
+No Node.js is required for Option 1.
 
 ## Features
 
@@ -19,21 +20,25 @@ No Node.js, npm, or other installs are needed.
 
 Data is stored in localStorage under keys prefixed with `andeco_inv_` (invoices, receipts, clients, company settings).
 
-**Optional cloud backend:** Postgres + Row Level Security via [Supabase](https://supabase.com) — see [SUPABASE.md](SUPABASE.md) and `supabase/migrations/`.
+**Cloud backend (Railway):** Node server + Postgres — see [RAILWAY.md](RAILWAY.md). Optional legacy Supabase setup: [SUPABASE.md](SUPABASE.md).
 
 ## Project structure
 
 ```
 Andeco Horizon/
 ├── index.html              # Single entry point
+├── server.js               # Serves app + /api/data|/api/save (Postgres when DATABASE_URL set)
+├── package.json
+├── railway/
+│   └── schema.sql          # Postgres table for workspace JSON
 ├── supabase/
-│   └── migrations/         # SQL for Supabase (optional)
+│   └── migrations/         # Legacy Supabase SQL (optional)
 ├── css/
 │   ├── styles.css          # Main CRM styles
 │   └── accounting-invoices.css  # Invoice/receipt/settings form styles
 ├── js/
 │   ├── app.js              # Auth, routing, role-based visibility
-│   ├── accounting-data.js  # Invoices/receipts/clients storage (andeco_inv_*)
+│   ├── accounting-data.js  # Invoices/receipts/clients storage
 │   ├── accounting-invoices.js  # Embedded invoice/receipt/settings logic
 │   └── clients-module.js   # Clients module (list + form)
 └── README.md

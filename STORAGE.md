@@ -56,6 +56,6 @@ Before the app script loads, you can set:
 
 The server creates this file with empty arrays/object if it does not exist.
 
-## Supabase (optional)
+## Supabase (legacy / optional)
 
-To host the same payload in Postgres with auth and RLS instead of (or alongside) `andeco_data.json`, see **[SUPABASE.md](SUPABASE.md)**. The app prefers Supabase when `ANDECO_SUPABASE_URL`, `ANDECO_SUPABASE_ANON_KEY`, and `ANDECO_ORG_ID` are set and the user has an active Supabase session.
+To use Supabase Auth + Postgres instead of the Railway Node API, see **[SUPABASE.md](SUPABASE.md)**. For new deploys, prefer **[RAILWAY.md](RAILWAY.md)** (Postgres via `DATABASE_URL`).

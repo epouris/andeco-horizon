@@ -1,5 +1,5 @@
 /**
- * Andeco Horizon CRM — Login required. Users and module access managed by administrator.
+ * Andeco Horizon Suite — Login required. Users and module access managed by administrator.
  * Data in localStorage. No installation required.
  */
 
