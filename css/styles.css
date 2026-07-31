@@ -234,10 +234,10 @@ body.home-view {
 
 .auth-company-logo {
   display: block;
-  width: 112px;
-  height: 112px;
-  max-width: 112px;
-  max-height: 112px;
+  width: min(220px, 55%);
+  height: auto;
+  max-width: 260px;
+  max-height: 260px;
   margin: 0 auto;
   object-fit: contain;
   border-radius: 0;
