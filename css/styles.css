@@ -240,9 +240,9 @@ body.home-view {
   max-height: 112px;
   margin: 0 auto;
   object-fit: contain;
-  border-radius: 50%;
-  background: #0b0b0b;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.35);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .auth-form.login-form input,
