@@ -560,30 +560,47 @@
   }
 
   function configureUnifiedLoginUI(cloudAuth) {
-    var loginSubtitle = document.querySelector('#login-screen .login-brand p');
+    var loginSubtitle = document.querySelector('#login-screen .auth-tagline') ||
+      document.querySelector('#login-screen .login-brand p.auth-tagline') ||
+      document.querySelector('#login-screen .login-brand .auth-tagline');
+    if (!loginSubtitle) {
+      loginSubtitle = document.querySelector('#login-screen .auth-brand .auth-tagline');
+    }
     var usernameLabel = document.querySelector('label[for="login-username"]');
     var usernameInput = document.getElementById('login-username');
     var supabasePanel = document.getElementById('supabase-cloud-panel');
     var setupSupabasePanel = document.getElementById('setup-supabase-cloud-panel');
     if (cloudAuth) {
-      if (loginSubtitle) loginSubtitle.textContent = 'Sign in with your company email';
+      if (loginSubtitle) loginSubtitle.textContent = 'Sign in with your company email.';
       if (usernameLabel) usernameLabel.textContent = 'Email';
       if (usernameInput) {
         usernameInput.type = 'email';
-        usernameInput.placeholder = 'you@company.com';
+        usernameInput.placeholder = 'Email';
         usernameInput.autocomplete = 'email';
       }
       if (supabasePanel) supabasePanel.classList.add('hidden');
       if (setupSupabasePanel) setupSupabasePanel.classList.add('hidden');
     } else {
-      if (loginSubtitle) loginSubtitle.textContent = 'Company CRM';
+      if (loginSubtitle) loginSubtitle.textContent = 'Log in to manage your company operations in one place.';
       if (usernameLabel) usernameLabel.textContent = 'Username';
       if (usernameInput) {
         usernameInput.type = 'text';
-        usernameInput.placeholder = 'Enter username';
+        usernameInput.placeholder = 'Username';
         usernameInput.autocomplete = 'username';
       }
     }
+  }
+
+  function initPasswordToggle() {
+    var btn = document.getElementById('login-password-toggle');
+    var input = document.getElementById('login-password');
+    if (!btn || !input) return;
+    btn.addEventListener('click', function () {
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.title = show ? 'Hide password' : 'Show password';
+    });
   }
 
   function createCrmSessionFromSupabase() {
@@ -1013,6 +1030,7 @@
   function init() {
     initSetup();
     initLogin();
+    initPasswordToggle();
     initLogout();
     initAdmin();
     initNavigation();
