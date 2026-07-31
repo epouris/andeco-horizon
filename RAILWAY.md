@@ -112,6 +112,21 @@ Without `DATABASE_URL`, the server uses `andeco_data.json` as before.
 - To wipe the workspace later: in Railway Postgres query  
   `UPDATE app_data SET payload = '{}'::jsonb, updated_at = now() WHERE id = 1;`
 
-## Turning off Supabase
+## Troubleshooting: no tables in Postgres
 
-You can leave or delete the old Supabase project. This deploy does not call it. Hardcoded Supabase keys in `index.html` are overridden to empty when HTML is served by `server.js`.
+1. Open your **web app** service (not the Postgres service) → **Variables**.
+2. Confirm `DATABASE_URL` exists and references Postgres, e.g. `${{Postgres.DATABASE_URL}}`.
+   - If it’s only on the Postgres service, the app never sees it and **creates no tables**.
+3. Redeploy the **web** service.
+4. Check **Deploy Logs** for: `Postgres schema applied:` and `Postgres public tables:`.
+5. Open `https://YOUR-DOMAIN/api/health`:
+   - `"databaseUrlConfigured": true`
+   - `"storage": "postgres-relational"`
+   - `"tableNames": [ ... ]`
+6. Or call setup manually (from a terminal):
+
+```bash
+curl -X POST https://YOUR-DOMAIN/api/setup-db
+```
+
+If you set `ANDECO_API_TOKEN`, include header: `Authorization: Bearer YOUR_TOKEN`.

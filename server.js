@@ -9,12 +9,18 @@ const path = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const pgStore = require('./lib/pg-store');
+const migrate = require('./lib/migrate');
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE
   ? path.resolve(process.env.DATA_FILE)
   : path.join(__dirname, 'andeco_data.json');
-const DATABASE_URL = process.env.DATABASE_URL || '';
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  process.env.DATABASE_PRIVATE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRESQL_URL ||
+  '';
 const API_TOKEN = process.env.ANDECO_API_TOKEN || '';
 const ADMIN_USERNAME = (process.env.ANDECO_ADMIN_USERNAME || 'admin').trim().toLowerCase();
 const ADMIN_PASSWORD = process.env.ANDECO_ADMIN_PASSWORD || 'AndecoAdmin1!';
@@ -96,15 +102,23 @@ async function ensureAdminUser() {
 }
 
 async function initPostgres() {
-  if (!DATABASE_URL) return;
+  if (!DATABASE_URL) {
+    console.warn('DATABASE_URL is not set — Postgres tables will NOT be created.');
+    console.warn('On Railway: Web service → Variables → add DATABASE_URL = ${{Postgres.DATABASE_URL}}');
+    return;
+  }
   const { Pool } = require('pg');
   pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false }
   });
+  // Verify connectivity first
+  await pool.query('SELECT 1 AS ok');
   const schemaPath = path.join(__dirname, 'railway', 'schema.sql');
-  const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-  await pool.query(schemaSql);
+  const result = await migrate.applySchema(pool, schemaPath);
+  console.log('Postgres schema applied:', result.applied + '/' + result.statements + ' statements');
+  const tables = await migrate.listPublicTables(pool);
+  console.log('Postgres public tables:', tables.join(', ') || '(none)');
   usePostgres = true;
   await ensureAdminUser();
   await pgStore.migrateLegacyPayloadIfNeeded(pool);
@@ -200,13 +214,54 @@ const server = http.createServer(async (req, res) => {
       const health = {
         ok: true,
         storage: usePostgres ? 'postgres-relational' : 'file',
+        databaseUrlConfigured: !!DATABASE_URL,
         authRequired: !!API_TOKEN
       };
       if (usePostgres) {
         health.tables = await pgStore.tableInventory(pool);
+        health.tableNames = await migrate.listPublicTables(pool);
         health.users = health.tables.users;
+      } else if (!DATABASE_URL) {
+        health.hint = 'Set DATABASE_URL on the Railway web service to ${{Postgres.DATABASE_URL}}, then redeploy.';
       }
       sendJson(res, 200, health);
+      return;
+    }
+
+    // Force-create / repair schema (useful if tables were missing)
+    if (req.method === 'POST' && url === '/api/setup-db') {
+      if (!isAuthorized(req)) {
+        sendJson(res, 401, { ok: false, error: 'Unauthorized' });
+        return;
+      }
+      if (!DATABASE_URL) {
+        sendJson(res, 500, {
+          ok: false,
+          error: 'DATABASE_URL is not set on this service',
+          hint: 'Railway web service → Variables → DATABASE_URL = ${{Postgres.DATABASE_URL}}'
+        });
+        return;
+      }
+      if (!pool) {
+        const { Pool } = require('pg');
+        pool = new Pool({
+          connectionString: DATABASE_URL,
+          ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false }
+        });
+      }
+      const schemaPath = path.join(__dirname, 'railway', 'schema.sql');
+      const result = await migrate.applySchema(pool, schemaPath);
+      usePostgres = true;
+      await ensureAdminUser();
+      await pgStore.migrateLegacyPayloadIfNeeded(pool);
+      const tableNames = await migrate.listPublicTables(pool);
+      sendJson(res, 200, {
+        ok: true,
+        applied: result.applied,
+        statements: result.statements,
+        tableNames,
+        tables: await pgStore.tableInventory(pool)
+      });
       return;
     }
 
