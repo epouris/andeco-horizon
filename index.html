@@ -82,24 +82,12 @@
           </div>
           <button type="submit" class="btn btn-auth">Create administrator</button>
         </form>
-        <div id="setup-supabase-cloud-panel" class="supabase-cloud-panel hidden">
-          <p class="supabase-cloud-title">Cloud data (Supabase)</p>
-          <p id="setup-supabase-cloud-status" class="supabase-cloud-status">Connect Supabase before adding data so everything is saved online.</p>
-          <form id="setup-supabase-signin-form" class="login-form supabase-signin-form">
-            <label for="setup-supabase-email">Email</label>
-            <input type="email" id="setup-supabase-email" placeholder="Supabase account email" autocomplete="email">
-            <label for="setup-supabase-password">Password</label>
-            <input type="password" id="setup-supabase-password" placeholder="Supabase password" autocomplete="current-password">
-            <p id="setup-supabase-signin-error" class="login-error hidden"></p>
-            <button type="submit" class="btn btn-secondary">Connect cloud data</button>
-          </form>
-        </div>
       </div>
       <aside class="auth-panel auth-panel--visual" aria-hidden="true">
         <div class="auth-visual-glow"></div>
         <div class="auth-visual-content">
           <p class="auth-visual-title">Andeco Horizon Suite</p>
-          <p class="auth-visual-copy">One workspace for accounting, fleet, crew, shifts, and HR — ready for your team.</p>
+          <p class="auth-visual-copy">Navigating excellence across every horizon.</p>
         </div>
       </aside>
     </div>
@@ -138,24 +126,12 @@
           <p id="login-error" class="login-error hidden">Invalid username or password.</p>
           <button type="submit" class="btn btn-auth">Sign in</button>
         </form>
-        <div id="supabase-cloud-panel" class="supabase-cloud-panel hidden">
-          <p class="supabase-cloud-title">Cloud data (Supabase)</p>
-          <p id="supabase-cloud-status" class="supabase-cloud-status">Sign in to load and save your company data online.</p>
-          <form id="supabase-signin-form" class="login-form supabase-signin-form">
-            <label for="supabase-email">Email</label>
-            <input type="email" id="supabase-email" placeholder="Supabase account email" autocomplete="email">
-            <label for="supabase-password">Password</label>
-            <input type="password" id="supabase-password" placeholder="Supabase password" autocomplete="current-password">
-            <p id="supabase-signin-error" class="login-error hidden"></p>
-            <button type="submit" class="btn btn-secondary">Connect cloud data</button>
-          </form>
-        </div>
       </div>
       <aside class="auth-panel auth-panel--visual" aria-hidden="true">
         <div class="auth-visual-glow"></div>
         <div class="auth-visual-content">
           <p class="auth-visual-title">Andeco Horizon Suite</p>
-          <p class="auth-visual-copy">Accounting, fleet, crew, shifts, and HR — connected for your company.</p>
+          <p class="auth-visual-copy">Navigating excellence across every horizon.</p>
         </div>
       </aside>
     </div>
@@ -1830,15 +1806,6 @@
     // Defaults for static open / local file. Railway overrides via injected config.
     window.ANDECO_DATA_FILE_URL = window.ANDECO_DATA_FILE_URL || '/api/data';
     window.ANDECO_SAVE_API_URL = window.ANDECO_SAVE_API_URL || '/api/save';
-    // Leave empty to use Railway Postgres via the Node API (no Supabase).
-    window.ANDECO_SUPABASE_URL = window.ANDECO_SUPABASE_URL || '';
-    window.ANDECO_SUPABASE_ANON_KEY = window.ANDECO_SUPABASE_ANON_KEY || '';
-    window.ANDECO_ORG_ID = window.ANDECO_ORG_ID || '';
-    if (window.ANDECO_SUPABASE_URL && window.location.protocol !== 'file:') {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
-      document.head.appendChild(s);
-    }
   </script>
   <script src="js/accounting-data.js" defer></script>
   <script src="js/accounting-invoices.js" defer></script>

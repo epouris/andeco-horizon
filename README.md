@@ -33,8 +33,8 @@ Andeco Horizon/
 ├── package.json
 ├── railway/
 │   └── schema.sql          # Full relational schema
-├── supabase/
-│   └── migrations/         # Legacy Supabase SQL (optional)
+├── assets/
+│   └── login_logo.png      # Company logo on the login screen
 ├── css/
 │   ├── styles.css          # Main CRM styles
 │   └── accounting-invoices.css  # Invoice/receipt/settings form styles

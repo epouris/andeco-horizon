@@ -56,6 +56,6 @@ Before the app script loads, you can set:
 
 The server creates this file with empty arrays/object if it does not exist.
 
-## Supabase (legacy / optional)
+## Cloud storage (Railway)
 
-To use Supabase Auth + Postgres instead of the Railway Node API, see **[SUPABASE.md](SUPABASE.md)**. For new deploys, prefer **[RAILWAY.md](RAILWAY.md)** (Postgres via `DATABASE_URL`).
+Shared data is loaded via `GET /api/data` and saved via `POST /api/save`. On Railway with `DATABASE_URL`, the Node server stores that payload in relational Postgres tables — see **[RAILWAY.md](RAILWAY.md)**.

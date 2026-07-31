@@ -171,9 +171,6 @@ function injectConfigIntoHtml(html) {
     ANDECO_SAVE_API_URL: '/api/save',
     ANDECO_PREFER_SERVER_DATA: preferServer,
     ANDECO_API_TOKEN: API_TOKEN || '',
-    ANDECO_SUPABASE_URL: '',
-    ANDECO_SUPABASE_ANON_KEY: '',
-    ANDECO_ORG_ID: ''
   };
   const snippet = '<script>window.ANDECO_RUNTIME_CONFIG=' + JSON.stringify(config) + ';' +
     'Object.keys(window.ANDECO_RUNTIME_CONFIG).forEach(function(k){window[k]=window.ANDECO_RUNTIME_CONFIG[k];});</script>';
