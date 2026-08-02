@@ -372,6 +372,32 @@
     return lessons.every(function (l) { return done.indexOf(l.id) !== -1; });
   }
 
+  function isLessonUnlocked(course, en, lessonId) {
+    if (isAdmin() || isLmsInstructorUser()) return true;
+    var lessons = (course && course.lessons) || [];
+    var idx = -1;
+    for (var i = 0; i < lessons.length; i++) {
+      if (lessons[i].id === lessonId) { idx = i; break; }
+    }
+    if (idx < 0) return false;
+    if (idx === 0) return true;
+    var done = (en && en.completedLessonIds) || [];
+    for (var p = 0; p < idx; p++) {
+      if (done.indexOf(lessons[p].id) === -1) return false;
+    }
+    return true;
+  }
+
+  function firstAvailableLesson(course, en) {
+    var lessons = (course && course.lessons) || [];
+    if (!lessons.length) return null;
+    var done = (en && en.completedLessonIds) || [];
+    for (var i = 0; i < lessons.length; i++) {
+      if (done.indexOf(lessons[i].id) === -1) return lessons[i];
+    }
+    return lessons[0];
+  }
+
   function canAccessCourseExam(course, en) {
     if (!course || !course.exam || !course.exam.enabled) return false;
     if (isEnrollmentContentLocked(en)) return false;
@@ -2267,7 +2293,11 @@
         return;
       }
     }
-    var lesson = course.lessons.filter(function (l) { return l.id === viewState.lessonId; })[0] || course.lessons[0];
+    if (!viewState.lessonId || !isLessonUnlocked(course, en, viewState.lessonId)) {
+      var availableLesson = firstAvailableLesson(course, en);
+      viewState.lessonId = availableLesson ? availableLesson.id : null;
+    }
+    var lesson = course.lessons.filter(function (l) { return l.id === viewState.lessonId; })[0] || firstAvailableLesson(course, en);
     var completed = en.completedLessonIds || [];
     var examUnlocked = canAccessCourseExam(course, en);
     var left = remainingLessonsCount(course, en);
@@ -2277,8 +2307,14 @@
       '<div class="lms-player">' +
         '<aside class="lms-player-nav">' +
           '<h3>Contents</h3>' +
-          '<ol>' + course.lessons.map(function (l) {
+          '<p class="lms-hint">Lessons unlock in order.</p>' +
+          '<ol>' + course.lessons.map(function (l, idx) {
             var done = completed.indexOf(l.id) !== -1;
+            var unlocked = isLessonUnlocked(course, en, l.id);
+            if (!unlocked) {
+              return '<li><span class="lms-lesson-link is-locked" title="Complete previous lessons first">' +
+                (idx + 1) + '. ' + escapeHtml(l.title) + ' (Locked)</span></li>';
+            }
             return '<li><button type="button" class="lms-lesson-link' + (lesson && lesson.id === l.id ? ' active' : '') +
               '" data-lms-lesson="' + escapeHtml(l.id) + '">' + (done ? '✓ ' : '') + escapeHtml(l.title) + '</button></li>';
           }).join('') + '</ol>' +
@@ -2290,16 +2326,19 @@
             : '') +
         '</aside>' +
         '<div class="lms-player-content module-table-panel">' +
-          (lesson ? '<h3>' + escapeHtml(lesson.title) + '</h3>' +
-            '<p class="lms-meta">' + escapeHtml(CONTENT_TYPES[lesson.contentType] || 'Text / procedure') +
-            (lesson.durationMinutes ? ' · ' + escapeHtml(String(lesson.durationMinutes)) + ' min' : '') + '</p>' +
-            embedMediaHtml(lesson) +
-            '<div class="lms-lesson-body is-protected" oncontextmenu="return false" oncopy="return false" oncut="return false">' +
-              formatContent(lesson.content) +
-            '</div>' +
-            '<div class="lms-actions">' +
-              '<button type="button" class="btn btn-primary" data-lms-complete-lesson="' + escapeHtml(lesson.id) + '">Mark complete &amp; continue</button>' +
-            '</div>' : emptyState('This training has no lessons yet.')) +
+          (lesson && isLessonUnlocked(course, en, lesson.id)
+            ? '<h3>' + escapeHtml(lesson.title) + '</h3>' +
+              '<p class="lms-meta">' + escapeHtml(CONTENT_TYPES[lesson.contentType] || 'Text / procedure') +
+              (lesson.durationMinutes ? ' · ' + escapeHtml(String(lesson.durationMinutes)) + ' min' : '') +
+              ' · Complete in order</p>' +
+              embedMediaHtml(lesson) +
+              '<div class="lms-lesson-body is-protected" oncontextmenu="return false" oncopy="return false" oncut="return false">' +
+                formatContent(lesson.content) +
+              '</div>' +
+              '<div class="lms-actions">' +
+                '<button type="button" class="btn btn-primary" data-lms-complete-lesson="' + escapeHtml(lesson.id) + '">Mark complete &amp; continue</button>' +
+              '</div>'
+            : emptyState('Complete previous lessons to unlock the next one.')) +
             referenceMaterialsHtml(course) +
         '</div>' +
       '</div>';
@@ -2957,13 +2996,23 @@
     }
     if (t.hasAttribute('data-lms-lesson')) {
       var enLessonNav = findEnrollment(viewState.enrollmentId);
+      var courseLessonNav = enLessonNav ? findCourse(enLessonNav.courseId) : null;
+      var targetLessonNav = t.getAttribute('data-lms-lesson');
       if (enLessonNav && isEnrollmentContentLocked(enLessonNav)) {
         alert('This course is completed. Lessons are no longer available.');
         viewState.mode = 'player';
         renderMyLearning();
         return;
       }
-      viewState.lessonId = t.getAttribute('data-lms-lesson');
+      if (courseLessonNav && enLessonNav && !isLessonUnlocked(courseLessonNav, enLessonNav, targetLessonNav)) {
+        alert('Lessons must be completed in order. Finish the previous lesson first.');
+        var openNav = firstAvailableLesson(courseLessonNav, enLessonNav);
+        viewState.lessonId = openNav ? openNav.id : null;
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
+      viewState.lessonId = targetLessonNav;
       viewState.slideIndex = 0;
       renderMyLearning();
       return;
@@ -2975,6 +3024,14 @@
       if (!en2 || !course2) return;
       if (isEnrollmentContentLocked(en2)) {
         alert('This course is completed. Lessons are no longer available.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
+      if (!isLessonUnlocked(course2, en2, lessonId)) {
+        alert('Lessons must be completed in order. Finish the previous lesson first.');
+        var openComplete = firstAvailableLesson(course2, en2);
+        viewState.lessonId = openComplete ? openComplete.id : null;
         viewState.mode = 'player';
         renderMyLearning();
         return;
