@@ -184,6 +184,10 @@
     if (!order) return;
     var sub = store.getSubcontractor(order.subcontractorId) || {};
     var settings = store.getCompanySettings() || {};
+    var logoSrc = (store.getDocumentLogo && store.getDocumentLogo('paymentOrder')) || settings.logo || '';
+    var logoHtml = logoSrc
+      ? '<img src="' + logoSrc + '" alt="Logo" style="max-height:72px;max-width:180px;margin-bottom:10px;display:block;">'
+      : '';
     var dateStr = order.date
       ? new Date(order.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
       : '';
@@ -231,6 +235,7 @@
       '@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}' +
       '</style></head><body><div class="sheet">' +
       '<div class="top"><div class="brand">' +
+      logoHtml +
       '<h1>' + escapeHtml(settings.companyName || 'Company') + '</h1>' +
       '<p>' + escapeHtml(settings.companyAddress || '') + '</p>' +
       '<p>' + escapeHtml([settings.companyEmail, settings.companyPhone].filter(Boolean).join(' · ')) + '</p>' +

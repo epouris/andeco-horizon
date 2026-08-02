@@ -60,3 +60,44 @@
     flex-direction: column;
   }
 }
+
+.doc-logos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.doc-logo-card {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+.doc-logo-card h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+.doc-logo-preview {
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app, #f8fafc);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  padding: 8px;
+}
+.doc-logo-preview img {
+  max-height: 80px;
+  max-width: 100%;
+  object-fit: contain;
+}
+.doc-logo-placeholder {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.doc-logo-card .logo-upload-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

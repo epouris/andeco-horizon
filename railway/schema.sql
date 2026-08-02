@@ -35,11 +35,14 @@ CREATE TABLE IF NOT EXISTS company_settings (
   default_tax_rate NUMERIC NOT NULL DEFAULT 0,
   default_payment_terms INTEGER NOT NULL DEFAULT 30,
   default_invoice_notes TEXT NOT NULL DEFAULT '',
+  document_logos JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO company_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS payment_order_sequence_number INTEGER NOT NULL DEFAULT 1000;
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS document_logos JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS subcontractors (
   id TEXT PRIMARY KEY,

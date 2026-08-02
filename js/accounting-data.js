@@ -52,7 +52,15 @@ window.AccountingData = (function () {
     paymentOrderSequenceNumber: 1000,
     defaultTaxRate: 0,
     defaultPaymentTerms: 30,
-    defaultInvoiceNotes: ''
+    defaultInvoiceNotes: '',
+    documentLogos: {
+      invoice: '',
+      receipt: '',
+      paymentOrder: '',
+      payslip: '',
+      socialInsurance: '',
+      statement: ''
+    }
   };
 
   function getLocalStorage(key, def) {
@@ -677,6 +685,24 @@ window.AccountingData = (function () {
     return (max + 1).toString().padStart(4, '0');
   }
 
+  function getDocumentLogo(kind) {
+    var settings = getCompanySettings() || {};
+    var logos = settings.documentLogos && typeof settings.documentLogos === 'object'
+      ? settings.documentLogos
+      : {};
+    var specific = logos[kind];
+    if (specific && String(specific).indexOf('data:') === 0) return specific;
+    if (settings.logo && String(settings.logo).indexOf('data:') === 0) return settings.logo;
+    return settings.logo || '';
+  }
+
+  function getDocumentLogoHtml(kind, className) {
+    var src = getDocumentLogo(kind);
+    if (!src) return '';
+    var cls = className || 'company-logo-print';
+    return '<img src="' + src + '" alt="Logo" class="' + cls + '">';
+  }
+
   function getNextPaymentOrderNumber() {
     var settings = getCompanySettings();
     var start = settings.paymentOrderSequenceNumber || 1000;
@@ -924,6 +950,8 @@ window.AccountingData = (function () {
     getNextInvoiceNumber: getNextInvoiceNumber,
     getNextReceiptNumber: getNextReceiptNumber,
     getNextPaymentOrderNumber: getNextPaymentOrderNumber,
+    getDocumentLogo: getDocumentLogo,
+    getDocumentLogoHtml: getDocumentLogoHtml,
     getSubcontractors: getSubcontractors,
     saveSubcontractors: saveSubcontractors,
     getPaymentOrders: getPaymentOrders,

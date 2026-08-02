@@ -181,6 +181,9 @@
         { id: 'profile', label: 'Company profile' },
         { id: 'branding', label: 'Branding' }
       ],
+      'document-logos': [
+        { id: 'prints', label: 'Print logos' }
+      ],
       accounting: [
         { id: 'defaults', label: 'Defaults' },
         { id: 'backup', label: 'Backup & restore' }

@@ -288,6 +288,7 @@ const app = {
                 this.removeLogo();
             });
         }
+        this.initDocumentLogoUploads();
 
         // Invoice search
         const invoiceSearch = document.getElementById('invoice-search');
@@ -949,10 +950,12 @@ const app = {
             const formattedDueDate = dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
             const previewContent = document.getElementById('invoice-preview-content');
+            const invoiceLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
+                ? DataStore.getDocumentLogoHtml('invoice') : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
             previewContent.innerHTML = `
             <div class="invoice-preview">
                 <div class="invoice-header-print">
-                    <div class="company-logo-wrap">${settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : ''}</div>
+                    <div class="company-logo-wrap">${invoiceLogoHtml}</div>
                     <div class="company-info-print">
                         <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
                         ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}
@@ -1154,6 +1157,9 @@ const app = {
         if (!invoice) return;
         
         const settings = DataStore.getCompanySettings();
+        const invoiceLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
+            ? DataStore.getDocumentLogoHtml('invoice')
+            : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         
         // Format dates
         const invoiceDate = new Date(invoice.date);
@@ -1594,7 +1600,7 @@ const app = {
             <body>
                 <div class="invoice-container">
                     <div class="invoice-header-print">
-                        <div class="company-logo-wrap">${settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : ''}</div>
+                        <div class="company-logo-wrap">${invoiceLogoHtml}</div>
                         <div class="company-info-print">
                             <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
                             ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}
@@ -2089,6 +2095,9 @@ const app = {
         }
 
         const settings = DataStore.getCompanySettings();
+        const receiptLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
+            ? DataStore.getDocumentLogoHtml('receipt')
+            : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         const receiptDate = new Date(receipt.date);
         const formattedReceiptDate = receiptDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -2125,7 +2134,7 @@ const app = {
         previewContent.innerHTML = `
             <div class="invoice-preview">
                 <div class="invoice-header-print">
-                    <div class="company-logo-wrap">${settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : ''}</div>
+                    <div class="company-logo-wrap">${receiptLogoHtml}</div>
                     <div class="company-info-print">
                         <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
                         ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}
@@ -2301,6 +2310,9 @@ const app = {
         }
         
         const settings = DataStore.getCompanySettings();
+        const receiptLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
+            ? DataStore.getDocumentLogoHtml('receipt')
+            : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         const receiptDate = new Date(receipt.date);
         const formattedReceiptDate = receiptDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
         
@@ -2582,7 +2594,7 @@ const app = {
             <body>
                 <div class="invoice-container">
                     <div class="invoice-header-print">
-                        <div class="company-logo-wrap">${settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : ''}</div>
+                        <div class="company-logo-wrap">${receiptLogoHtml}</div>
                         <div class="company-info-print">
                             <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
                             ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}
@@ -2927,6 +2939,94 @@ const app = {
             document.getElementById('logo-placeholder').style.display = 'block';
             document.getElementById('remove-logo').style.display = 'none';
         }
+        this.loadDocumentLogosForm(settings);
+    },
+
+    getDocumentLogosFromForm() {
+        const logos = {
+            invoice: '',
+            receipt: '',
+            paymentOrder: '',
+            payslip: '',
+            socialInsurance: '',
+            statement: ''
+        };
+        document.querySelectorAll('#doc-logos-grid .doc-logo-card').forEach(function (card) {
+            const key = card.getAttribute('data-doc-logo');
+            const img = card.querySelector('.doc-logo-image');
+            if (!key || !img) return;
+            const src = img.getAttribute('src') || '';
+            logos[key] = src.indexOf('data:') === 0 ? src : '';
+        });
+        return logos;
+    },
+
+    setDocLogoCard(card, dataUrl) {
+        if (!card) return;
+        const img = card.querySelector('.doc-logo-image');
+        const placeholder = card.querySelector('.doc-logo-placeholder');
+        const removeBtn = card.querySelector('.doc-logo-remove-btn');
+        if (dataUrl && String(dataUrl).indexOf('data:') === 0) {
+            if (img) {
+                img.src = dataUrl;
+                img.style.display = 'block';
+            }
+            if (placeholder) placeholder.style.display = 'none';
+            if (removeBtn) removeBtn.style.display = 'inline-block';
+        } else {
+            if (img) {
+                img.removeAttribute('src');
+                img.style.display = 'none';
+            }
+            if (placeholder) placeholder.style.display = 'block';
+            if (removeBtn) removeBtn.style.display = 'none';
+        }
+    },
+
+    loadDocumentLogosForm(settings) {
+        const logos = (settings && settings.documentLogos && typeof settings.documentLogos === 'object')
+            ? settings.documentLogos
+            : {};
+        const self = this;
+        document.querySelectorAll('#doc-logos-grid .doc-logo-card').forEach(function (card) {
+            const key = card.getAttribute('data-doc-logo');
+            self.setDocLogoCard(card, logos[key] || '');
+        });
+    },
+
+    initDocumentLogoUploads() {
+        const root = document.getElementById('doc-logos-grid');
+        if (!root || root._docLogosBound) return;
+        root._docLogosBound = true;
+        const self = this;
+        root.addEventListener('click', function (e) {
+            const card = e.target.closest('.doc-logo-card');
+            if (!card) return;
+            if (e.target.closest('.doc-logo-upload-btn')) {
+                const fileInput = card.querySelector('.doc-logo-file');
+                if (fileInput) fileInput.click();
+            }
+            if (e.target.closest('.doc-logo-remove-btn')) {
+                self.setDocLogoCard(card, '');
+                const fileInput = card.querySelector('.doc-logo-file');
+                if (fileInput) fileInput.value = '';
+            }
+        });
+        root.addEventListener('change', function (e) {
+            const input = e.target.closest('.doc-logo-file');
+            if (!input || !input.files || !input.files[0]) return;
+            const card = input.closest('.doc-logo-card');
+            const file = input.files[0];
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function (ev) {
+                self.setDocLogoCard(card, ev.target.result);
+            };
+            reader.readAsDataURL(file);
+        });
     },
 
     loadCompanySettings() {
@@ -2983,7 +3083,8 @@ const app = {
             paymentOrderSequenceNumber: parseInt((document.getElementById('payment-order-sequence-number') || {}).value) || 1000,
             defaultTaxRate: parseFloat(document.getElementById('default-tax-rate').value) || 0,
             defaultPaymentTerms: parseInt(document.getElementById('default-payment-terms').value) || 30,
-            defaultInvoiceNotes: document.getElementById('default-invoice-notes').value
+            defaultInvoiceNotes: document.getElementById('default-invoice-notes').value,
+            documentLogos: this.getDocumentLogosFromForm()
         };
 
         // Only save logo if it's a data URL (not empty)
@@ -2991,6 +3092,15 @@ const app = {
             const existingSettings = DataStore.getCompanySettings();
             settings.logo = existingSettings.logo || '';
         }
+        const existingLogos = (DataStore.getCompanySettings().documentLogos) || {};
+        Object.keys(settings.documentLogos).forEach(function (key) {
+            if (!settings.documentLogos[key] && existingLogos[key] && String(existingLogos[key]).indexOf('data:') === 0) {
+                // Keep existing if form card was empty because section wasn't visited — only when img had no data
+                // Actually getDocumentLogosFromForm returns '' when removed or empty; preserve only if card wasn't in DOM
+            }
+        });
+        // Merge: if a card exists and shows empty, '' is intentional. If keys missing, keep existing.
+        settings.documentLogos = Object.assign({}, existingLogos, settings.documentLogos);
 
         DataStore.saveCompanySettings(settings);
         this.syncCompanySettingsToPayroll(settings);
@@ -3025,7 +3135,12 @@ const app = {
             companyWebsite: settings.companyWebsite || '',
             companyTaxId: settings.companyTaxId || '',
             companyRegistration: settings.companyRegistration || '',
-            logoData: (settings.logo && settings.logo.toString().startsWith('data:')) ? settings.logo : '',
+            logoData: (function () {
+                const payslipLogo = settings.documentLogos && settings.documentLogos.payslip;
+                if (payslipLogo && String(payslipLogo).indexOf('data:') === 0) return payslipLogo;
+                if (settings.logo && settings.logo.toString().startsWith('data:')) return settings.logo;
+                return '';
+            })(),
             currency: settings.currency || 'EUR'
         };
         try {
@@ -3483,6 +3598,9 @@ const app = {
         
         const data = this.currentStatementData;
         const settings = DataStore.getCompanySettings();
+        const statementLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
+            ? DataStore.getDocumentLogoHtml('statement')
+            : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         const container = document.getElementById('statement-content');
         
         // Format dates as dd/mm/yyyy
@@ -3500,7 +3618,7 @@ const app = {
         container.innerHTML = `
             <div class="statement-preview">
                 <div class="invoice-header-print">
-                    <div class="company-logo-wrap">${settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : ''}</div>
+                    <div class="company-logo-wrap">${statementLogoHtml}</div>
                     <div class="company-info-print">
                         <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
                         ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}
@@ -3633,6 +3751,9 @@ const app = {
         
         const data = this.currentStatementData;
         const settings = DataStore.getCompanySettings();
+        const statementLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
+            ? DataStore.getDocumentLogoHtml('statement')
+            : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         
         // Format dates as dd/mm/yyyy
         const formatDateDDMMYYYY = (dateString) => {
@@ -3871,7 +3992,7 @@ const app = {
             <body>
                 <div class="invoice-container">
                     <div class="invoice-header-print">
-                        <div class="company-logo-wrap">${settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : ''}</div>
+                        <div class="company-logo-wrap">${statementLogoHtml}</div>
                         <div class="company-info-print">
                             <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
                             ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}

@@ -2513,10 +2513,27 @@ function getMergedCompanySettingsForReports() {
             cs.companyWebsite = main.companyWebsite || cs.companyWebsite;
             cs.companyTaxId = main.companyTaxId || cs.companyTaxId;
             cs.companyRegistration = main.companyRegistration || cs.companyRegistration;
-            if (main.logo && main.logo.toString().startsWith('data:')) cs.logoData = main.logo;
+            var payslipLogo = window.AccountingData.getDocumentLogo
+                ? window.AccountingData.getDocumentLogo('payslip')
+                : '';
+            if (payslipLogo && String(payslipLogo).indexOf('data:') === 0) {
+                cs.logoData = payslipLogo;
+            } else if (main.logo && main.logo.toString().startsWith('data:')) {
+                cs.logoData = main.logo;
+            }
         }
     }
     return cs;
+}
+
+function getSocialInsuranceLogoData() {
+    if (typeof window.AccountingData !== 'undefined' && window.AccountingData.getDocumentLogo) {
+        var siLogo = window.AccountingData.getDocumentLogo('socialInsurance');
+        if (siLogo && String(siLogo).indexOf('data:') === 0) return siLogo;
+        if (siLogo) return siLogo;
+    }
+    var cs = getMergedCompanySettingsForReports();
+    return cs.logoData || '';
 }
 
 function buildSocialInsuranceCompanyHeaderHtml(monthName, year) {
@@ -2531,7 +2548,7 @@ function buildSocialInsuranceCompanyHeaderHtml(monthName, year) {
     const taxParts = [];
     if (cs.companyTaxId) taxParts.push('TIN: ' + escapeEmployeeHtml(cs.companyTaxId));
     if (cs.companyRegistration) taxParts.push('Reg: ' + escapeEmployeeHtml(cs.companyRegistration));
-    const logo = cs.logoData || '';
+    const logo = getSocialInsuranceLogoData();
     const logoHtml = logo
         ? `<img src="${logo}" alt="" class="si-monthly-header-logo-img">`
         : `<div class="si-monthly-header-logo-text">${escapeEmployeeHtml((name || 'CO').substring(0, 12).toUpperCase())}</div>`;
