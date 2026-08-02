@@ -776,7 +776,7 @@
       description: '',
       coverImage: '',
       instructorName: u ? u.name : '',
-      instructorTitle: 'Instructor',
+      instructorTitle: 'Course Instructor',
       instructorBio: '',
       type: 'course',
       category: 'General',
