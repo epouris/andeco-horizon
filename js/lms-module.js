@@ -1404,10 +1404,27 @@
     return escapeHtml(name || 'Authorized Signer');
   }
 
+  function resolveCompanyBrand(lmsSettings) {
+    var company = {};
+    try {
+      if (window.AccountingData && typeof window.AccountingData.getCompanySettings === 'function') {
+        company = window.AccountingData.getCompanySettings() || {};
+      }
+    } catch (e) {}
+    var name = (company.companyName || '').trim() ||
+      ((lmsSettings && lmsSettings.companyLmsName) || '').trim() ||
+      'Andeco Learning';
+    var logo = (company.logo || '').trim() ||
+      ((lmsSettings && lmsSettings.companyLogo) || '').trim() ||
+      'assets/login_logo.png';
+    return { name: name, logo: logo };
+  }
+
   function buildCertificateHtml(cert, settings, course) {
     var data = getData();
     var s = settings || data.settings || {};
-    var org = s.companyLmsName || 'Andeco Learning';
+    var brand = resolveCompanyBrand(s);
+    var org = brand.name;
     var title = s.certificateTitle || 'Certificate of Completion';
     var courseTitle = (cert && cert.courseTitle) || (course && course.title) || 'Course';
     var courseInstructor = resolveCourseInstructor(course, data);
@@ -1430,6 +1447,15 @@
     return '' +
       '<div class="lms-certificate" role="document" aria-label="Certificate of completion">' +
         '<div class="lms-certificate-body">' +
+          '<div class="lms-certificate-brand">' +
+            '<div class="lms-certificate-logo-wrap">' +
+              '<img class="lms-certificate-logo" src="' + escapeHtml(brand.logo) + '" alt="' + escapeHtml(org) + ' logo" onerror="this.style.display=\'none\'">' +
+            '</div>' +
+            '<div class="lms-certificate-company">' +
+              '<span class="lms-certificate-company-label">Presented by</span>' +
+              '<strong>' + escapeHtml(String(org).toUpperCase()) + '</strong>' +
+            '</div>' +
+          '</div>' +
           '<header class="lms-certificate-header">' +
             '<span class="lms-certificate-accent" aria-hidden="true"></span>' +
             '<div>' +
@@ -1609,6 +1635,21 @@
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="autoIssueCertificates"' + (s.autoIssueCertificates !== false ? ' checked' : '') + '> Auto-issue certificates on completion</label></div>' +
           '<div class="form-group"><label>Certificate title</label><input name="certificateTitle" value="' + escapeHtml(s.certificateTitle || '') + '"></div>' +
           '<div class="form-group"><label>Certificate signer</label><input name="certificateSigner" value="' + escapeHtml(s.certificateSigner || '') + '"></div>' +
+          '<div class="form-group full-width"><label>Certificate company logo URL (optional override)</label>' +
+            '<input name="companyLogo" value="' + escapeHtml((s.companyLogo && String(s.companyLogo).indexOf('data:image') === 0) ? '' : (s.companyLogo || '')) + '" placeholder="Uses CRM company logo by default">' +
+            ((s.companyLogo && String(s.companyLogo).indexOf('data:image') === 0)
+              ? '<p class="lms-hint">An uploaded LMS logo is currently saved. Paste a URL to replace it, or clear and save to use the CRM company logo.</p>'
+              : '<p class="lms-hint">By default certificates use the company name and logo from CRM Company settings.</p>') +
+          '</div>' +
+          '<div class="form-group full-width"><label>Upload certificate logo override</label>' +
+            '<input type="file" id="lms-settings-logo-file" accept="image/*">' +
+            '<div class="lms-signature-preview' + (s.companyLogo ? ' has-image' : '') + '" id="lms-settings-logo-preview">' +
+              (s.companyLogo
+                ? '<img src="' + escapeHtml(s.companyLogo) + '" alt="Certificate logo preview">'
+                : '<span>Using CRM company logo / default</span>') +
+            '</div>' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="lms-settings-logo-clear" style="margin-top:0.5rem">Clear LMS logo override</button>' +
+          '</div>' +
           '<div class="form-group full-width"><label>Public purchase instructions</label><textarea name="purchaseInstructions" rows="3">' + escapeHtml(s.purchaseInstructions) + '</textarea></div>' +
           '<div class="form-group full-width"><label>Careers portal intro</label><textarea name="careersIntro" rows="3">' + escapeHtml(s.careersIntro) + '</textarea></div>' +
         '</div></div>' +
@@ -1620,6 +1661,64 @@
         '<p>Hiring exams: add <code>#lms-careers</code> to your app URL</p>' +
         '<p><strong>Mobile access:</strong> the LMS layout adapts to phones and tablets.</p>' +
       '</div></div>';
+    bindSettingsLogoControls();
+  }
+
+  function bindSettingsLogoControls() {
+    var form = document.getElementById('lms-settings-form');
+    var file = document.getElementById('lms-settings-logo-file');
+    var preview = document.getElementById('lms-settings-logo-preview');
+    var clearBtn = document.getElementById('lms-settings-logo-clear');
+    var urlInput = form ? form.querySelector('[name="companyLogo"]') : null;
+    if (!form || !file || !preview) return;
+
+    function setPreview(src) {
+      if (src) {
+        preview.classList.add('has-image');
+        preview.innerHTML = '<img src="' + src + '" alt="Certificate logo preview">';
+      } else {
+        preview.classList.remove('has-image');
+        preview.innerHTML = '<span>Using CRM company logo / default</span>';
+      }
+    }
+
+    file.onchange = function () {
+      var f = file.files && file.files[0];
+      if (!f) return;
+      if (f.size > 1.5 * 1024 * 1024) {
+        alert('Please choose a logo image under 1.5 MB.');
+        file.value = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = String(reader.result || '');
+        form.setAttribute('data-logo-upload', dataUrl);
+        form.removeAttribute('data-logo-cleared');
+        if (urlInput) urlInput.value = '';
+        setPreview(dataUrl);
+      };
+      reader.readAsDataURL(f);
+    };
+
+    if (urlInput) {
+      urlInput.oninput = function () {
+        var typed = urlInput.value.trim();
+        form.removeAttribute('data-logo-upload');
+        form.removeAttribute('data-logo-cleared');
+        setPreview(typed);
+      };
+    }
+
+    if (clearBtn) {
+      clearBtn.onclick = function () {
+        form.setAttribute('data-logo-cleared', '1');
+        form.removeAttribute('data-logo-upload');
+        file.value = '';
+        if (urlInput) urlInput.value = '';
+        setPreview('');
+      };
+    }
   }
 
   function renderPlayer(el) {
