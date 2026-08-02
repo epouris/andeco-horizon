@@ -1346,12 +1346,117 @@
   margin-top: 0.4rem;
 }
 
+.lp-exam-cover {
+  max-width: 46rem;
+}
+
+.lp-exam-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lp-accent);
+}
+
+.lp-exam-instructions {
+  margin: 1rem 0 1.25rem;
+  padding: 1rem 1rem 1rem 1.35rem;
+  border-radius: 16px;
+  border: 1px solid var(--lp-line);
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 0.55rem;
+  color: var(--lp-text);
+}
+
+.lp-exam-instructions li {
+  line-height: 1.45;
+}
+
+.lp-exam-cover-actions {
+  margin-top: 0.25rem;
+}
+
+.lp-exam-live-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.lp-exam-timer {
+  min-width: 7.5rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(47, 211, 197, 0.35);
+  background: rgba(47, 211, 197, 0.1);
+  text-align: center;
+}
+
+.lp-exam-timer--open {
+  border-color: var(--lp-line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lp-exam-timer.is-urgent {
+  border-color: rgba(255, 120, 100, 0.55);
+  background: rgba(255, 90, 70, 0.14);
+  animation: lp-timer-pulse 1s ease-in-out infinite;
+}
+
+.lp-exam-timer-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lp-muted);
+  margin-bottom: 0.2rem;
+}
+
+.lp-exam-timer strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.lp-exam-result {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1rem 0 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid var(--lp-line);
+}
+
+.lp-exam-result.is-pass {
+  border-color: rgba(47, 211, 197, 0.4);
+  background: rgba(47, 211, 197, 0.1);
+}
+
+.lp-exam-result.is-fail {
+  border-color: rgba(255, 120, 100, 0.4);
+  background: rgba(255, 90, 70, 0.1);
+}
+
+.lp-exam-result strong {
+  font-size: 1.15rem;
+}
+
 .lp-exam-q {
   padding: 0.9rem;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--lp-line);
   margin-bottom: 0.75rem;
+}
+
+@keyframes lp-timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.82; }
 }
 
 .lp-option {

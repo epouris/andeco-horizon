@@ -18,6 +18,8 @@
     threadId: null,
     composingPrivate: false
   };
+  var examTimerHandle = null;
+  var examSubmitLock = false;
 
   function escapeHtml(s) {
     if (s == null) return '';
@@ -551,6 +553,7 @@
   }
 
   function render() {
+    clearExamTimer();
     renderShell();
     renderNav();
     syncCourseFocusShell();
@@ -559,8 +562,13 @@
     if (isCourseFocus()) {
       var enTitle = findEnrollment(playerState.enrollmentId);
       var courseTitle = enTitle ? findCourse(enTitle.courseId) : null;
+      if (enTitle && courseTitle && isExamExpiredPending(courseTitle, enTitle)) {
+        finishExamAttempt(courseTitle, enTitle, {}, true);
+        return;
+      }
       setTitle(courseTitle ? courseTitle.title : 'Course', playerState.panel === 'exam' ? 'Assessment' : 'Course workspace');
       root.innerHTML = renderCoursePage();
+      setupExamTimerIfNeeded();
       return;
     }
     if (view === 'home') {
@@ -1090,12 +1098,55 @@
     return lessons.filter(function (l) { return done.indexOf(l.id) === -1; }).length;
   }
 
+  function examTimeLimitMinutes(course) {
+    return Math.max(0, Number(course && course.exam && course.exam.timeLimitMinutes) || 0);
+  }
+
+  function hasUsedExamAttempt(enrollment) {
+    if (!enrollment) return false;
+    if (enrollment.score != null) return true;
+    if (enrollment.passed === true || enrollment.passed === false) return true;
+    var data = getData();
+    return (data.attempts || []).some(function (a) {
+      return a.enrollmentId === enrollment.id;
+    });
+  }
+
+  function examEndsAtMs(course, enrollment) {
+    var mins = examTimeLimitMinutes(course);
+    if (!mins || !enrollment || !enrollment.examStartedAt) return null;
+    var start = new Date(enrollment.examStartedAt).getTime();
+    if (isNaN(start)) return null;
+    return start + mins * 60 * 1000;
+  }
+
+  function pad2(n) {
+    return (n < 10 ? '0' : '') + n;
+  }
+
+  function formatCountdown(ms) {
+    if (ms < 0) ms = 0;
+    var totalSec = Math.floor(ms / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    if (h > 0) return h + ':' + pad2(m) + ':' + pad2(s);
+    return pad2(m) + ':' + pad2(s);
+  }
+
+  function clearExamTimer() {
+    if (examTimerHandle) {
+      clearInterval(examTimerHandle);
+      examTimerHandle = null;
+    }
+  }
+
   function statusPretty(status) {
     var map = {
       enrolled: 'Enrolled',
       in_progress: 'In progress',
       completed: 'Completed',
-      failed: 'Needs retry',
+      failed: 'Not passed',
       passed: 'Passed'
     };
     return map[status] || status || 'Enrolled';
@@ -1133,9 +1184,10 @@
       return t.courseId === course.id || !t.courseId;
     }).length;
     var examUnlocked = canAccessExam(course, en);
+    var examDone = hasUsedExamAttempt(en);
 
     return '<div class="lp-course-page lp-course-page--focus">' +
-      renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor, examUnlocked, en) +
+      renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor, examUnlocked, en, examDone) +
       '<div class="lp-course-focus-main">' +
         renderCourseHeader(course, instructor, progress, en) +
         '<section class="lp-course-main">' +
@@ -1182,7 +1234,7 @@
     '</header>';
   }
 
-  function renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor, examUnlocked, en) {
+  function renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor, examUnlocked, en, examDone) {
     var lessonItems = (course.lessons || []).map(function (l, idx) {
       var done = completed.indexOf(l.id) !== -1;
       var active = panel === 'lesson' && activeLesson && activeLesson.id === l.id;
@@ -1193,6 +1245,7 @@
       '</button>';
     }).join('');
     var left = remainingLessonsCount(course, en);
+    var examInProgress = !!(en && en.examStartedAt && !examDone);
 
     return '<aside class="lp-course-side" aria-label="Course navigation">' +
       '<div class="lp-course-side-brand">' +
@@ -1219,7 +1272,9 @@
         (course.exam && course.exam.enabled
           ? '<p class="lp-course-side-label lp-course-side-label--spaced">Assessment</p>' +
             (examUnlocked
-              ? '<button type="button" class="lp-course-nav-link' + (panel === 'exam' ? ' active' : '') + '" data-lp-course-panel="exam">Exam</button>'
+              ? '<button type="button" class="lp-course-nav-link' + (panel === 'exam' ? ' active' : '') + '" data-lp-course-panel="exam">Exam' +
+                  (examDone ? ' <em>Done</em>' : (examInProgress ? ' <em>In progress</em>' : '')) +
+                '</button>'
               : '<button type="button" class="lp-course-nav-link is-locked" data-lp-exam-locked title="Finish all lessons to unlock the exam">Exam <em>Locked</em></button>' +
                 '<p class="lp-course-lock-hint">Finish ' + left + ' more lesson' + (left === 1 ? '' : 's') + ' to unlock</p>')
           : '') +
@@ -1413,13 +1468,72 @@
     '</div>';
   }
 
-  function renderExamHtml(course, enrollment) {
-    var questions = ((course.exam && course.exam.questions) || []).slice();
-    return '<div class="lp-card lp-course-panel">' +
+  function renderExamResultPanel(course, enrollment) {
+    var passed = enrollment.passed === true;
+    return '<div class="lp-card lp-course-panel lp-exam-cover">' +
+      '<p class="lp-exam-kicker">Assessment complete</p>' +
+      '<h3>Exam result</h3>' +
+      '<p class="lp-muted-line">This exam allows only one attempt. Your result is final.</p>' +
+      '<div class="lp-exam-result ' + (passed ? 'is-pass' : 'is-fail') + '">' +
+        '<strong>' + (passed ? 'Passed' : 'Not passed') + '</strong>' +
+        '<span>Score: ' + escapeHtml(String(enrollment.score != null ? enrollment.score : '—')) + '%' +
+          ' · Required: ' + escapeHtml(String((course.exam && course.exam.passScore) || 70)) + '%</span>' +
+      '</div>' +
+      '<div class="lp-form-actions">' +
+        '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="overview">Back to overview</button>' +
+      '</div></div>';
+  }
+
+  function renderExamCoverPanel(course, enrollment) {
+    var mins = examTimeLimitMinutes(course);
+    var passScore = (course.exam && course.exam.passScore) || 70;
+    var qCount = ((course.exam && course.exam.questions) || []).length;
+    return '<div class="lp-card lp-course-panel lp-exam-cover">' +
+      '<p class="lp-exam-kicker">Ready when you are</p>' +
       '<h3>Exam: ' + escapeHtml(course.title) + '</h3>' +
-      '<p class="lp-muted-line">Pass score: ' + escapeHtml(String((course.exam && course.exam.passScore) || 70)) + '%' +
-        (enrollment.score != null ? ' · Your latest score: ' + escapeHtml(String(enrollment.score)) + '%' : '') +
-      '</p>' +
+      '<p class="lp-muted-line">Read the instructions carefully before you begin. You can continue studying instead if you are not ready.</p>' +
+      '<ul class="lp-exam-instructions">' +
+        '<li>You have <strong>one attempt only</strong>. Once you start, you cannot retake this exam.</li>' +
+        '<li>Pass score: <strong>' + escapeHtml(String(passScore)) + '%</strong></li>' +
+        '<li>Questions: <strong>' + qCount + '</strong></li>' +
+        '<li>Time limit: <strong>' + (mins ? (mins + ' minute' + (mins === 1 ? '' : 's')) : 'No time limit set') + '</strong>' +
+          (mins ? '. A countdown starts when you click Start Exam.' : '') + '</li>' +
+        '<li>When time runs out, your answers are submitted automatically.</li>' +
+        '<li>Make sure you have a stable connection and enough uninterrupted time.</li>' +
+      '</ul>' +
+      '<div class="lp-form-actions lp-exam-cover-actions">' +
+        '<button type="button" class="lp-btn lp-btn-primary" data-lp-begin-exam>Start Exam</button>' +
+        '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="overview">Continue study</button>' +
+      '</div></div>';
+  }
+
+  function renderExamHtml(course, enrollment) {
+    if (hasUsedExamAttempt(enrollment)) {
+      return renderExamResultPanel(course, enrollment);
+    }
+    if (!enrollment.examStartedAt) {
+      return renderExamCoverPanel(course, enrollment);
+    }
+
+    var questions = ((course.exam && course.exam.questions) || []).slice();
+    var mins = examTimeLimitMinutes(course);
+    var endsAt = examEndsAtMs(course, enrollment);
+    var remaining = endsAt != null ? Math.max(0, endsAt - Date.now()) : null;
+
+    return '<div class="lp-card lp-course-panel">' +
+      '<div class="lp-exam-live-head">' +
+        '<div>' +
+          '<h3>Exam: ' + escapeHtml(course.title) + '</h3>' +
+          '<p class="lp-muted-line">Pass score: ' + escapeHtml(String((course.exam && course.exam.passScore) || 70)) + '%' +
+            ' · One attempt · Answer all questions, then submit</p>' +
+        '</div>' +
+        (mins && endsAt != null
+          ? '<div class="lp-exam-timer" id="lp-exam-timer" data-ends-at="' + endsAt + '" role="timer" aria-live="polite">' +
+              '<span class="lp-exam-timer-label">Time left</span>' +
+              '<strong id="lp-exam-timer-value">' + formatCountdown(remaining) + '</strong>' +
+            '</div>'
+          : '<div class="lp-exam-timer lp-exam-timer--open"><span class="lp-exam-timer-label">Time limit</span><strong>None</strong></div>') +
+      '</div>' +
       '<form id="lp-exam-form">' +
         questions.map(function (q, qi) {
           return '<div class="lp-exam-q"><p><strong>Q' + (qi + 1) + '.</strong> ' + escapeHtml(q.prompt) + '</p>' +
@@ -1432,6 +1546,130 @@
         }).join('') +
         '<div class="lp-form-actions"><button class="lp-btn lp-btn-primary" type="submit">Submit exam</button></div>' +
       '</form></div>';
+  }
+
+  function collectExamAnswers(form, course) {
+    var answers = {};
+    ((course.exam && course.exam.questions) || []).forEach(function (q) {
+      if (!form) {
+        answers[q.id] = [];
+        return;
+      }
+      var nodes = form.querySelectorAll('[name="q_' + q.id + '"]:checked');
+      answers[q.id] = Array.prototype.map.call(nodes, function (n) { return n.value; });
+    });
+    return answers;
+  }
+
+  function isExamExpiredPending(course, en) {
+    if (!en || !course || hasUsedExamAttempt(en) || !en.examStartedAt) return false;
+    var ends = examEndsAtMs(course, en);
+    return ends != null && Date.now() >= ends;
+  }
+
+  function finishExamAttempt(course, en, answers, autoExpired) {
+    if (!course || !en || examSubmitLock) return;
+    if (hasUsedExamAttempt(en)) {
+      playerState.panel = 'exam';
+      return;
+    }
+    examSubmitLock = true;
+    clearExamTimer();
+    var result = scoreAttempt(course, answers || {});
+    var data = getData();
+    data.attempts = data.attempts || [];
+    data.attempts.push({
+      id: 'att' + Date.now().toString(36),
+      enrollmentId: en.id,
+      courseId: course.id,
+      userId: en.userId,
+      answers: answers || {},
+      score: result.percent,
+      passed: result.passed,
+      autoExpired: !!autoExpired,
+      startedAt: en.examStartedAt || new Date().toISOString(),
+      finishedAt: new Date().toISOString()
+    });
+    var target = data.enrollments.filter(function (x) { return x.id === en.id; })[0];
+    if (target) {
+      target.score = result.percent;
+      target.passed = result.passed;
+      target.status = result.passed ? 'completed' : 'failed';
+      target.progressPercent = 100;
+      target.completedAt = new Date().toISOString();
+      if (result.passed) maybeIssueCertificate(data, target, course);
+    }
+    saveData(data);
+    examSubmitLock = false;
+    alert(autoExpired
+      ? ('Time is up. Your exam was submitted automatically. Score: ' + result.percent + '%.' +
+          (result.passed ? ' Passed.' : ' Required ' + result.passScore + '%.'))
+      : (result.passed
+          ? ('Passed with ' + result.percent + '%')
+          : ('Score ' + result.percent + '%. Required ' + result.passScore + '%.')));
+    playerState.mode = 'course';
+    playerState.panel = 'exam';
+    render();
+  }
+
+  function beginExamAttempt() {
+    var en = findEnrollment(playerState.enrollmentId);
+    var course = en ? findCourse(en.courseId) : null;
+    if (!course || !en) return;
+    if (!canAccessExam(course, en)) {
+      alert('Finish all lessons before taking the exam.');
+      playerState.panel = 'overview';
+      render();
+      return;
+    }
+    if (hasUsedExamAttempt(en)) {
+      playerState.panel = 'exam';
+      render();
+      return;
+    }
+    if (en.examStartedAt) {
+      playerState.panel = 'exam';
+      render();
+      return;
+    }
+    var mins = examTimeLimitMinutes(course);
+    var confirmMsg = 'You have only one attempt' +
+      (mins ? ' and ' + mins + ' minute' + (mins === 1 ? '' : 's') + ' on the clock' : '') +
+      '. Start the exam now?';
+    if (!window.confirm(confirmMsg)) return;
+    var data = getData();
+    var target = data.enrollments.filter(function (x) { return x.id === en.id; })[0];
+    if (!target) return;
+    target.examStartedAt = new Date().toISOString();
+    if (target.status === 'enrolled') target.status = 'in_progress';
+    saveData(data);
+    playerState.panel = 'exam';
+    render();
+  }
+
+  function setupExamTimerIfNeeded() {
+    var timer = document.getElementById('lp-exam-timer');
+    var valueEl = document.getElementById('lp-exam-timer-value');
+    if (!timer || !valueEl) return;
+    var endsAt = Number(timer.getAttribute('data-ends-at'));
+    if (!endsAt) return;
+
+    function tick() {
+      var left = endsAt - Date.now();
+      valueEl.textContent = formatCountdown(left);
+      timer.classList.toggle('is-urgent', left <= 60 * 1000);
+      if (left <= 0) {
+        clearExamTimer();
+        var form = document.getElementById('lp-exam-form');
+        var en = findEnrollment(playerState.enrollmentId);
+        var course = en ? findCourse(en.courseId) : null;
+        if (!course || !en) return;
+        finishExamAttempt(course, en, collectExamAnswers(form, course), true);
+      }
+    }
+
+    tick();
+    examTimerHandle = setInterval(tick, 1000);
   }
 
   function scoreAttempt(course, answers) {
@@ -1507,7 +1745,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
@@ -1515,6 +1753,10 @@
       playerState.panel = 'overview';
       if (view === 'discussions') discussionState.composingPrivate = false;
       render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-begin-exam')) {
+      beginExamAttempt();
       return;
     }
     if (t.hasAttribute('data-lp-exam-locked')) {
@@ -1777,7 +2019,7 @@
       e.preventDefault();
       var en = findEnrollment(playerState.enrollmentId);
       var course = en ? findCourse(en.courseId) : null;
-      if (!course) return;
+      if (!course || !en) return;
       if (!canAccessExam(course, en)) {
         alert('Finish all lessons before taking the exam.');
         playerState.mode = 'course';
@@ -1785,41 +2027,19 @@
         render();
         return;
       }
-      var answers = {};
-      (course.exam.questions || []).forEach(function (q) {
-        var nodes = e.target.querySelectorAll('[name="q_' + q.id + '"]:checked');
-        answers[q.id] = Array.prototype.map.call(nodes, function (n) { return n.value; });
-      });
-      var result = scoreAttempt(course, answers);
-      var data = getData();
-      data.attempts = data.attempts || [];
-      data.attempts.push({
-        id: 'att' + Date.now().toString(36),
-        enrollmentId: en.id,
-        courseId: course.id,
-        userId: en.userId,
-        answers: answers,
-        score: result.percent,
-        passed: result.passed,
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString()
-      });
-      var target = data.enrollments.filter(function (x) { return x.id === en.id; })[0];
-      if (target) {
-        target.score = result.percent;
-        target.passed = result.passed;
-        target.status = result.passed ? 'completed' : 'failed';
-        target.progressPercent = 100;
-        target.completedAt = new Date().toISOString();
-        if (result.passed) maybeIssueCertificate(data, target, course);
+      if (hasUsedExamAttempt(en)) {
+        alert('You have already used your one exam attempt.');
+        playerState.panel = 'exam';
+        render();
+        return;
       }
-      saveData(data);
-      alert(result.passed
-        ? ('Passed with ' + result.percent + '%')
-        : ('Score ' + result.percent + '%. Required ' + result.passScore + '%.'));
-      playerState.mode = 'course';
-      playerState.panel = 'overview';
-      render();
+      if (!en.examStartedAt) {
+        playerState.panel = 'exam';
+        render();
+        return;
+      }
+      if (!window.confirm('Submit your exam now? You only get one attempt.')) return;
+      finishExamAttempt(course, en, collectExamAnswers(e.target, course), false);
     }
   }
 

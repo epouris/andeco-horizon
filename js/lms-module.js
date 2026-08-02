@@ -56,8 +56,11 @@
     enrollmentId: null,
     attemptId: null,
     publicCourseId: null,
-    applicantId: null
+    applicantId: null,
+    examLive: false // applicant / session flag after Start Exam
   };
+  var examTimerHandle = null;
+  var examSubmitLock = false;
 
   function isCourseEditorOpen() {
     return viewState.mode === 'editor' && !!document.getElementById('lms-course-form');
@@ -354,6 +357,50 @@
     var lessons = (course && course.lessons) || [];
     var done = (en && en.completedLessonIds) || [];
     return lessons.filter(function (l) { return done.indexOf(l.id) === -1; }).length;
+  }
+
+  function examTimeLimitMinutes(course) {
+    return Math.max(0, Number(course && course.exam && course.exam.timeLimitMinutes) || 0);
+  }
+
+  function hasUsedExamAttempt(enrollment) {
+    if (!enrollment) return false;
+    if (enrollment.score != null) return true;
+    if (enrollment.passed === true || enrollment.passed === false) return true;
+    var data = getData();
+    return (data.attempts || []).some(function (a) {
+      return a.enrollmentId === enrollment.id;
+    });
+  }
+
+  function examEndsAtMs(course, enrollment, startedAtIso) {
+    var mins = examTimeLimitMinutes(course);
+    var startedAt = startedAtIso || (enrollment && enrollment.examStartedAt);
+    if (!mins || !startedAt) return null;
+    var start = new Date(startedAt).getTime();
+    if (isNaN(start)) return null;
+    return start + mins * 60 * 1000;
+  }
+
+  function pad2(n) {
+    return (n < 10 ? '0' : '') + n;
+  }
+
+  function formatCountdown(ms) {
+    if (ms < 0) ms = 0;
+    var totalSec = Math.floor(ms / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    if (h > 0) return h + ':' + pad2(m) + ':' + pad2(s);
+    return pad2(m) + ':' + pad2(s);
+  }
+
+  function clearExamTimer() {
+    if (examTimerHandle) {
+      clearInterval(examTimerHandle);
+      examTimerHandle = null;
+    }
   }
 
   function maybeIssueCertificate(data, enrollment, course) {
@@ -1385,6 +1432,58 @@
   }
 
   function renderExamPlayer(el, course, enrollment) {
+    clearExamTimer();
+    el.setAttribute('data-exam-course-id', course.id);
+    el.setAttribute('data-exam-enrollment-id', enrollment ? enrollment.id : '');
+    el.setAttribute('data-exam-applicant-id', viewState.applicantId || '');
+
+    if (enrollment && hasUsedExamAttempt(enrollment)) {
+      var passed = enrollment.passed === true;
+      el.innerHTML =
+        '<div class="page-header"><h2>Exam result</h2>' +
+        '<div class="header-actions"><button type="button" class="btn btn-ghost" id="lms-exam-back">← Back to course</button></div></div>' +
+        '<div class="invoice-form-container">' +
+          '<p class="lms-hint">This exam allows only one attempt. Your result is final.</p>' +
+          '<div class="lms-exam-result ' + (passed ? 'is-pass' : 'is-fail') + '">' +
+            '<strong>' + (passed ? 'Passed' : 'Not passed') + '</strong>' +
+            '<p>Score: ' + escapeHtml(String(enrollment.score != null ? enrollment.score : '—')) +
+              '% · Required: ' + escapeHtml(String(course.exam.passScore || 70)) + '%</p>' +
+          '</div></div>';
+      return;
+    }
+
+    var examStarted = enrollment ? !!enrollment.examStartedAt : !!viewState.examLive;
+    if (!examStarted) {
+      var mins = examTimeLimitMinutes(course);
+      var qCount = (course.exam.questions || []).length;
+      el.innerHTML =
+        '<div class="page-header"><h2>Exam: ' + escapeHtml(course.title) + '</h2>' +
+        '<div class="header-actions"><button type="button" class="btn btn-ghost" id="lms-continue-study">Continue study</button></div></div>' +
+        '<div class="invoice-form-container lms-exam-cover">' +
+          '<p class="lms-hint">Read the instructions carefully before you begin.</p>' +
+          '<ul class="lms-exam-instructions">' +
+            '<li>You have <strong>one attempt only</strong>. Once you start, you cannot retake this exam.</li>' +
+            '<li>Pass score: <strong>' + escapeHtml(String(course.exam.passScore || 70)) + '%</strong></li>' +
+            '<li>Questions: <strong>' + qCount + '</strong></li>' +
+            '<li>Time limit: <strong>' + (mins ? (mins + ' minute' + (mins === 1 ? '' : 's')) : 'No time limit set') + '</strong>' +
+              (mins ? '. A countdown starts when you click Start Exam.' : '') + '</li>' +
+            '<li>When time runs out, your answers are submitted automatically.</li>' +
+          '</ul>' +
+          '<div class="form-actions">' +
+            '<button type="button" class="btn btn-primary" id="lms-begin-exam">Start Exam</button>' +
+            '<button type="button" class="btn btn-secondary" id="lms-continue-study-2">Continue study</button>' +
+          '</div></div>';
+      return;
+    }
+
+    if (enrollment && enrollment.examStartedAt) {
+      var endsPending = examEndsAtMs(course, enrollment);
+      if (endsPending != null && Date.now() >= endsPending) {
+        autoSubmitExpiredExam(course, enrollment, el);
+        return;
+      }
+    }
+
     var questions = (course.exam.questions || []).slice();
     if (course.exam.shuffle) {
       for (var i = questions.length - 1; i > 0; i--) {
@@ -1392,12 +1491,23 @@
         var tmp = questions[i]; questions[i] = questions[j]; questions[j] = tmp;
       }
     }
+    var minsLive = examTimeLimitMinutes(course);
+    var startedIso = enrollment ? enrollment.examStartedAt : viewState.examStartedAt;
+    var endsAt = examEndsAtMs(course, enrollment, startedIso);
+    var remaining = endsAt != null ? Math.max(0, endsAt - Date.now()) : null;
     el.innerHTML =
       '<div class="page-header"><h2>Exam: ' + escapeHtml(course.title) + '</h2>' +
-      '<div class="header-actions"><button type="button" class="btn btn-ghost" id="lms-exam-back">← Back to course</button></div></div>' +
+      '<div class="header-actions">' +
+        (minsLive && endsAt != null
+          ? '<div class="lms-exam-timer" id="lms-exam-timer" data-ends-at="' + endsAt + '" role="timer" aria-live="polite">' +
+              '<span>Time left</span><strong id="lms-exam-timer-value">' + formatCountdown(remaining) + '</strong></div>'
+          : '') +
+        (enrollment ? '<button type="button" class="btn btn-ghost" id="lms-exam-back">← Back to course</button>' : '') +
+      '</div></div>' +
       '<div class="invoice-form-container"><form id="lms-exam-form" class="invoice-form">' +
         '<p class="lms-hint">Pass score: ' + escapeHtml(String(course.exam.passScore || 70)) + '%' +
-        (course.exam.timeLimitMinutes ? ' · Time limit: ' + escapeHtml(String(course.exam.timeLimitMinutes)) + ' min' : '') + '</p>' +
+        ' · One attempt' +
+        (minsLive ? ' · Time limit: ' + escapeHtml(String(minsLive)) + ' min' : '') + '</p>' +
         questions.map(function (q, qi) {
           return '<div class="lms-editor-block"><p><strong>Q' + (qi + 1) + '.</strong> ' + escapeHtml(q.prompt) +
             ' <span class="lms-meta">(' + escapeHtml(String(q.points || 1)) + ' pt)</span></p>' +
@@ -1410,9 +1520,83 @@
         }).join('') +
         '<div class="form-actions"><button type="submit" class="btn btn-primary">Submit exam</button></div>' +
       '</form></div>';
-    el.setAttribute('data-exam-course-id', course.id);
-    el.setAttribute('data-exam-enrollment-id', enrollment ? enrollment.id : '');
     el._examQuestionOrder = questions.map(function (q) { return q.id; });
+    setupModuleExamTimer(el, course, enrollment);
+  }
+
+  function setupModuleExamTimer(el, course, enrollment) {
+    var timer = document.getElementById('lms-exam-timer');
+    var valueEl = document.getElementById('lms-exam-timer-value');
+    if (!timer || !valueEl) return;
+    var endsAt = Number(timer.getAttribute('data-ends-at'));
+    if (!endsAt) return;
+    function tick() {
+      var left = endsAt - Date.now();
+      valueEl.textContent = formatCountdown(left);
+      timer.classList.toggle('is-urgent', left <= 60 * 1000);
+      if (left <= 0) {
+        clearExamTimer();
+        autoSubmitExpiredExam(course, enrollment, el);
+      }
+    }
+    tick();
+    examTimerHandle = setInterval(tick, 1000);
+  }
+
+  function autoSubmitExpiredExam(course, enrollment, el) {
+    var form = el ? el.querySelector('#lms-exam-form') : document.getElementById('lms-exam-form');
+    if (!form) {
+      // Build empty submit through submitExam pathway
+      var host = el || document.getElementById('lms-my-learning');
+      if (!host) return;
+      host.innerHTML = '<form id="lms-exam-form"></form>';
+      host.setAttribute('data-exam-course-id', course.id);
+      host.setAttribute('data-exam-enrollment-id', enrollment ? enrollment.id : '');
+      host.setAttribute('data-exam-applicant-id', viewState.applicantId || '');
+      form = host.querySelector('#lms-exam-form');
+    }
+    submitExam(form, true);
+  }
+
+  function beginModuleExam() {
+    var en = findEnrollment(viewState.enrollmentId);
+    var course = en ? findCourse(en.courseId) : (viewState.applicantId ? findCourse((getData().applicants.filter(function (a) {
+      return a.id === viewState.applicantId;
+    })[0] || {}).courseId) : null);
+    if (!course) return;
+    if (en) {
+      if (!canAccessCourseExam(course, en)) {
+        alert('Finish all lessons before taking the exam.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
+      if (hasUsedExamAttempt(en)) {
+        viewState.mode = 'exam';
+        renderMyLearning();
+        return;
+      }
+      var mins = examTimeLimitMinutes(course);
+      if (!window.confirm('You have only one attempt' +
+        (mins ? ' and ' + mins + ' minute' + (mins === 1 ? '' : 's') + ' on the clock' : '') +
+        '. Start the exam now?')) return;
+      var data = getData();
+      var target = data.enrollments.filter(function (x) { return x.id === en.id; })[0];
+      if (!target) return;
+      target.examStartedAt = new Date().toISOString();
+      if (target.status === 'enrolled') target.status = 'in_progress';
+      saveData(data);
+    } else {
+      var minsA = examTimeLimitMinutes(course);
+      if (!window.confirm('You have only one attempt' +
+        (minsA ? ' and ' + minsA + ' minute' + (minsA === 1 ? '' : 's') + ' on the clock' : '') +
+        '. Start the exam now?')) return;
+      viewState.examLive = true;
+      viewState.examStartedAt = new Date().toISOString();
+    }
+    viewState.mode = 'exam';
+    if (viewState.applicantId) renderCareersPortal();
+    else renderMyLearning();
   }
 
   /* ---------- Public portals ---------- */
@@ -1662,7 +1846,7 @@
   }
 
   function onPageClick(e) {
-    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-open-portal-btn-dash');
+    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
     if (!t) return;
 
     if (t.id === 'lms-open-portal-btn-dash') {
@@ -1842,6 +2026,23 @@
       renderMyLearning();
       return;
     }
+    if (t.id === 'lms-begin-exam') {
+      beginModuleExam();
+      return;
+    }
+    if (t.id === 'lms-continue-study' || t.id === 'lms-continue-study-2') {
+      if (viewState.applicantId) {
+        viewState.mode = 'list';
+        viewState.applicantId = null;
+        viewState.examLive = false;
+        viewState.examStartedAt = null;
+        renderCareersPortal();
+        return;
+      }
+      viewState.mode = 'player';
+      renderMyLearning();
+      return;
+    }
     if (t.id === 'lms-exam-back') {
       viewState.mode = 'player';
       renderMyLearning();
@@ -2012,7 +2213,8 @@
     }
     if (e.target && e.target.id === 'lms-exam-form') {
       e.preventDefault();
-      submitExam(e.target);
+      if (!window.confirm('Submit your exam now? You only get one attempt.')) return;
+      submitExam(e.target, false);
     }
   }
 
@@ -2025,7 +2227,8 @@
     if (e.target.closest('#lms-course-form')) syncDraftFromEditor();
   }
 
-  function submitExam(form) {
+  function submitExam(form, autoExpired) {
+    if (examSubmitLock) return;
     var host = form.closest('[data-exam-course-id]') || form.parentElement;
     var courseId = (host && host.getAttribute('data-exam-course-id')) || '';
     var enrollmentId = (host && host.getAttribute('data-exam-enrollment-id')) || viewState.enrollmentId || '';
@@ -2042,8 +2245,21 @@
         renderMyLearning();
         return;
       }
+      if (hasUsedExamAttempt(enGate)) {
+        alert('You have already used your one exam attempt.');
+        viewState.mode = 'exam';
+        renderMyLearning();
+        return;
+      }
+      if (!enGate.examStartedAt) {
+        viewState.mode = 'exam';
+        renderMyLearning();
+        return;
+      }
     }
 
+    examSubmitLock = true;
+    clearExamTimer();
     var answers = {};
     (course.exam.questions || []).forEach(function (q) {
       var nodes = form.querySelectorAll('[name="q_' + q.id + '"]:checked');
@@ -2051,6 +2267,13 @@
     });
     var result = scoreAttempt(course, answers);
     var data = getData();
+    var startedAt = '';
+    if (enrollmentId) {
+      var enStart = data.enrollments.filter(function (x) { return x.id === enrollmentId; })[0];
+      startedAt = (enStart && enStart.examStartedAt) || '';
+    } else {
+      startedAt = viewState.examStartedAt || '';
+    }
     var attempt = {
       id: id('att'),
       enrollmentId: enrollmentId || '',
@@ -2059,7 +2282,8 @@
       answers: answers,
       score: result.percent,
       passed: result.passed,
-      startedAt: new Date().toISOString(),
+      autoExpired: !!autoExpired,
+      startedAt: startedAt || new Date().toISOString(),
       finishedAt: new Date().toISOString()
     };
     data.attempts.push(attempt);
@@ -2086,10 +2310,15 @@
       }
     }
     saveData(data);
+    examSubmitLock = false;
+    viewState.examLive = false;
+    viewState.examStartedAt = null;
 
-    var msg = result.passed
-      ? 'Passed with ' + result.percent + '% (required ' + result.passScore + '%).'
-      : 'Score ' + result.percent + '%. Required pass score is ' + result.passScore + '%.';
+    var msg = autoExpired
+      ? ('Time is up. Your exam was submitted automatically. Score: ' + result.percent + '%.')
+      : (result.passed
+          ? 'Passed with ' + result.percent + '% (required ' + result.passScore + '%).'
+          : 'Score ' + result.percent + '%. Required pass score is ' + result.passScore + '%.');
     alert(msg);
 
     if (applicantId) {
@@ -2104,10 +2333,8 @@
       }
       return;
     }
-    viewState.mode = 'list';
-    viewState.enrollmentId = null;
-    if (window.setLmsSection) window.setLmsSection('my-learning');
-    else { setSection('my-learning'); render(); }
+    viewState.mode = 'exam';
+    renderMyLearning();
   }
 
   function onPublicClick(e) {
@@ -2164,13 +2391,28 @@
   }
 
   function onCareersClick(e) {
+    var begin = e.target.closest('#lms-begin-exam');
+    if (begin) {
+      beginModuleExam();
+      return;
+    }
+    var cont = e.target.closest('#lms-continue-study, #lms-continue-study-2');
+    if (cont) {
+      viewState.mode = 'list';
+      viewState.applicantId = null;
+      viewState.examLive = false;
+      viewState.examStartedAt = null;
+      renderCareersPortal();
+      return;
+    }
     goLoginFromPublic(e);
   }
 
   function onCareersSubmit(e) {
     if (e.target && e.target.id === 'lms-exam-form') {
       e.preventDefault();
-      submitExam(e.target);
+      if (!window.confirm('Submit your exam now? You only get one attempt.')) return;
+      submitExam(e.target, false);
       return;
     }
     if (!e.target || e.target.id !== 'lms-careers-access-form') return;
@@ -2195,6 +2437,8 @@
     saveData(data);
     viewState.mode = 'exam';
     viewState.applicantId = applicant.id;
+    viewState.examLive = false;
+    viewState.examStartedAt = null;
     renderCareersPortal();
   }
 
