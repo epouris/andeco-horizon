@@ -196,6 +196,8 @@
       durationMinutes: Number(c.durationMinutes) || 0,
       passScore: Number(c.passScore) || 70,
       certificateValidMonths: Math.max(0, Number(c.certificateValidMonths) || 0),
+      referenceMaterialsEnabled: c.referenceMaterialsEnabled === true,
+      referenceMaterials: normalizeReferenceMaterials(c.referenceMaterials),
       lessons: Array.isArray(c.lessons) ? c.lessons.map(function (l, i) {
         return {
           id: l.id || id('lsn'),
@@ -563,31 +565,76 @@
     });
   }
 
+  function normalizeReferenceMaterials(items) {
+    if (!Array.isArray(items)) return [];
+    return items.map(function (item, i) {
+      item = item && typeof item === 'object' ? item : {};
+      return {
+        id: item.id || id('ref'),
+        title: item.title || ('Reference ' + (i + 1)),
+        url: item.url || '',
+        kind: item.kind === 'link' ? 'link' : 'file'
+      };
+    });
+  }
+
+  function wrapProtectedMedia(html, frameClass) {
+    var cls = (frameClass || 'lms-media') + '-protected';
+    return '<div class="' + cls + '" oncontextmenu="return false" ondragstart="return false">' + html + '</div>';
+  }
+
   function videoEmbedHtml(url, frameClass) {
     if (!url) return '';
     var cls = frameClass || 'lms-media';
     var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{6,})/);
     var vim = url.match(/vimeo\.com\/(\d+)/);
+    var inner;
     if (yt) {
-      return '<div class="' + cls + '"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt[1]) +
-        '" title="Lesson video" allowfullscreen loading="lazy"></iframe></div>';
+      inner = '<div class="' + cls + '"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt[1]) +
+        '?controls=1&modestbranding=1&rel=0" title="Lesson video" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe></div>';
+    } else if (vim) {
+      inner = '<div class="' + cls + '"><iframe src="https://player.vimeo.com/video/' + escapeHtml(vim[1]) +
+        '" title="Lesson video" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe></div>';
+    } else {
+      inner = '<div class="' + cls + '"><video controls controlsList="nodownload noplaybackrate" disablePictureInPicture playsinline src="' +
+        escapeHtml(url) + '" oncontextmenu="return false"></video></div>';
     }
-    if (vim) {
-      return '<div class="' + cls + '"><iframe src="https://player.vimeo.com/video/' + escapeHtml(vim[1]) +
-        '" title="Lesson video" allowfullscreen loading="lazy"></iframe></div>';
-    }
-    return '<div class="' + cls + '"><video controls src="' + escapeHtml(url) + '"></video></div>';
+    return wrapProtectedMedia(inner, cls);
   }
 
-  function pptxEmbedHtml(url, frameClass) {
+  function officeEmbedHtml(url, frameClass, title) {
     if (!url) return '';
     var cls = frameClass || 'lms-media';
     var embed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(url);
-    return '<div class="' + cls + ' ' + cls + '--pptx">' +
-      '<iframe src="' + escapeHtml(embed) + '" title="PowerPoint presentation" allowfullscreen loading="lazy"></iframe>' +
-      '</div>' +
-      '<p class="lms-actions"><a class="btn btn-secondary btn-sm" href="' + escapeHtml(url) +
-        '" target="_blank" rel="noopener noreferrer">Open PowerPoint</a></p>';
+    var inner = '<div class="' + cls + ' ' + cls + '--office">' +
+      '<iframe src="' + escapeHtml(embed) + '" title="' + escapeHtml(title || 'Document') +
+      '" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe></div>' +
+      '<p class="lms-hint">View only — downloading or copying course materials is disabled.</p>';
+    return wrapProtectedMedia(inner, cls);
+  }
+
+  function pptxEmbedHtml(url, frameClass) {
+    return officeEmbedHtml(url, frameClass, 'PowerPoint presentation');
+  }
+
+  function documentEmbedHtml(url, frameClass) {
+    if (!url) return '';
+    var cls = frameClass || 'lms-media';
+    var lower = String(url).toLowerCase();
+    if (/\.(pptx?|docx?|xlsx?)(\?|#|$)/.test(lower) || /sharepoint\.|onedrive\.|1drv\.ms/.test(lower)) {
+      return officeEmbedHtml(url, cls, 'Course document');
+    }
+    if (/\.pdf(\?|#|$)/.test(lower)) {
+      var inner = '<div class="' + cls + ' ' + cls + '--pdf">' +
+        '<iframe src="' + escapeHtml(url) + '#toolbar=0&navpanes=0" title="Course document" loading="lazy" referrerpolicy="no-referrer"></iframe></div>' +
+        '<p class="lms-hint">View only — downloading or copying course materials is disabled.</p>';
+      return wrapProtectedMedia(inner, cls);
+    }
+    return wrapProtectedMedia(
+      '<div class="' + cls + '"><iframe src="' + escapeHtml(url) + '" title="Course document" loading="lazy" referrerpolicy="no-referrer"></iframe></div>' +
+      '<p class="lms-hint">View only — downloading or copying course materials is disabled.</p>',
+      cls
+    );
   }
 
   function slideMediaHtml(slide, frameClass) {
@@ -640,9 +687,32 @@
     var url = lesson.mediaUrl || '';
     if (!url || type === 'text') return '';
     if (type === 'video') return videoEmbedHtml(url, 'lms-media');
-    return '<p class="lms-actions"><a class="btn btn-secondary" href="' + escapeHtml(url) +
-      '" target="_blank" rel="noopener noreferrer">' +
-      (type === 'document' ? 'Open document' : 'Open resource') + '</a></p>';
+    if (type === 'document') return documentEmbedHtml(url, 'lms-media');
+    // External web links stay in-app only (no downloadable course file).
+    return wrapProtectedMedia(
+      '<div class="lms-media"><iframe src="' + escapeHtml(url) + '" title="Course resource" loading="lazy" referrerpolicy="no-referrer"></iframe></div>' +
+      '<p class="lms-hint">View only — course materials cannot be downloaded from the lesson player.</p>',
+      'lms-media'
+    );
+  }
+
+  function referenceMaterialsHtml(course, opts) {
+    opts = opts || {};
+    if (!course || !course.referenceMaterialsEnabled) return '';
+    var items = normalizeReferenceMaterials(course.referenceMaterials).filter(function (item) {
+      return !!item.url;
+    });
+    if (!items.length) return '';
+    var listClass = opts.listClass || 'lms-reference-list';
+    var linkClass = opts.linkClass || 'btn btn-secondary btn-sm';
+    return '<div class="' + (opts.wrapClass || 'lms-reference-materials') + '">' +
+      '<h3>' + escapeHtml(opts.title || 'Reference materials') + '</h3>' +
+      '<p class="' + (opts.hintClass || 'lms-hint') + '">Approved downloads for this course.</p>' +
+      '<ul class="' + listClass + '">' + items.map(function (item) {
+        return '<li><a class="' + linkClass + '" href="' + escapeHtml(item.url) +
+          '" target="_blank" rel="noopener noreferrer" download>' +
+          escapeHtml(item.title) + '</a></li>';
+      }).join('') + '</ul></div>';
   }
 
   function scoreAttempt(course, answers) {
@@ -945,8 +1015,20 @@
           '<div class="form-group full-width"><label>Instructor bio</label><textarea name="instructorBio" rows="2" placeholder="Short intro for learners">' + escapeHtml(course.instructorBio || '') + '</textarea></div>' +
         '</div></div>' +
         '<div class="form-section"><h3>Lessons / content</h3>' +
+          '<p class="lms-hint">Lesson media is view-only for learners. Downloads are not available unless you enable reference materials below.</p>' +
           '<div id="lms-lessons-editor"></div>' +
           '<button type="button" class="btn btn-secondary" id="lms-add-lesson">+ Add lesson</button>' +
+        '</div>' +
+        '<div class="form-section"><h3>Reference materials</h3>' +
+          '<div class="form-row">' +
+            '<div class="form-group full-width"><label class="admin-check-label">' +
+              '<input type="checkbox" name="referenceMaterialsEnabled"' + (course.referenceMaterialsEnabled ? ' checked' : '') + '>' +
+              ' Allow learners to download reference materials' +
+            '</label>' +
+            '<p class="lms-hint">When enabled, only the files listed here can be downloaded. Lesson slides, videos, and documents stay view-only.</p></div>' +
+          '</div>' +
+          '<div id="lms-reference-editor"></div>' +
+          '<button type="button" class="btn btn-secondary" id="lms-add-reference">+ Add reference file</button>' +
         '</div>' +
         '<div class="form-section"><h3>Exam / assessment</h3><div class="form-row">' +
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="examEnabled"' + (course.exam.enabled ? ' checked' : '') + '> Enable exam</label></div>' +
@@ -968,9 +1050,32 @@
       '</form></div>';
 
     renderLessonsEditor(course.lessons);
+    renderReferenceMaterialsEditor(course.referenceMaterials || []);
     renderQuestionsEditor(course.exam.questions);
     el.setAttribute('data-editing-course-id', course.id || '');
     bindCoverImageControls();
+  }
+
+  function renderReferenceMaterialsEditor(items) {
+    var wrap = document.getElementById('lms-reference-editor');
+    if (!wrap) return;
+    var list = normalizeReferenceMaterials(items);
+    wrap.innerHTML = list.length ? list.map(function (item, i) {
+      return '<div class="lms-editor-block" data-reference-index="' + i + '">' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label>Title</label>' +
+            '<input data-ref-field="title" value="' + escapeHtml(item.title || '') + '" placeholder="e.g. Safety handbook"></div>' +
+          '<div class="form-group"><label>Type</label><select data-ref-field="kind">' +
+            '<option value="file"' + (item.kind !== 'link' ? ' selected' : '') + '>Downloadable file</option>' +
+            '<option value="link"' + (item.kind === 'link' ? ' selected' : '') + '>Web link</option>' +
+          '</select></div>' +
+          '<div class="form-group full-width"><label>URL</label>' +
+            '<input data-ref-field="url" value="' + escapeHtml(item.url || '') + '" placeholder="https://… file or page link"></div>' +
+        '</div>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-remove-reference="' + i + '">Remove</button>' +
+        '<input type="hidden" data-ref-field="id" value="' + escapeHtml(item.id || '') + '">' +
+      '</div>';
+    }).join('') : '<p class="lms-hint">No reference materials yet. Add files learners may download when the option above is enabled.</p>';
   }
 
   function currentCoverImageValue() {
@@ -1065,7 +1170,7 @@
     return '<div class="lms-slides-editor" data-lesson-slides="' + lessonIndex + '">' +
       '<div class="lms-slides-editor-head">' +
         '<strong>Slideshow slides</strong>' +
-        '<p class="lms-hint">Each slide can be a PowerPoint (.pptx URL) or a video URL. Use a publicly accessible link for PowerPoint embeds.</p>' +
+        '<p class="lms-hint">Each slide can be a PowerPoint (.pptx URL) or a video URL. Learners can view slides in the player only — no download or open-file links.</p>' +
       '</div>' +
       (list.length ? list.map(function (s, si) {
         return '<div class="lms-slide-block" data-slide-index="' + si + '">' +
@@ -1344,6 +1449,19 @@
       published: form.querySelector('[name="published"]').checked,
       passScore: Number(fd.get('passScore')) || 70,
       certificateValidMonths: Math.max(0, Number(fd.get('certificateValidMonths')) || 0),
+      referenceMaterialsEnabled: !!(form.querySelector('[name="referenceMaterialsEnabled"]') && form.querySelector('[name="referenceMaterialsEnabled"]').checked),
+      referenceMaterials: (function () {
+        var refs = [];
+        document.querySelectorAll('#lms-reference-editor .lms-editor-block').forEach(function (block, i) {
+          refs.push({
+            id: (block.querySelector('[data-ref-field="id"]') || {}).value || id('ref'),
+            title: (block.querySelector('[data-ref-field="title"]') || {}).value || ('Reference ' + (i + 1)),
+            url: (block.querySelector('[data-ref-field="url"]') || {}).value || '',
+            kind: (block.querySelector('[data-ref-field="kind"]') || {}).value || 'file'
+          });
+        });
+        return refs;
+      })(),
       lessons: lessons,
       exam: {
         enabled: form.querySelector('[name="examEnabled"]').checked || String(fd.get('type')) === 'exam',
@@ -2137,6 +2255,7 @@
               return '<li>' + escapeHtml((i + 1) + '. ' + l.title) + (done ? ' · Completed' : '') + '</li>';
             }).join('') +
           '</ol>' +
+          referenceMaterialsHtml(course) +
         '</div>';
       return;
     }
@@ -2175,10 +2294,13 @@
             '<p class="lms-meta">' + escapeHtml(CONTENT_TYPES[lesson.contentType] || 'Text / procedure') +
             (lesson.durationMinutes ? ' · ' + escapeHtml(String(lesson.durationMinutes)) + ' min' : '') + '</p>' +
             embedMediaHtml(lesson) +
-            '<div class="lms-lesson-body">' + formatContent(lesson.content) + '</div>' +
+            '<div class="lms-lesson-body is-protected" oncontextmenu="return false" oncopy="return false" oncut="return false">' +
+              formatContent(lesson.content) +
+            '</div>' +
             '<div class="lms-actions">' +
               '<button type="button" class="btn btn-primary" data-lms-complete-lesson="' + escapeHtml(lesson.id) + '">Mark complete &amp; continue</button>' +
             '</div>' : emptyState('This training has no lessons yet.')) +
+            referenceMaterialsHtml(course) +
         '</div>' +
       '</div>';
   }
@@ -2609,7 +2731,7 @@
   }
 
   function onPageClick(e) {
-    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
+    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-remove-reference],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-reference,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
     if (!t) return;
 
     if (t.id === 'lms-open-portal-btn-dash') {
@@ -2646,6 +2768,29 @@
       viewState.draftCourse = course;
       viewState.courseId = course.id;
       renderLessonsEditor(course.lessons);
+      return;
+    }
+    if (t.id === 'lms-add-reference') {
+      var cRef = syncDraftFromEditor() || viewState.draftCourse || normalizeCourse({});
+      cRef.referenceMaterials = normalizeReferenceMaterials(cRef.referenceMaterials);
+      cRef.referenceMaterials.push({
+        id: id('ref'),
+        title: 'Reference ' + (cRef.referenceMaterials.length + 1),
+        url: '',
+        kind: 'file'
+      });
+      viewState.draftCourse = cRef;
+      renderReferenceMaterialsEditor(cRef.referenceMaterials);
+      return;
+    }
+    if (t.hasAttribute('data-remove-reference')) {
+      var cRefRm = syncDraftFromEditor() || viewState.draftCourse;
+      if (!cRefRm) return;
+      var rmRefIdx = Number(t.getAttribute('data-remove-reference'));
+      cRefRm.referenceMaterials = normalizeReferenceMaterials(cRefRm.referenceMaterials);
+      cRefRm.referenceMaterials.splice(rmRefIdx, 1);
+      viewState.draftCourse = cRefRm;
+      renderReferenceMaterialsEditor(cRefRm.referenceMaterials);
       return;
     }
     if (t.hasAttribute('data-add-slide')) {

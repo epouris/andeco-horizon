@@ -1408,6 +1408,31 @@
   margin: 0.65rem 0 0.85rem;
 }
 
+.lp-media-protected,
+.lp-lesson-body.is-protected,
+.lp-slideshow-notes {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.lp-media-protected {
+  position: relative;
+}
+
+.lp-reference-materials {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-reference-list {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
 .lp-form {
   display: grid;
   gap: 0.85rem;
