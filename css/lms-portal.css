@@ -418,7 +418,6 @@
   padding: 1rem 0.2rem;
 }
 
-<<<<<<< HEAD
 .lp-course-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
