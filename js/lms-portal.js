@@ -813,6 +813,8 @@
         questions: []
       },
       certificateValidMonths: 0,
+      referenceMaterialsEnabled: false,
+      referenceMaterials: [],
       ownerId: u ? u.id : '',
       createdBy: u ? u.id : '',
       createdByName: u ? u.name : '',
@@ -889,6 +891,16 @@
     draft.exam.timeLimitMinutes = Number(fd.get('timeLimitMinutes')) || 0;
     draft.exam.shuffle = !!form.querySelector('[name="shuffle"]').checked;
     draft.certificateValidMonths = Math.max(0, Number(fd.get('certificateValidMonths')) || 0);
+    draft.referenceMaterialsEnabled = !!(form.querySelector('[name="referenceMaterialsEnabled"]') && form.querySelector('[name="referenceMaterialsEnabled"]').checked);
+    draft.referenceMaterials = [];
+    form.querySelectorAll('[data-lp-reference-block]').forEach(function (block, i) {
+      draft.referenceMaterials.push({
+        id: block.getAttribute('data-reference-id') || newId('ref'),
+        title: (block.querySelector('[data-ref-field="title"]') || {}).value || ('Reference ' + (i + 1)),
+        url: (block.querySelector('[data-ref-field="url"]') || {}).value || '',
+        kind: (block.querySelector('[data-ref-field="kind"]') || {}).value || 'file'
+      });
+    });
 
     draft.lessons = [];
     form.querySelectorAll('[data-lp-lesson-block]').forEach(function (block, i) {
@@ -1032,7 +1044,7 @@
     return '<div class="lp-slides-editor">' +
       '<div class="lp-slides-editor-head">' +
         '<strong>Slideshow slides</strong>' +
-        '<p class="lp-muted-line">Add PowerPoint (.pptx URL) or video slides. PowerPoint needs a publicly accessible link to embed.</p>' +
+        '<p class="lp-muted-line">Add PowerPoint (.pptx URL) or video slides. Learners can view slides in the player only — no download links.</p>' +
       '</div>' +
       (list.length ? list.map(function (s, si) {
         return '<div class="lp-editor-block lp-slide-block" data-lp-slide-block data-slide-id="' + escapeHtml(s.id || '') + '">' +
@@ -1173,8 +1185,17 @@
             '<label class="lp-span-2">Instructor bio<textarea name="instructorBio" rows="2">' + escapeHtml(course.instructorBio || '') + '</textarea></label>' +
           '</div></section>' +
           '<section class="lp-editor-section"><h4>Lessons</h4>' +
+            '<p class="lp-muted-line">Lesson media is view-only. Downloads are only available from Reference materials when you allow them.</p>' +
             '<div id="lp-lessons-editor">' + renderLessonEditorBlocks(course.lessons || []) + '</div>' +
             '<button type="button" class="lp-btn lp-btn-secondary" data-lp-add-lesson>+ Add lesson</button>' +
+          '</section>' +
+          '<section class="lp-editor-section"><h4>Reference materials</h4>' +
+            '<label class="lp-check"><input type="checkbox" name="referenceMaterialsEnabled"' +
+              (course.referenceMaterialsEnabled ? ' checked' : '') +
+              '> Allow learners to download reference materials</label>' +
+            '<p class="lp-muted-line">Only files listed here can be downloaded when this option is enabled.</p>' +
+            '<div id="lp-reference-editor">' + renderReferenceEditorBlocks(course.referenceMaterials || []) + '</div>' +
+            '<button type="button" class="lp-btn lp-btn-secondary" data-lp-add-reference>+ Add reference file</button>' +
           '</section>' +
           '<section class="lp-editor-section"><h4>Exam</h4><div class="lp-form-grid">' +
             '<label class="lp-check"><input type="checkbox" name="examEnabled"' + (course.exam && course.exam.enabled ? ' checked' : '') + '> Enable exam</label>' +
@@ -1700,20 +1721,92 @@
     return escapeHtml(text || '').replace(/\n/g, '<br>');
   }
 
+  function wrapPortalProtectedMedia(html) {
+    return '<div class="lp-media-protected" oncontextmenu="return false" ondragstart="return false">' + html + '</div>';
+  }
+
   function portalVideoEmbed(url) {
     if (!url) return '';
     var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{6,})/);
     var vim = url.match(/vimeo\.com\/(\d+)/);
-    if (yt) return '<div class="lp-media"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt[1]) + '" allowfullscreen loading="lazy"></iframe></div>';
-    if (vim) return '<div class="lp-media"><iframe src="https://player.vimeo.com/video/' + escapeHtml(vim[1]) + '" allowfullscreen loading="lazy"></iframe></div>';
-    return '<div class="lp-media"><video controls src="' + escapeHtml(url) + '"></video></div>';
+    var inner;
+    if (yt) {
+      inner = '<div class="lp-media"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt[1]) +
+        '?controls=1&modestbranding=1&rel=0" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe></div>';
+    } else if (vim) {
+      inner = '<div class="lp-media"><iframe src="https://player.vimeo.com/video/' + escapeHtml(vim[1]) +
+        '" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe></div>';
+    } else {
+      inner = '<div class="lp-media"><video controls controlsList="nodownload noplaybackrate" disablePictureInPicture playsinline src="' +
+        escapeHtml(url) + '" oncontextmenu="return false"></video></div>';
+    }
+    return wrapPortalProtectedMedia(inner);
+  }
+
+  function portalOfficeEmbed(url, title) {
+    if (!url) return '';
+    var embed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(url);
+    return wrapPortalProtectedMedia(
+      '<div class="lp-media lp-media--office"><iframe src="' + escapeHtml(embed) + '" title="' +
+        escapeHtml(title || 'Document') + '" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe></div>' +
+      '<p class="lp-muted-line">View only — downloading or copying course materials is disabled.</p>'
+    );
   }
 
   function portalPptxEmbed(url) {
+    return portalOfficeEmbed(url, 'PowerPoint presentation');
+  }
+
+  function portalDocumentEmbed(url) {
     if (!url) return '';
-    var embed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(url);
-    return '<div class="lp-media lp-media--pptx"><iframe src="' + escapeHtml(embed) + '" title="PowerPoint presentation" allowfullscreen loading="lazy"></iframe></div>' +
-      '<p><a class="lp-btn lp-btn-secondary" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Open PowerPoint</a></p>';
+    var lower = String(url).toLowerCase();
+    if (/\.(pptx?|docx?|xlsx?)(\?|#|$)/.test(lower) || /sharepoint\.|onedrive\.|1drv\.ms/.test(lower)) {
+      return portalOfficeEmbed(url, 'Course document');
+    }
+    if (/\.pdf(\?|#|$)/.test(lower)) {
+      return wrapPortalProtectedMedia(
+        '<div class="lp-media lp-media--pdf"><iframe src="' + escapeHtml(url) +
+          '#toolbar=0&navpanes=0" title="Course document" loading="lazy" referrerpolicy="no-referrer"></iframe></div>' +
+        '<p class="lp-muted-line">View only — downloading or copying course materials is disabled.</p>'
+      );
+    }
+    return wrapPortalProtectedMedia(
+      '<div class="lp-media"><iframe src="' + escapeHtml(url) +
+        '" title="Course resource" loading="lazy" referrerpolicy="no-referrer"></iframe></div>' +
+      '<p class="lp-muted-line">View only — course materials cannot be downloaded from the lesson player.</p>'
+    );
+  }
+
+  function renderReferenceMaterials(course) {
+    if (!course || !course.referenceMaterialsEnabled) return '';
+    var items = (Array.isArray(course.referenceMaterials) ? course.referenceMaterials : []).filter(function (item) {
+      return item && item.url;
+    });
+    if (!items.length) return '';
+    return '<div class="lp-reference-materials">' +
+      '<h4>Reference materials</h4>' +
+      '<p class="lp-muted-line">Approved downloads for this course.</p>' +
+      '<ul class="lp-reference-list">' + items.map(function (item) {
+        return '<li><a class="lp-btn lp-btn-secondary" href="' + escapeHtml(item.url) +
+          '" target="_blank" rel="noopener noreferrer" download>' + escapeHtml(item.title || 'Download') + '</a></li>';
+      }).join('') + '</ul></div>';
+  }
+
+  function renderReferenceEditorBlocks(items) {
+    var list = Array.isArray(items) ? items : [];
+    return list.length ? list.map(function (item, i) {
+      return '<div class="lp-editor-block" data-lp-reference-block data-reference-id="' + escapeHtml(item.id || '') + '">' +
+        '<div class="lp-editor-block-head"><strong>Reference ' + (i + 1) + '</strong>' +
+          '<button type="button" class="lp-btn lp-btn-ghost" data-lp-remove-reference="' + i + '">Remove</button></div>' +
+        '<div class="lp-form-grid">' +
+          '<label>Title<input data-ref-field="title" value="' + escapeHtml(item.title || '') + '" placeholder="e.g. Safety handbook"></label>' +
+          '<label>Type<select data-ref-field="kind">' +
+            '<option value="file"' + (item.kind !== 'link' ? ' selected' : '') + '>Downloadable file</option>' +
+            '<option value="link"' + (item.kind === 'link' ? ' selected' : '') + '>Web link</option>' +
+          '</select></label>' +
+          '<label class="lp-span-2">URL<input data-ref-field="url" value="' + escapeHtml(item.url || '') + '" placeholder="https://… file or page link"></label>' +
+        '</div></div>';
+    }).join('') : '<p class="lp-empty">No reference materials yet.</p>';
   }
 
   function portalSlideshowHtml(lesson) {
@@ -1745,8 +1838,8 @@
     var url = lesson.mediaUrl || '';
     if (!url || type === 'text') return '';
     if (type === 'video') return portalVideoEmbed(url);
-    return '<p><a class="lp-btn lp-btn-secondary" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
-      (type === 'document' ? 'Open document' : 'Open resource') + '</a></p>';
+    if (type === 'document') return portalDocumentEmbed(url);
+    return portalDocumentEmbed(url);
   }
 
   function courseDurationLabel(course) {
@@ -2208,6 +2301,7 @@
             '</button></li>';
         }).join('') +
       '</ol>' +
+      renderReferenceMaterials(course) +
     '</div>';
   }
 
@@ -2226,7 +2320,9 @@
         '<h3>' + escapeHtml(lesson.title) + '</h3>' +
       '</div>' +
       mediaHtml(lesson) +
-      '<div class="lp-lesson-body">' + formatContent(lesson.content) + '</div>' +
+      '<div class="lp-lesson-body is-protected" oncontextmenu="return false" oncopy="return false" oncut="return false">' +
+        formatContent(lesson.content) +
+      '</div>' +
       '<div class="lp-form-actions">' +
         (prev ? '<button type="button" class="lp-btn lp-btn-ghost" data-lp-lesson="' + escapeHtml(prev.id) + '">← Previous</button>' : '') +
         '<button type="button" class="lp-btn lp-btn-primary" data-lp-complete-lesson="' + escapeHtml(lesson.id) + '">' +
@@ -2239,6 +2335,7 @@
               ? '<p class="lp-muted-line">Finish every lesson to unlock the exam.</p>'
               : '')) +
       '</div>' +
+      renderReferenceMaterials(course) +
     '</div>';
   }
 
@@ -2580,7 +2677,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-content-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-slide],[data-lp-remove-slide],[data-lp-slide-prev],[data-lp-slide-next],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-content-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-slide],[data-lp-remove-slide],[data-lp-add-reference],[data-lp-remove-reference],[data-lp-slide-prev],[data-lp-slide-next],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
@@ -2659,6 +2756,27 @@
         order: courseEditor.draft.lessons.length,
         durationMinutes: 0
       });
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-add-reference')) {
+      syncPortalCourseDraft();
+      courseEditor.draft.referenceMaterials = courseEditor.draft.referenceMaterials || [];
+      courseEditor.draft.referenceMaterials.push({
+        id: newId('ref'),
+        title: 'Reference ' + (courseEditor.draft.referenceMaterials.length + 1),
+        url: '',
+        kind: 'file'
+      });
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-remove-reference')) {
+      syncPortalCourseDraft();
+      var rmRefIdx = Number(t.getAttribute('data-lp-remove-reference'));
+      if (courseEditor.draft && Array.isArray(courseEditor.draft.referenceMaterials)) {
+        courseEditor.draft.referenceMaterials.splice(rmRefIdx, 1);
+      }
       render();
       return;
     }

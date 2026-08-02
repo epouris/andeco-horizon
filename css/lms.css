@@ -719,6 +719,30 @@
   margin: 0.65rem 0 0.85rem;
 }
 
+.lms-media-protected,
+.lms-lesson-body.is-protected {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.lms-media-protected {
+  position: relative;
+}
+
+.lms-reference-materials {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+
+.lms-reference-list {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
 .lms-certificate-sheet {
   position: fixed;
   inset: 0;
