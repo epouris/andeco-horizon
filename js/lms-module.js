@@ -1502,10 +1502,8 @@
     var name = (company.companyName || '').trim() ||
       ((lmsSettings && lmsSettings.companyLmsName) || '').trim() ||
       'Andeco Learning';
-    var logo = (company.logo || '').trim() ||
-      ((lmsSettings && lmsSettings.companyLogo) || '').trim() ||
-      'assets/login_logo.png';
-    return { name: name, logo: logo };
+    // Certificates always use the login logo asset.
+    return { name: name, logo: 'assets/login_logo.png' };
   }
 
   function buildCertificateHtml(cert, settings, course) {
