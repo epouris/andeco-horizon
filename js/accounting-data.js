@@ -169,7 +169,11 @@ window.AccountingData = (function () {
       try { window.CrewManagement.render(); } catch (e) {}
     }
     if (typeof window.LmsModule !== 'undefined' && window.LmsModule.render) {
-      try { window.LmsModule.render(); } catch (e) {}
+      try {
+        if (!(window.LmsModule.isBusy && window.LmsModule.isBusy())) {
+          window.LmsModule.render();
+        }
+      } catch (e) {}
     }
     if (typeof window.hrEmployeesRefreshOverview === 'function') {
       try { window.hrEmployeesRefreshOverview(); } catch (e) {}
