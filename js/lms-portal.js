@@ -285,6 +285,25 @@
     if (s) s.textContent = sub || '';
   }
 
+  function greetingPrefix() {
+    var hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  function displayName() {
+    var u = currentUser();
+    return (u && u.name) ? u.name : 'there';
+  }
+
+  function greetingHtml(supporting) {
+    return '<div class="lp-greeting">' +
+      '<p class="lp-greeting-hello">' + escapeHtml(greetingPrefix()) + ', <strong>' + escapeHtml(displayName()) + '</strong></p>' +
+      (supporting ? '<p class="lp-greeting-sub">' + escapeHtml(supporting) + '</p>' : '') +
+    '</div>';
+  }
+
   function render() {
     renderShell();
     renderNav();
@@ -321,8 +340,9 @@
     }).slice(0, 3);
     var continueItems = mine.filter(function (e) { return e.status !== 'completed'; }).slice(0, 4);
 
-    setTitle('My dashboard', 'Pick up where you left off');
+    setTitle('My dashboard', greetingPrefix() + ', ' + displayName());
     root.innerHTML =
+      greetingHtml('Welcome to Andeco Learning. Pick up where you left off.') +
       '<section class="lp-hero">' +
         '<h3>Keep building your skills</h3>' +
         '<p>Your personal learning space for courses, inductions, procedures, and certificates.</p>' +
@@ -350,8 +370,9 @@
     var active = data.enrollments.filter(function (e) { return e.status === 'in_progress' || e.status === 'enrolled'; }).length;
     var recent = data.enrollments.slice().reverse().slice(0, 6);
 
-    setTitle('Instructor home', 'Guide learners and track outcomes');
+    setTitle('Instructor home', greetingPrefix() + ', ' + displayName());
     root.innerHTML =
+      greetingHtml('Welcome to Andeco Learning. Guide learners and track outcomes.') +
       '<section class="lp-hero">' +
         '<h3>Teach with clarity</h3>' +
         '<p>Monitor progress, communicate updates, and keep your training library moving.</p>' +
