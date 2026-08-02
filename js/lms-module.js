@@ -217,6 +217,7 @@
           return {
             id: q.id || id('q'),
             prompt: q.prompt || '',
+            image: q.image || '',
             type: q.type === 'multi' ? 'multi' : 'single',
             options: Array.isArray(q.options) ? q.options.map(function (o) {
               return { id: o.id || id('opt'), text: o.text || '' };
@@ -1141,6 +1142,13 @@
     });
   }
 
+  function questionImageHtml(question, className) {
+    if (!question || !question.image) return '';
+    return '<div class="' + (className || 'lms-question-image') + '">' +
+      '<img src="' + escapeHtml(question.image) + '" alt="Question image">' +
+    '</div>';
+  }
+
   function renderQuestionsEditor(questions) {
     var wrap = document.getElementById('lms-questions-editor');
     if (!wrap) return;
@@ -1149,6 +1157,8 @@
         { id: id('opt'), text: '' },
         { id: id('opt'), text: '' }
       ];
+      var image = q.image || '';
+      var imageUrl = image && image.indexOf('data:image') === 0 ? '' : image;
       return '<div class="lms-editor-block" data-question-index="' + i + '">' +
         '<div class="form-row">' +
           '<div class="form-group full-width"><label>Question ' + (i + 1) + '</label>' +
@@ -1158,6 +1168,19 @@
             '<option value="multi"' + (q.type === 'multi' ? ' selected' : '') + '>Multiple answers</option>' +
           '</select></div>' +
           '<div class="form-group"><label>Points</label><input data-q-field="points" type="number" min="1" value="' + escapeHtml(String(q.points || 1)) + '"></div>' +
+          '<div class="form-group full-width"><label>Question image URL (optional)</label>' +
+            '<input data-q-image-url value="' + escapeHtml(imageUrl) + '" placeholder="https://… or upload below">' +
+            (image && image.indexOf('data:image') === 0
+              ? '<p class="lms-hint">Uploaded image is saved with this question.</p>'
+              : '') +
+          '</div>' +
+          '<div class="form-group full-width"><label>Upload question image</label>' +
+            '<input type="file" data-q-image-file accept="image/*">' +
+            '<div class="lms-q-image-preview' + (image ? ' has-image' : '') + '" data-q-image-preview>' +
+              (image ? '<img src="' + escapeHtml(image) + '" alt="Question image preview">' : '<span>No image</span>') +
+            '</div>' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-q-clear-image style="margin-top:0.5rem">Remove image</button>' +
+          '</div>' +
         '</div>' +
         '<div class="lms-options-editor">' + options.map(function (o, oi) {
           var checked = (q.correctOptionIds || []).indexOf(o.id) !== -1;
@@ -1170,8 +1193,77 @@
         '<button type="button" class="btn btn-ghost btn-sm" data-add-option="' + i + '">+ Option</button> ' +
         '<button type="button" class="btn btn-ghost btn-sm" data-remove-question="' + i + '">Remove question</button>' +
         '<input type="hidden" data-q-field="id" value="' + escapeHtml(q.id) + '">' +
+        '<input type="hidden" data-q-field="image" value="' + escapeHtml(image) + '">' +
       '</div>';
     }).join('') || '<p class="lms-hint">Add questions for inductions, procedure checks, or hiring exams.</p>';
+    bindQuestionImageControls();
+  }
+
+  function bindQuestionImageControls() {
+    var wrap = document.getElementById('lms-questions-editor');
+    if (!wrap) return;
+    wrap.querySelectorAll('.lms-editor-block[data-question-index]').forEach(function (block) {
+      var hidden = block.querySelector('[data-q-field="image"]');
+      var urlInput = block.querySelector('[data-q-image-url]');
+      var fileInput = block.querySelector('[data-q-image-file]');
+      var preview = block.querySelector('[data-q-image-preview]');
+      var clearBtn = block.querySelector('[data-q-clear-image]');
+      if (!hidden || !preview) return;
+
+      function setPreview(src) {
+        preview.innerHTML = '';
+        if (src) {
+          preview.classList.add('has-image');
+          var img = document.createElement('img');
+          img.alt = 'Question image preview';
+          img.src = src;
+          preview.appendChild(img);
+        } else {
+          preview.classList.remove('has-image');
+          preview.innerHTML = '<span>No image</span>';
+        }
+      }
+
+      if (fileInput) {
+        fileInput.onchange = function () {
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) return;
+          if (file.size > 1.5 * 1024 * 1024) {
+            alert('Please choose an image under 1.5 MB.');
+            fileInput.value = '';
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            var dataUrl = String(reader.result || '');
+            hidden.value = dataUrl;
+            if (urlInput) urlInput.value = '';
+            setPreview(dataUrl);
+            syncDraftFromEditor();
+          };
+          reader.readAsDataURL(file);
+        };
+      }
+
+      if (urlInput) {
+        urlInput.oninput = function () {
+          var typed = urlInput.value.trim();
+          hidden.value = typed;
+          setPreview(typed);
+          syncDraftFromEditor();
+        };
+      }
+
+      if (clearBtn) {
+        clearBtn.onclick = function () {
+          if (fileInput) fileInput.value = '';
+          if (urlInput) urlInput.value = '';
+          hidden.value = '';
+          setPreview('');
+          syncDraftFromEditor();
+        };
+      }
+    });
   }
 
   function collectEditorCourse() {
@@ -1216,6 +1308,7 @@
       questions.push({
         id: (block.querySelector('[data-q-field="id"]') || {}).value || id('q'),
         prompt: (block.querySelector('[data-q-field="prompt"]') || {}).value || '',
+        image: (block.querySelector('[data-q-field="image"]') || {}).value || '',
         type: (block.querySelector('[data-q-field="type"]') || {}).value || 'single',
         points: Number((block.querySelector('[data-q-field="points"]') || {}).value) || 1,
         options: options,
@@ -2174,6 +2267,7 @@
         questions.map(function (q, qi) {
           return '<div class="lms-editor-block"><p><strong>Q' + (qi + 1) + '.</strong> ' + escapeHtml(q.prompt) +
             ' <span class="lms-meta">(' + escapeHtml(String(q.points || 1)) + ' pt)</span></p>' +
+            questionImageHtml(q, 'lms-question-image') +
             (q.options || []).map(function (o) {
               var inputType = q.type === 'multi' ? 'checkbox' : 'radio';
               return '<label class="lms-option-row"><input type="' + inputType + '" name="q_' + escapeHtml(q.id) +
@@ -2589,7 +2683,7 @@
     if (t.id === 'lms-add-question') {
       var c2 = syncDraftFromEditor() || viewState.draftCourse || normalizeCourse({});
       c2.exam.questions.push({
-        id: id('q'), prompt: '', type: 'single', points: 1,
+        id: id('q'), prompt: '', image: '', type: 'single', points: 1,
         options: [{ id: id('opt'), text: 'Option A' }, { id: id('opt'), text: 'Option B' }],
         correctOptionIds: []
       });

@@ -928,6 +928,7 @@
       draft.exam.questions.push({
         id: block.getAttribute('data-question-id') || newId('q'),
         prompt: (block.querySelector('[data-q-field="prompt"]') || {}).value || '',
+        image: (block.querySelector('[data-q-field="image"]') || {}).value || '',
         type: (block.querySelector('[data-q-field="type"]') || {}).value || 'single',
         points: Number((block.querySelector('[data-q-field="points"]') || {}).value) || 1,
         options: options,
@@ -1081,6 +1082,8 @@
       var options = q.options && q.options.length
         ? q.options
         : [{ id: newId('opt'), text: 'Option A' }, { id: newId('opt'), text: 'Option B' }];
+      var image = q.image || '';
+      var imageUrl = image && image.indexOf('data:image') === 0 ? '' : image;
       return '<div class="lp-editor-block" data-lp-question-block data-question-id="' + escapeHtml(q.id) + '">' +
         '<div class="lp-editor-block-head"><strong>Question ' + (i + 1) + '</strong>' +
           '<button type="button" class="lp-btn lp-btn-ghost" data-lp-remove-question="' + i + '">Remove</button></div>' +
@@ -1091,6 +1094,18 @@
             '<option value="multi"' + (q.type === 'multi' ? ' selected' : '') + '>Multiple answers</option>' +
           '</select></label>' +
           '<label>Points<input data-q-field="points" type="number" min="1" value="' + escapeHtml(String(q.points || 1)) + '"></label>' +
+          '<label class="lp-span-2">Question image URL (optional)<input data-q-image-url value="' + escapeHtml(imageUrl) + '" placeholder="https://… or upload below">' +
+            (image && image.indexOf('data:image') === 0
+              ? '<span class="lp-muted-line">Uploaded image is saved with this question.</span>'
+              : '') +
+          '</label>' +
+          '<div class="lp-span-2 lp-q-image-controls">' +
+            '<label>Upload question image<input type="file" data-q-image-file accept="image/*"></label>' +
+            '<div class="lp-q-image-preview' + (image ? ' has-image' : '') + '" data-q-image-preview>' +
+              (image ? '<img src="' + escapeHtml(image) + '" alt="Question image preview">' : '<span>No image</span>') +
+            '</div>' +
+            '<button type="button" class="lp-btn lp-btn-ghost" data-lp-clear-q-image>Remove image</button>' +
+          '</div>' +
         '</div>' +
         '<div class="lp-options-editor">' + options.map(function (o, oi) {
           var checked = (q.correctOptionIds || []).indexOf(o.id) !== -1;
@@ -1102,7 +1117,9 @@
         }).join('') + '</div>' +
         '<div class="lp-form-actions">' +
           '<button type="button" class="lp-btn lp-btn-ghost" data-lp-add-option="' + i + '">+ Option</button>' +
-        '</div></div>';
+        '</div>' +
+        '<input type="hidden" data-q-field="image" value="' + escapeHtml(image) + '">' +
+      '</div>';
     }).join('') || '<p class="lp-empty">No exam questions yet. Add questions after enabling the exam.</p>';
   }
 
@@ -1176,6 +1193,70 @@
         '</form></div>';
 
     bindPortalCoverControls();
+    bindPortalQuestionImageControls();
+  }
+
+  function bindPortalQuestionImageControls() {
+    var wrap = document.getElementById('lp-questions-editor');
+    if (!wrap) return;
+    wrap.querySelectorAll('[data-lp-question-block]').forEach(function (block) {
+      var hidden = block.querySelector('[data-q-field="image"]');
+      var urlInput = block.querySelector('[data-q-image-url]');
+      var fileInput = block.querySelector('[data-q-image-file]');
+      var preview = block.querySelector('[data-q-image-preview]');
+      var clearBtn = block.querySelector('[data-lp-clear-q-image]');
+      if (!hidden || !preview) return;
+
+      function setPreview(src) {
+        if (src) {
+          preview.className = 'lp-q-image-preview has-image';
+          preview.innerHTML = '<img src="' + escapeHtml(src) + '" alt="Question image preview">';
+        } else {
+          preview.className = 'lp-q-image-preview';
+          preview.innerHTML = '<span>No image</span>';
+        }
+      }
+
+      if (fileInput) {
+        fileInput.onchange = function () {
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) return;
+          if (file.size > 1.5 * 1024 * 1024) {
+            alert('Please choose an image under 1.5 MB.');
+            fileInput.value = '';
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            var dataUrl = String(reader.result || '');
+            hidden.value = dataUrl;
+            if (urlInput) urlInput.value = '';
+            setPreview(dataUrl);
+            syncPortalCourseDraft();
+          };
+          reader.readAsDataURL(file);
+        };
+      }
+
+      if (urlInput) {
+        urlInput.oninput = function () {
+          var typed = urlInput.value.trim();
+          hidden.value = typed;
+          setPreview(typed);
+          syncPortalCourseDraft();
+        };
+      }
+
+      if (clearBtn) {
+        clearBtn.onclick = function () {
+          if (fileInput) fileInput.value = '';
+          if (urlInput) urlInput.value = '';
+          hidden.value = '';
+          setPreview('');
+          syncPortalCourseDraft();
+        };
+      }
+    });
   }
 
   function bindPortalCoverControls() {
@@ -2240,6 +2321,9 @@
       '<form id="lp-exam-form">' +
         questions.map(function (q, qi) {
           return '<div class="lp-exam-q"><p><strong>Q' + (qi + 1) + '.</strong> ' + escapeHtml(q.prompt) + '</p>' +
+            (q.image
+              ? '<div class="lp-question-image"><img src="' + escapeHtml(q.image) + '" alt="Question image"></div>'
+              : '') +
             (q.options || []).map(function (o) {
               var type = q.type === 'multi' ? 'checkbox' : 'radio';
               return '<label class="lp-option"><input type="' + type + '" name="q_' + escapeHtml(q.id) +
@@ -2645,6 +2729,7 @@
       courseEditor.draft.exam.questions.push({
         id: newId('q'),
         prompt: '',
+        image: '',
         type: 'single',
         points: 1,
         options: [{ id: newId('opt'), text: 'Option A' }, { id: newId('opt'), text: 'Option B' }],
