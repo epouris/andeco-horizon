@@ -338,6 +338,24 @@
     saveData(data);
   }
 
+  function allLessonsComplete(course, en) {
+    var lessons = (course && course.lessons) || [];
+    if (!lessons.length) return true;
+    var done = (en && en.completedLessonIds) || [];
+    return lessons.every(function (l) { return done.indexOf(l.id) !== -1; });
+  }
+
+  function canAccessCourseExam(course, en) {
+    if (!course || !course.exam || !course.exam.enabled) return false;
+    return allLessonsComplete(course, en);
+  }
+
+  function remainingLessonsCount(course, en) {
+    var lessons = (course && course.lessons) || [];
+    var done = (en && en.completedLessonIds) || [];
+    return lessons.filter(function (l) { return done.indexOf(l.id) === -1; }).length;
+  }
+
   function maybeIssueCertificate(data, enrollment, course) {
     if (!data.settings.autoIssueCertificates) return null;
     if (!enrollment || !course) return null;
@@ -1320,11 +1338,17 @@
       return;
     }
     if (viewState.mode === 'exam') {
-      renderExamPlayer(el, course, en);
-      return;
+      if (!canAccessCourseExam(course, en)) {
+        viewState.mode = 'player';
+      } else {
+        renderExamPlayer(el, course, en);
+        return;
+      }
     }
     var lesson = course.lessons.filter(function (l) { return l.id === viewState.lessonId; })[0] || course.lessons[0];
     var completed = en.completedLessonIds || [];
+    var examUnlocked = canAccessCourseExam(course, en);
+    var left = remainingLessonsCount(course, en);
     el.innerHTML =
       '<div class="page-header"><h2>' + escapeHtml(course.title) + '</h2>' +
       '<div class="header-actions"><button type="button" class="btn btn-ghost" id="lms-player-back">← My learning</button></div></div>' +
@@ -1336,7 +1360,12 @@
             return '<li><button type="button" class="lms-lesson-link' + (lesson && lesson.id === l.id ? ' active' : '') +
               '" data-lms-lesson="' + escapeHtml(l.id) + '">' + (done ? '✓ ' : '') + escapeHtml(l.title) + '</button></li>';
           }).join('') + '</ol>' +
-          (course.exam.enabled ? '<button type="button" class="btn btn-primary" id="lms-start-exam" style="width:100%;margin-top:1rem">Take exam</button>' : '') +
+          (course.exam.enabled
+            ? (examUnlocked
+                ? '<button type="button" class="btn btn-primary" id="lms-start-exam" style="width:100%;margin-top:1rem">Take exam</button>'
+                : '<button type="button" class="btn btn-secondary" id="lms-exam-locked" style="width:100%;margin-top:1rem" disabled title="Finish all lessons to unlock the exam">Exam locked</button>' +
+                  '<p class="lms-hint">Finish ' + left + ' more lesson' + (left === 1 ? '' : 's') + ' to unlock the exam.</p>')
+            : '') +
         '</aside>' +
         '<div class="lms-player-content module-table-panel">' +
           (lesson ? '<h3>' + escapeHtml(lesson.title) + '</h3>' +
@@ -1801,6 +1830,14 @@
       return;
     }
     if (t.id === 'lms-start-exam') {
+      var enExam = findEnrollment(viewState.enrollmentId);
+      var courseExam = enExam ? findCourse(enExam.courseId) : null;
+      if (!courseExam || !enExam || !canAccessCourseExam(courseExam, enExam)) {
+        alert('Finish all lessons before taking the exam.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
       viewState.mode = 'exam';
       renderMyLearning();
       return;
@@ -1995,6 +2032,17 @@
     var applicantId = (host && host.getAttribute('data-exam-applicant-id')) || viewState.applicantId || '';
     var course = findCourse(courseId);
     if (!course) return;
+
+    // Enrolled learners must finish all lessons first; hiring applicants are exempt.
+    if (enrollmentId && !applicantId) {
+      var enGate = findEnrollment(enrollmentId);
+      if (!canAccessCourseExam(course, enGate)) {
+        alert('Finish all lessons before taking the exam.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
+    }
 
     var answers = {};
     (course.exam.questions || []).forEach(function (q) {

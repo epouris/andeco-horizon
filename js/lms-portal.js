@@ -1071,6 +1071,25 @@
     };
   }
 
+  function allLessonsComplete(course, en) {
+    var lessons = (course && course.lessons) || [];
+    if (!lessons.length) return true;
+    var done = (en && en.completedLessonIds) || [];
+    return lessons.every(function (l) { return done.indexOf(l.id) !== -1; });
+  }
+
+  function canAccessExam(course, en) {
+    if (!course || !course.exam || !course.exam.enabled) return false;
+    if (isInstructor()) return true;
+    return allLessonsComplete(course, en);
+  }
+
+  function remainingLessonsCount(course, en) {
+    var lessons = (course && course.lessons) || [];
+    var done = (en && en.completedLessonIds) || [];
+    return lessons.filter(function (l) { return done.indexOf(l.id) === -1; }).length;
+  }
+
   function statusPretty(status) {
     var map = {
       enrolled: 'Enrolled',
@@ -1097,6 +1116,10 @@
     }
 
     var panel = playerState.panel || 'overview';
+    if (panel === 'exam' && !canAccessExam(course, en)) {
+      panel = 'overview';
+      playerState.panel = 'overview';
+    }
     if (panel === 'lesson' && !playerState.lessonId && course.lessons[0]) {
       playerState.lessonId = course.lessons[0].id;
     }
@@ -1109,9 +1132,10 @@
     var privateCount = visiblePrivateThreads().filter(function (t) {
       return t.courseId === course.id || !t.courseId;
     }).length;
+    var examUnlocked = canAccessExam(course, en);
 
     return '<div class="lp-course-page lp-course-page--focus">' +
-      renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor) +
+      renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor, examUnlocked, en) +
       '<div class="lp-course-focus-main">' +
         renderCourseHeader(course, instructor, progress, en) +
         '<section class="lp-course-main">' +
@@ -1158,7 +1182,7 @@
     '</header>';
   }
 
-  function renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor) {
+  function renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor, examUnlocked, en) {
     var lessonItems = (course.lessons || []).map(function (l, idx) {
       var done = completed.indexOf(l.id) !== -1;
       var active = panel === 'lesson' && activeLesson && activeLesson.id === l.id;
@@ -1168,6 +1192,7 @@
         '<span>' + escapeHtml(l.title) + '</span>' +
       '</button>';
     }).join('');
+    var left = remainingLessonsCount(course, en);
 
     return '<aside class="lp-course-side" aria-label="Course navigation">' +
       '<div class="lp-course-side-brand">' +
@@ -1193,7 +1218,10 @@
         '</button>' +
         (course.exam && course.exam.enabled
           ? '<p class="lp-course-side-label lp-course-side-label--spaced">Assessment</p>' +
-            '<button type="button" class="lp-course-nav-link' + (panel === 'exam' ? ' active' : '') + '" data-lp-course-panel="exam">Exam</button>'
+            (examUnlocked
+              ? '<button type="button" class="lp-course-nav-link' + (panel === 'exam' ? ' active' : '') + '" data-lp-course-panel="exam">Exam</button>'
+              : '<button type="button" class="lp-course-nav-link is-locked" data-lp-exam-locked title="Finish all lessons to unlock the exam">Exam <em>Locked</em></button>' +
+                '<p class="lp-course-lock-hint">Finish ' + left + ' more lesson' + (left === 1 ? '' : 's') + ' to unlock</p>')
           : '') +
         '<p class="lp-course-side-label lp-course-side-label--spaced">Instructor</p>' +
         '<div class="lp-course-side-instructor">' +
@@ -1215,11 +1243,29 @@
   }
 
   function renderCoursePanel(course, en, panel, lesson, instructor, progress) {
-    if (panel === 'exam') return renderExamHtml(course, en);
+    if (panel === 'exam') {
+      if (!canAccessExam(course, en)) return renderExamLockedPanel(course, en);
+      return renderExamHtml(course, en);
+    }
     if (panel === 'discussion') return renderCourseDiscussionPanel(course);
     if (panel === 'private') return renderCoursePrivatePanel(course);
     if (panel === 'lesson') return renderLessonPanel(course, en, lesson);
     return renderOverviewPanel(course, en, instructor, progress);
+  }
+
+  function renderExamLockedPanel(course, en) {
+    var left = remainingLessonsCount(course, en);
+    var next = ((course.lessons || []).filter(function (l) {
+      return ((en.completedLessonIds || []).indexOf(l.id) === -1);
+    })[0]) || null;
+    return '<div class="lp-card lp-course-panel">' +
+      '<h3>Exam locked</h3>' +
+      '<p class="lp-muted-line">Complete all lessons before taking the exam.</p>' +
+      '<p>You still have <strong>' + left + '</strong> lesson' + (left === 1 ? '' : 's') + ' to finish.</p>' +
+      (next
+        ? '<button type="button" class="lp-btn lp-btn-primary" data-lp-lesson="' + escapeHtml(next.id) + '">Continue: ' + escapeHtml(next.title) + '</button>'
+        : '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="lesson">Go to lessons</button>') +
+    '</div>';
   }
 
   function renderCoursePrivatePanel(course) {
@@ -1281,6 +1327,7 @@
       return false;
     });
     if (!nextLesson && course.lessons[0]) nextLesson = course.lessons[0];
+    var examReady = canAccessExam(course, en);
 
     return '<div class="lp-card lp-course-panel">' +
       '<h3>About this course</h3>' +
@@ -1290,13 +1337,15 @@
           '<h4>Your progress</h4>' +
           '<div class="lp-progress"><span style="width:' + progress.percent + '%"></span></div>' +
           '<p class="lp-muted-line">' + progress.percent + '% complete · ' + progress.done + ' of ' + progress.total + ' lessons · ' + escapeHtml(statusPretty(progress.status)) + '</p>' +
-          (nextLesson
+          (nextLesson && !allLessonsComplete(course, en)
             ? '<button type="button" class="lp-btn lp-btn-primary" data-lp-lesson="' + escapeHtml(nextLesson.id) + '">' +
                 (progress.done ? 'Continue: ' : 'Begin: ') + escapeHtml(nextLesson.title) +
               '</button>'
             : '') +
           (course.exam && course.exam.enabled
-            ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="exam" style="margin-left:0.5rem">Go to exam</button>'
+            ? (examReady
+                ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="exam" style="margin-left:0.5rem">Go to exam</button>'
+                : '<p class="lp-muted-line">Exam unlocks after all lessons are completed.</p>')
             : '') +
         '</div>' +
         '<div class="lp-course-instructor-card">' +
@@ -1345,9 +1394,11 @@
           (done ? 'Completed · Continue' : 'Mark complete &amp; continue') +
         '</button>' +
         (next ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-lesson="' + escapeHtml(next.id) + '">Next →</button>' : '') +
-        (!next && course.exam && course.exam.enabled
+        (!next && course.exam && course.exam.enabled && canAccessExam(course, en)
           ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="exam">Take exam</button>'
-          : '') +
+          : (!next && course.exam && course.exam.enabled
+              ? '<p class="lp-muted-line">Finish every lesson to unlock the exam.</p>'
+              : '')) +
       '</div>' +
     '</div>';
   }
@@ -1456,7 +1507,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
@@ -1466,24 +1517,33 @@
       render();
       return;
     }
+    if (t.hasAttribute('data-lp-exam-locked')) {
+      alert('Finish all lessons before taking the exam.');
+      return;
+    }
     if (t.hasAttribute('data-lp-course-panel')) {
       var panel = t.getAttribute('data-lp-course-panel');
+      var enPanel = findEnrollment(playerState.enrollmentId);
+      var coursePanel = enPanel ? findCourse(enPanel.courseId) : null;
+      if (panel === 'exam' && coursePanel && enPanel && !canAccessExam(coursePanel, enPanel)) {
+        alert('Finish all lessons before taking the exam.');
+        playerState.mode = 'course';
+        playerState.panel = 'overview';
+        render();
+        return;
+      }
       playerState.mode = 'course';
       playerState.panel = panel || 'overview';
       discussionState.composingPrivate = false;
       if (panel === 'lesson' && !playerState.lessonId) {
-        var enPanel = findEnrollment(playerState.enrollmentId);
-        var coursePanel = enPanel ? findCourse(enPanel.courseId) : null;
         if (coursePanel && coursePanel.lessons[0]) playerState.lessonId = coursePanel.lessons[0].id;
       }
       if (panel === 'private') {
         discussionState.tab = 'private';
-        var enPriv = findEnrollment(playerState.enrollmentId);
-        if (enPriv) discussionState.courseId = enPriv.courseId;
+        if (enPanel) discussionState.courseId = enPanel.courseId;
       }
       if (panel === 'discussion') {
-        var enDisc = findEnrollment(playerState.enrollmentId);
-        if (enDisc) discussionState.courseId = enDisc.courseId;
+        if (enPanel) discussionState.courseId = enPanel.courseId;
       }
       render();
       return;
@@ -1562,6 +1622,15 @@
       return;
     }
     if (t.hasAttribute('data-lp-start-exam')) {
+      var enExam = findEnrollment(playerState.enrollmentId);
+      var courseExam = enExam ? findCourse(enExam.courseId) : null;
+      if (!courseExam || !enExam || !canAccessExam(courseExam, enExam)) {
+        alert('Finish all lessons before taking the exam.');
+        playerState.mode = 'course';
+        playerState.panel = 'overview';
+        render();
+        return;
+      }
       playerState.mode = 'course';
       playerState.panel = 'exam';
       render();
@@ -1631,7 +1700,7 @@
     if (idx >= 0 && idx < course.lessons.length - 1) {
       playerState.lessonId = course.lessons[idx + 1].id;
       playerState.panel = 'lesson';
-    } else if (course.exam && course.exam.enabled) {
+    } else if (course.exam && course.exam.enabled && canAccessExam(course, en)) {
       playerState.panel = 'exam';
     } else {
       playerState.panel = 'overview';
@@ -1709,6 +1778,13 @@
       var en = findEnrollment(playerState.enrollmentId);
       var course = en ? findCourse(en.courseId) : null;
       if (!course) return;
+      if (!canAccessExam(course, en)) {
+        alert('Finish all lessons before taking the exam.');
+        playerState.mode = 'course';
+        playerState.panel = 'overview';
+        render();
+        return;
+      }
       var answers = {};
       (course.exam.questions || []).forEach(function (q) {
         var nodes = e.target.querySelectorAll('[name="q_' + q.id + '"]:checked');

@@ -1100,6 +1100,31 @@
   border-color: rgba(47, 211, 197, 0.28);
 }
 
+.lp-course-nav-link.is-locked {
+  opacity: 0.72;
+  cursor: not-allowed;
+  color: var(--lp-muted);
+}
+
+.lp-course-nav-link.is-locked:hover {
+  color: var(--lp-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: transparent;
+}
+
+.lp-course-nav-link.is-locked em {
+  color: var(--lp-muted);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lp-course-lock-hint {
+  margin: 0.15rem 0 0;
+  padding: 0 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--lp-muted);
+}
+
 .lp-course-nav-group {
   display: grid;
   gap: 0.25rem;
