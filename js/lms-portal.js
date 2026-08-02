@@ -104,6 +104,54 @@
     return '<span class="' + cls + '">' + escapeHtml(status || '—') + '</span>';
   }
 
+  function courseDuration(course) {
+    var mins = Number(course && course.durationMinutes) || 0;
+    if (!mins && course && Array.isArray(course.lessons)) {
+      mins = course.lessons.reduce(function (sum, lesson) {
+        return sum + (Number(lesson && lesson.durationMinutes) || 0);
+      }, 0);
+    }
+    if (!mins) return 'Self-paced';
+    if (mins < 60) return mins + ' min';
+    var h = Math.floor(mins / 60);
+    var m = mins % 60;
+    return m ? (h + 'h ' + m + 'm') : (h + 'h');
+  }
+
+  function courseCoverHtml(course) {
+    var title = escapeHtml((course && course.title) || 'Course');
+    if (course && course.coverImage) {
+      return '<div class="lp-course-cover"><img src="' + escapeHtml(course.coverImage) + '" alt="' + title + '" loading="lazy"></div>';
+    }
+    var letter = escapeHtml(String((course && course.title) || 'C').charAt(0).toUpperCase());
+    return '<div class="lp-course-cover lp-course-cover--placeholder" aria-hidden="true"><span>' + letter + '</span></div>';
+  }
+
+  function courseCardHtml(course, opts) {
+    opts = opts || {};
+    var progress = opts.progress;
+    var pct = progress != null ? Math.round(Number(progress.progressPercent != null ? progress.progressPercent : progress.percent) || 0) : null;
+    var cta = opts.cta || (progress ? 'Open' : 'Start');
+    var actionAttr = opts.enrollId
+      ? (' data-lp-open-enroll="' + escapeHtml(opts.enrollId) + '"')
+      : (' data-lp-enroll="' + escapeHtml(course.id) + '"');
+    var foot = pct != null
+      ? ('<div class="lp-course-card__progress"><div class="lp-progress"><span style="width:' + pct + '%"></span></div><span>' + pct + '%</span></div>')
+      : '';
+    return '<article class="lp-course-card"' + actionAttr + ' role="button" tabindex="0">' +
+      courseCoverHtml(course) +
+      '<div class="lp-course-card__body">' +
+        '<h3>' + escapeHtml(course.title || 'Untitled') + '</h3>' +
+        '<div class="lp-course-card__meta">' +
+          '<span>' + escapeHtml(course.category || 'General') + '</span>' +
+          '<span>' + escapeHtml(courseDuration(course)) + '</span>' +
+        '</div>' +
+        foot +
+        '<div class="lp-course-card__cta">' + escapeHtml(cta) + '</div>' +
+      '</div>' +
+    '</article>';
+  }
+
   function ensureEnrollment(courseId) {
     var u = currentUser();
     if (!u) return null;
@@ -439,24 +487,42 @@
   }
 
   function renderLearnerCourses(root) {
+    var mine = myEnrollments();
+    var data = getData();
     setTitle('My courses', 'Everything assigned to you');
-    root.innerHTML = '<div class="lp-card lp-span-12">' + renderEnrollmentList(myEnrollments()) + '</div>';
+    root.innerHTML = mine.length
+      ? ('<div class="lp-course-grid">' + mine.map(function (en) {
+          var course = data.courses.filter(function (c) { return c.id === en.courseId; })[0];
+          if (!course) return '';
+          return courseCardHtml(course, {
+            progress: en,
+            enrollId: en.id,
+            cta: (en.status === 'completed' || en.passed === true) ? 'Review' : 'Continue'
+          });
+        }).filter(Boolean).join('') + '</div>')
+      : '<div class="lp-card"><p class="lp-empty">You are not enrolled in any courses yet. Browse training to get started.</p></div>';
   }
 
   function renderCatalog(root) {
     var data = getData();
+    var mine = myEnrollments();
     var courses = data.courses.filter(function (c) {
       return c.published && (c.audience === 'employee' || c.audience === 'all');
     });
     setTitle('Browse training', 'Enroll in available company courses');
-    root.innerHTML = '<div class="lp-card"><div class="lp-list">' +
-      (courses.length ? courses.map(function (c) {
-        return '<div class="lp-item"><div><h4>' + escapeHtml(c.title) + '</h4>' +
-          '<p>' + escapeHtml(c.category || 'General') + ' · ' + escapeHtml(c.type) +
-          (c.description ? ' — ' + escapeHtml(c.description.slice(0, 100)) : '') + '</p></div>' +
-          '<button type="button" class="lp-btn lp-btn-secondary" data-lp-enroll="' + escapeHtml(c.id) + '">Start</button></div>';
-      }).join('') : '<p class="lp-empty">No published employee courses yet.</p>') +
-    '</div></div>';
+    root.innerHTML = courses.length
+      ? ('<div class="lp-course-grid">' + courses.map(function (c) {
+          var enrolled = mine.filter(function (e) { return e.courseId === c.id; })[0];
+          if (enrolled) {
+            return courseCardHtml(c, {
+              progress: enrolled,
+              enrollId: enrolled.id,
+              cta: 'Continue'
+            });
+          }
+          return courseCardHtml(c, { cta: 'Start' });
+        }).join('') + '</div>')
+      : '<div class="lp-card"><p class="lp-empty">No published employee courses yet.</p></div>';
   }
 
   function renderInstructorCourses(root) {
@@ -651,6 +717,7 @@
     if (!screen || screen.getAttribute('data-bound') === '1') return;
     screen.setAttribute('data-bound', '1');
     screen.addEventListener('click', onClick);
+    screen.addEventListener('keydown', onKeydown);
     screen.addEventListener('submit', onSubmit);
     var signout = document.getElementById('lp-signout');
     if (signout) {
@@ -670,6 +737,14 @@
     bindCrmBack('lp-back-crm', 'home');
     bindCrmBack('lp-back-crm-top', 'home');
     bindCrmBack('lp-back-crm-lms', 'lms');
+  }
+
+  function onKeydown(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var card = e.target.closest('.lp-course-card[data-lp-enroll], .lp-course-card[data-lp-open-enroll]');
+    if (!card || !e.currentTarget.contains(card)) return;
+    e.preventDefault();
+    card.click();
   }
 
   function onClick(e) {
