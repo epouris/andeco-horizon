@@ -1346,43 +1346,44 @@
     var host = document.getElementById('lms-certificate-print') || document.createElement('div');
     host.id = 'lms-certificate-print';
     host.className = 'lms-certificate-sheet';
+    host.setAttribute('data-print-page', 'certificate-landscape');
     host.innerHTML =
       '<div class="lms-certificate-toolbar no-print">' +
         '<button type="button" class="btn btn-primary" id="lms-cert-do-print">Print</button>' +
         '<button type="button" class="btn btn-ghost" id="lms-cert-close">Close</button>' +
       '</div>' +
       buildCertificateHtml(cert, data.settings, course);
-    if (!host.parentNode) document.body.appendChild(host);
+    // Keep sheet at body root so print sizing is exactly one landscape page.
+    if (host.parentNode !== document.body) document.body.appendChild(host);
     host.classList.remove('hidden');
     document.body.classList.add('lms-cert-open');
+    document.documentElement.classList.add('lms-cert-open');
 
     function closeSheet() {
       host.classList.add('hidden');
       document.body.classList.remove('lms-cert-open');
+      document.documentElement.classList.remove('lms-cert-open');
       host.innerHTML = '';
+    }
+
+    function runPrint() {
+      var prevTitle = document.title;
+      document.title = 'Certificate - ' + (cert.userName || 'Learner');
+      document.documentElement.classList.add('lms-printing-cert');
+      window.print();
+      document.documentElement.classList.remove('lms-printing-cert');
+      document.title = prevTitle;
     }
 
     var printBtn = host.querySelector('#lms-cert-do-print');
     var closeBtn = host.querySelector('#lms-cert-close');
-    if (printBtn) {
-      printBtn.onclick = function () {
-        var prevTitle = document.title;
-        document.title = 'Certificate - ' + (cert.userName || 'Learner');
-        window.print();
-        document.title = prevTitle;
-      };
-    }
+    if (printBtn) printBtn.onclick = runPrint;
     if (closeBtn) closeBtn.onclick = closeSheet;
 
     // Auto-open print after QR image has a moment to load
     setTimeout(function () {
-      if (!host.classList.contains('hidden')) {
-        var prevTitle = document.title;
-        document.title = 'Certificate - ' + (cert.userName || 'Learner');
-        window.print();
-        document.title = prevTitle;
-      }
-    }, 450);
+      if (!host.classList.contains('hidden')) runPrint();
+    }, 500);
   }
 
   function renderPurchases() {
