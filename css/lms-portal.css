@@ -1472,6 +1472,29 @@
   display: block;
 }
 
+.lp-signature-preview {
+  margin-top: 0.65rem;
+  min-height: 110px;
+  border: 1px dashed var(--lp-line);
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--lp-muted);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.85rem;
+}
+
+.lp-signature-preview.has-image {
+  border-style: solid;
+}
+
+.lp-signature-preview img {
+  max-height: 90px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
 @media (max-width: 720px) {
   .lp-form-grid {
     grid-template-columns: 1fr;

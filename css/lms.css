@@ -772,6 +772,44 @@ body.lms-cert-open {
   text-overflow: ellipsis;
 }
 
+.lms-certificate-sign-image {
+  height: 54px;
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 2px;
+}
+
+.lms-certificate-sign-image img {
+  max-height: 54px;
+  max-width: 220px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.lms-signature-preview {
+  margin-top: 0.65rem;
+  min-height: 90px;
+  border: 1px dashed var(--border, #e5e7eb);
+  border-radius: 0.5rem;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary, #6b7280);
+  background: #fff;
+  padding: 0.75rem;
+}
+
+.lms-signature-preview.has-image {
+  border-style: solid;
+}
+
+.lms-signature-preview img {
+  max-height: 80px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
 .lms-certificate-sign-line {
   height: 2px;
   width: min(100%, 220px);

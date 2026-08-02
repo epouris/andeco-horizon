@@ -446,9 +446,13 @@
   function upsertLearnerProfile(userId, patch) {
     var data = getData();
     var idx = (data.learnerProfiles || []).findIndex(function (p) { return p.userId === userId; });
-    var base = idx >= 0 ? data.learnerProfiles[idx] : { userId: userId, role: 'learner', department: '', notes: '' };
+    var base = idx >= 0
+      ? data.learnerProfiles[idx]
+      : { userId: userId, role: 'learner', department: '', notes: '', title: '', signatureImage: '' };
     var next = Object.assign({}, base, patch || {}, { userId: userId });
     if (!LEARNER_ROLES[next.role]) next.role = 'learner';
+    if (typeof next.signatureImage !== 'string') next.signatureImage = base.signatureImage || '';
+    if (typeof next.title !== 'string') next.title = base.title || '';
     if (idx >= 0) data.learnerProfiles[idx] = next;
     else {
       data.learnerProfiles = data.learnerProfiles || [];
@@ -456,6 +460,41 @@
     }
     saveData(data);
     return next;
+  }
+
+  function resolveCourseInstructor(course, data) {
+    data = data || getData();
+    var ownerId = (course && (course.ownerId || course.createdBy)) || '';
+    var profile = ownerId ? getLearnerProfile(ownerId) : null;
+    var user = ownerId
+      ? getUsers().filter(function (u) { return u.id === ownerId; })[0]
+      : null;
+    var name = (course && course.createdByName) ||
+      (course && course.instructorName) ||
+      (user && (user.displayName || user.username)) ||
+      ((data.settings && data.settings.companyLmsName) || 'Andeco Learning');
+    var signatureImage = (profile && profile.signatureImage) || '';
+    return {
+      userId: ownerId,
+      name: name,
+      title: 'Course Instructor',
+      signatureImage: signatureImage
+    };
+  }
+
+  function signatureBlockHtml(person) {
+    var name = (person && person.name) || 'Authorized Signer';
+    var title = (person && person.title) || '';
+    var sig = (person && person.signatureImage) || '';
+    var mark = sig
+      ? '<div class="lms-certificate-sign-image"><img src="' + escapeHtml(sig) + '" alt="Signature of ' + escapeHtml(name) + '"></div>'
+      : '<p class="lms-certificate-script">' + signatureScript(name) + '</p>';
+    return '<div class="lms-certificate-sign-block">' +
+      mark +
+      '<div class="lms-certificate-sign-line"></div>' +
+      '<strong>' + escapeHtml(String(name).toUpperCase()) + '</strong>' +
+      (title ? '<span>' + escapeHtml(String(title).toUpperCase()) + '</span>' : '') +
+    '</div>';
   }
 
   function embedMediaHtml(lesson) {
@@ -1002,8 +1041,10 @@
       title: String(fd.get('title') || '').trim(),
       description: String(fd.get('description') || '').trim(),
       coverImage: coverImage,
-      instructorName: String(fd.get('instructorName') || '').trim(),
-      instructorTitle: String(fd.get('instructorTitle') || '').trim(),
+      instructorName: String(fd.get('instructorName') || '').trim() ||
+        (findCourse(existingId) || {}).createdByName ||
+        (currentUser() || {}).name || '',
+      instructorTitle: String(fd.get('instructorTitle') || '').trim() || 'Course Instructor',
       instructorBio: String(fd.get('instructorBio') || '').trim(),
       type: String(fd.get('type') || 'course'),
       audience: String(fd.get('audience') || 'employee'),
@@ -1055,7 +1096,15 @@
             }).join('') +
           '</select></div>' +
           '<div class="form-group"><label>Department</label><input name="department" placeholder="e.g. Deck, Office"></div>' +
+          '<div class="form-group"><label>Title</label><input name="title" placeholder="e.g. Course Instructor"></div>' +
           '<div class="form-group full-width"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>' +
+          '<div class="form-group full-width"><label>Instructor signature image</label>' +
+            '<input type="file" id="lms-profile-signature-file" accept="image/*">' +
+            '<input type="hidden" name="signatureImage" id="lms-profile-signature-value" value="">' +
+            '<div class="lms-signature-preview" id="lms-profile-signature-preview"><span>No signature uploaded</span></div>' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="lms-profile-signature-clear" style="margin-top:0.5rem">Remove signature</button>' +
+            '<p class="lms-hint">Used on course certificates for instructors who create courses.</p>' +
+          '</div>' +
         '</div><div class="form-actions"><button type="submit" class="btn btn-primary">Save profile</button></div></div>' +
       '</form></div>' +
       '<div class="table-wrap" style="margin-bottom:1.5rem"><table class="data-table"><thead><tr>' +
@@ -1069,7 +1118,9 @@
         return '<tr><td><strong>' + escapeHtml(u.displayName || u.username) + '</strong>' +
           (u.isAdmin ? ' <span class="lms-badge">admin</span>' : '') +
           '<div class="lms-meta">' + escapeHtml(u.username) + '</div></td>' +
-          '<td>' + escapeHtml(LEARNER_ROLES[profile.role] || 'Learner') + '</td>' +
+          '<td>' + escapeHtml(LEARNER_ROLES[profile.role] || 'Learner') +
+            (profile.signatureImage ? ' · <span class="lms-meta">Signature on file</span>' : '') +
+          '</td>' +
           '<td>' + escapeHtml(profile.department || '—') + '</td>' +
           '<td>' + ens.length + '</td><td>' + done + '</td><td>' + certs + '</td></tr>';
       }).join('') : '<tr><td colspan="6">No users found.</td></tr>') +
@@ -1100,6 +1151,71 @@
           statusBadge(en.status) + '</td><td>' + (en.score != null ? escapeHtml(String(en.score)) + '%' : '—') + '</td></tr>';
       }).join('') : '<tr><td colspan="6">No enrollments yet.</td></tr>') +
       '</tbody></table></div>';
+    bindProfileSignatureControls();
+  }
+
+  function bindProfileSignatureControls() {
+    var form = document.getElementById('lms-profile-form');
+    var file = document.getElementById('lms-profile-signature-file');
+    var hidden = document.getElementById('lms-profile-signature-value');
+    var preview = document.getElementById('lms-profile-signature-preview');
+    var clearBtn = document.getElementById('lms-profile-signature-clear');
+    var userSelect = form ? form.querySelector('[name="userId"]') : null;
+    if (!form || !file || !hidden || !preview) return;
+
+    function setPreview(src) {
+      if (src) {
+        preview.classList.add('has-image');
+        preview.innerHTML = '<img src="' + src + '" alt="Signature preview">';
+      } else {
+        preview.classList.remove('has-image');
+        preview.innerHTML = '<span>No signature uploaded</span>';
+      }
+    }
+
+    function loadSelectedProfile() {
+      var id = userSelect ? userSelect.value : '';
+      var p = id ? getLearnerProfile(id) : null;
+      var roleEl = form.querySelector('[name="role"]');
+      var deptEl = form.querySelector('[name="department"]');
+      var titleEl = form.querySelector('[name="title"]');
+      var notesEl = form.querySelector('[name="notes"]');
+      if (roleEl) roleEl.value = (p && p.role) || 'learner';
+      if (deptEl) deptEl.value = (p && p.department) || '';
+      if (titleEl) titleEl.value = (p && p.title) || '';
+      if (notesEl) notesEl.value = (p && p.notes) || '';
+      hidden.value = '';
+      form.removeAttribute('data-signature-cleared');
+      setPreview((p && p.signatureImage) || '');
+    }
+
+    file.onchange = function () {
+      var f = file.files && file.files[0];
+      if (!f) return;
+      if (f.size > 1.5 * 1024 * 1024) {
+        alert('Please choose a signature image under 1.5 MB.');
+        file.value = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = String(reader.result || '');
+        hidden.value = dataUrl;
+        form.removeAttribute('data-signature-cleared');
+        setPreview(dataUrl);
+      };
+      reader.readAsDataURL(f);
+    };
+
+    if (clearBtn) {
+      clearBtn.onclick = function () {
+        hidden.value = '';
+        file.value = '';
+        form.setAttribute('data-signature-cleared', '1');
+        setPreview('');
+      };
+    }
+    if (userSelect) userSelect.onchange = loadSelectedProfile;
   }
 
   function renderAnnouncements() {
@@ -1289,15 +1405,15 @@
   }
 
   function buildCertificateHtml(cert, settings, course) {
-    var s = settings || {};
+    var data = getData();
+    var s = settings || data.settings || {};
     var org = s.companyLmsName || 'Andeco Learning';
     var title = s.certificateTitle || 'Certificate of Completion';
     var courseTitle = (cert && cert.courseTitle) || (course && course.title) || 'Course';
-    var instructorName = (course && course.instructorName) || org;
-    var instructorTitle = (course && course.instructorTitle) || 'Primary Instructor';
+    var courseInstructor = resolveCourseInstructor(course, data);
     var signerName = s.certificateSigner || 'Training Manager';
     var signerTitle = 'Training Manager';
-    if (signerName === instructorName) {
+    if (signerName === courseInstructor.name) {
       signerName = org;
       signerTitle = 'Program Director';
     }
@@ -1326,18 +1442,8 @@
           '<p class="lms-certificate-statement">Has meritoriously completed the “' +
             escapeHtml(courseTitle) + '” course, based on ' + escapeHtml(org) + '.</p>' +
           '<div class="lms-certificate-signs">' +
-            '<div class="lms-certificate-sign-block">' +
-              '<p class="lms-certificate-script">' + signatureScript(instructorName) + '</p>' +
-              '<div class="lms-certificate-sign-line"></div>' +
-              '<strong>' + escapeHtml(String(instructorName).toUpperCase()) + '</strong>' +
-              '<span>' + escapeHtml(String(instructorTitle).toUpperCase()) + '</span>' +
-            '</div>' +
-            '<div class="lms-certificate-sign-block">' +
-              '<p class="lms-certificate-script">' + signatureScript(signerName) + '</p>' +
-              '<div class="lms-certificate-sign-line"></div>' +
-              '<strong>' + escapeHtml(String(signerName).toUpperCase()) + '</strong>' +
-              '<span>' + escapeHtml(String(signerTitle).toUpperCase()) + '</span>' +
-            '</div>' +
+            signatureBlockHtml(courseInstructor) +
+            signatureBlockHtml({ name: signerName, title: signerTitle, signatureImage: '' }) +
             '<div class="lms-certificate-qr">' +
               '<img src="' + qrSrc + '" alt="Certificate verification QR code" width="120" height="120" loading="eager">' +
             '</div>' +
@@ -2246,11 +2352,19 @@
       var fdP = new FormData(e.target);
       var profileUserId = String(fdP.get('userId') || '');
       if (!profileUserId) return;
-      upsertLearnerProfile(profileUserId, {
+      var existingProfile = getLearnerProfile(profileUserId) || {};
+      var sigVal = String(fdP.get('signatureImage') || '').trim();
+      var sigCleared = e.target.getAttribute('data-signature-cleared') === '1';
+      var patch = {
         role: String(fdP.get('role') || 'learner'),
         department: String(fdP.get('department') || '').trim(),
+        title: String(fdP.get('title') || '').trim(),
         notes: String(fdP.get('notes') || '').trim()
-      });
+      };
+      if (sigVal) patch.signatureImage = sigVal;
+      else if (sigCleared) patch.signatureImage = '';
+      else if (existingProfile.signatureImage) patch.signatureImage = existingProfile.signatureImage;
+      upsertLearnerProfile(profileUserId, patch);
       renderLearners();
       return;
     }

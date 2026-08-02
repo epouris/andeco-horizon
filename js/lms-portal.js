@@ -518,7 +518,8 @@
           { id: 'discussions', label: 'Discussions' },
           { id: 'announcements', label: 'Announcements' },
           { id: 'reports', label: 'Reports' },
-          { id: 'certificates', label: 'Certificates' }
+          { id: 'certificates', label: 'Certificates' },
+          { id: 'profile', label: 'My profile' }
         ]
       : [
           { id: 'home', label: 'My dashboard' },
@@ -611,6 +612,7 @@
     else if (view === 'announcements') renderAnnouncements(root);
     else if (view === 'reports') renderReports(root);
     else if (view === 'certificates') renderCertificates(root);
+    else if (view === 'profile' && isInstructor()) renderInstructorProfile(root);
     else renderLearnerHome(root);
   }
 
@@ -939,6 +941,11 @@
       draft.createdByName = existing.createdByName || draft.createdByName || (u ? u.name : '');
       draft.createdAt = existing.createdAt || draft.createdAt;
     }
+    // Certificates use the course creator as Course Instructor.
+    if (!draft.instructorName) {
+      draft.instructorName = draft.createdByName || (u ? u.name : '');
+    }
+    if (!draft.instructorTitle) draft.instructorTitle = 'Course Instructor';
     if (window.LmsModule && typeof window.LmsModule.normalizeData === 'function') {
       // Normalize shape against the shared LMS course schema.
       draft = window.LmsModule.normalizeData({ courses: [draft] }).courses[0] || draft;
@@ -1163,6 +1170,95 @@
     var data = getData();
     setTitle('Learners', 'People and progress');
     root.innerHTML = '<div class="lp-card">' + renderEnrollmentTable(data.enrollments.slice().reverse(), true) + '</div>';
+  }
+
+  function upsertPortalProfile(patch) {
+    var u = currentUser();
+    if (!u) return null;
+    var data = getData();
+    data.learnerProfiles = data.learnerProfiles || [];
+    var idx = data.learnerProfiles.findIndex(function (p) { return p.userId === u.id; });
+    var base = idx >= 0
+      ? data.learnerProfiles[idx]
+      : { userId: u.id, role: 'instructor', department: '', notes: '', title: '', signatureImage: '' };
+    var next = Object.assign({}, base, patch || {}, {
+      userId: u.id,
+      role: 'instructor'
+    });
+    if (idx >= 0) data.learnerProfiles[idx] = next;
+    else data.learnerProfiles.push(next);
+    saveData(data);
+    return next;
+  }
+
+  function renderInstructorProfile(root) {
+    var u = currentUser();
+    var profile = (u && getProfile(u.id)) || {
+      role: 'instructor',
+      department: '',
+      notes: '',
+      title: 'Course Instructor',
+      signatureImage: ''
+    };
+    setTitle('My profile', 'Your instructor details and certificate signature');
+    root.innerHTML =
+      '<div class="lp-card lp-course-editor">' +
+        '<div class="lp-section-head">' +
+          '<div>' +
+            '<h3>Instructor profile</h3>' +
+            '<p class="lp-muted-line">This name and signature appear on certificates for courses you create.</p>' +
+          '</div>' +
+        '</div>' +
+        '<form id="lp-instructor-profile-form" class="lp-form">' +
+          '<section class="lp-editor-section"><h4>Details</h4><div class="lp-form-grid">' +
+            '<label>Display name<input value="' + escapeHtml(u ? u.name : '') + '" disabled></label>' +
+            '<label>Title<input name="title" value="' + escapeHtml(profile.title || 'Course Instructor') + '" placeholder="Course Instructor"></label>' +
+            '<label>Department<input name="department" value="' + escapeHtml(profile.department || '') + '" placeholder="e.g. Training"></label>' +
+            '<label class="lp-span-2">Bio / notes<textarea name="notes" rows="3" placeholder="Short intro shown to learners">' + escapeHtml(profile.notes || '') + '</textarea></label>' +
+          '</div></section>' +
+          '<section class="lp-editor-section"><h4>Certificate signature</h4>' +
+            '<p class="lp-muted-line">Upload a clear signature image (PNG or JPG). It is used on certificates as Course Instructor.</p>' +
+            '<label>Upload signature<input type="file" id="lp-signature-file" accept="image/*"></label>' +
+            '<input type="hidden" name="signatureImage" id="lp-signature-value" value="">' +
+            '<div class="lp-signature-preview' + (profile.signatureImage ? ' has-image' : '') + '" id="lp-signature-preview">' +
+              (profile.signatureImage
+                ? '<img src="' + escapeHtml(profile.signatureImage) + '" alt="Your signature">'
+                : '<span>No signature uploaded yet</span>') +
+            '</div>' +
+            '<div class="lp-form-actions">' +
+              '<button type="button" class="lp-btn lp-btn-ghost" data-lp-clear-signature>Remove signature</button>' +
+            '</div>' +
+          '</section>' +
+          '<div class="lp-form-actions">' +
+            '<button type="submit" class="lp-btn lp-btn-primary">Save profile</button>' +
+          '</div>' +
+        '</form></div>';
+
+    var fileInput = document.getElementById('lp-signature-file');
+    var hidden = document.getElementById('lp-signature-value');
+    var preview = document.getElementById('lp-signature-preview');
+    var form = document.getElementById('lp-instructor-profile-form');
+    if (fileInput && hidden && preview && form) {
+      form.setAttribute('data-signature-current', profile.signatureImage || '');
+      fileInput.onchange = function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        if (file.size > 1.5 * 1024 * 1024) {
+          alert('Please choose a signature image under 1.5 MB.');
+          fileInput.value = '';
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function () {
+          var dataUrl = String(reader.result || '');
+          hidden.value = dataUrl;
+          form.removeAttribute('data-signature-cleared');
+          preview.className = 'lp-signature-preview has-image';
+          preview.innerHTML = '<img src="' + dataUrl + '" alt="Your signature">';
+        };
+        reader.readAsDataURL(file);
+      };
+    }
   }
 
   function renderDiscussionMessages(thread) {
@@ -1442,11 +1538,13 @@
   }
 
   function courseInstructorInfo(course) {
-    if (course && course.instructorName) {
+    if (course && (course.createdByName || course.instructorName || course.ownerId || course.createdBy)) {
+      var ownerId = course.ownerId || course.createdBy || '';
+      var ownerProfile = ownerId ? getProfile(ownerId) : null;
       return {
-        name: course.instructorName,
-        title: course.instructorTitle || 'Instructor',
-        bio: course.instructorBio || ''
+        name: course.createdByName || course.instructorName || 'Course Instructor',
+        title: course.instructorTitle || 'Course Instructor',
+        bio: course.instructorBio || (ownerProfile && ownerProfile.notes) || ''
       };
     }
     var profiles = (getData().learnerProfiles || []).filter(function (p) { return p.role === 'instructor'; });
@@ -1454,7 +1552,7 @@
       var en = getData().enrollments.filter(function (e) { return e.userId === profiles[0].userId; })[0];
       return {
         name: (en && en.userName) || profiles[0].userId,
-        title: 'Instructor',
+        title: profiles[0].title || 'Course Instructor',
         bio: profiles[0].notes || ''
       };
     }
@@ -2148,7 +2246,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
@@ -2197,6 +2295,20 @@
       if (preview) {
         preview.className = 'lp-cover-preview';
         preview.innerHTML = '<span>No photo yet</span>';
+      }
+      return;
+    }
+    if (t.hasAttribute('data-lp-clear-signature')) {
+      var sigForm = document.getElementById('lp-instructor-profile-form');
+      var sigHidden = document.getElementById('lp-signature-value');
+      var sigFile = document.getElementById('lp-signature-file');
+      var sigPreview = document.getElementById('lp-signature-preview');
+      if (sigHidden) sigHidden.value = '';
+      if (sigFile) sigFile.value = '';
+      if (sigForm) sigForm.setAttribute('data-signature-cleared', '1');
+      if (sigPreview) {
+        sigPreview.className = 'lp-signature-preview';
+        sigPreview.innerHTML = '<span>No signature uploaded yet</span>';
       }
       return;
     }
@@ -2442,6 +2554,26 @@
   }
 
   function onSubmit(e) {
+    if (e.target && e.target.id === 'lp-instructor-profile-form') {
+      e.preventDefault();
+      if (!isInstructor()) return;
+      var fdProf = new FormData(e.target);
+      var patch = {
+        title: String(fdProf.get('title') || '').trim() || 'Course Instructor',
+        department: String(fdProf.get('department') || '').trim(),
+        notes: String(fdProf.get('notes') || '').trim()
+      };
+      var uploadedSig = String(fdProf.get('signatureImage') || '').trim();
+      var clearedSig = e.target.getAttribute('data-signature-cleared') === '1';
+      var currentSig = e.target.getAttribute('data-signature-current') || '';
+      if (uploadedSig) patch.signatureImage = uploadedSig;
+      else if (clearedSig) patch.signatureImage = '';
+      else patch.signatureImage = currentSig;
+      upsertPortalProfile(patch);
+      alert('Instructor profile saved. Your signature will appear on certificates for courses you create.');
+      render();
+      return;
+    }
     if (e.target && e.target.id === 'lp-course-form') {
       e.preventDefault();
       savePortalCourse();
