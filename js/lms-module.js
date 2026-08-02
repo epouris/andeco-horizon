@@ -1296,11 +1296,22 @@
       if (!course || !course.published || (course.audience !== 'public' && course.audience !== 'all')) {
         viewState.publicCourseId = null;
       } else {
+        var detailMins = Number(course.durationMinutes) || 0;
+        if (!detailMins && Array.isArray(course.lessons)) {
+          detailMins = course.lessons.reduce(function (sum, l) { return sum + (Number(l.durationMinutes) || 0); }, 0);
+        }
+        var detailDuration = detailMins
+          ? (detailMins >= 60 ? (Math.floor(detailMins / 60) + 'h' + (detailMins % 60 ? ' ' + (detailMins % 60) + 'm' : '')) : detailMins + ' min')
+          : 'Self-paced';
         root.innerHTML =
           '<button type="button" class="btn btn-ghost" id="lms-public-back">← Back to catalog</button>' +
           '<div class="lms-public-card">' +
+            (course.coverImage
+              ? '<div class="lms-public-detail-photo"><img src="' + escapeHtml(course.coverImage) + '" alt="' + escapeHtml(course.title) + '"></div>'
+              : '') +
             '<h2>' + escapeHtml(course.title) + '</h2>' +
             '<p class="lms-meta">' + escapeHtml(typeLabel(course.type)) + ' · ' + escapeHtml(course.category) +
+            ' · ' + escapeHtml(detailDuration) +
             ' · ' + escapeHtml(formatMoney(course.price, course.currency || settings.currency)) + '</p>' +
             '<p>' + escapeHtml(course.description) + '</p>' +
             '<p class="lms-hint">' + escapeHtml(settings.purchaseInstructions) + '</p>' +

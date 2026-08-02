@@ -416,6 +416,21 @@
   display: block;
 }
 
+.lms-public-detail-photo {
+  margin: -1.25rem -1.35rem 1rem;
+  aspect-ratio: 21 / 9;
+  overflow: hidden;
+  border-radius: 0.85rem 0.85rem 0 0;
+  background: #0b1f33;
+}
+
+.lms-public-detail-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .lms-public-links {
   display: flex;
   gap: 0.75rem;
