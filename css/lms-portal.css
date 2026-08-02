@@ -182,6 +182,31 @@
   font-weight: 800;
 }
 
+.lp-greeting {
+  margin-bottom: 1rem;
+  animation: lp-fade-up 380ms ease both;
+}
+
+.lp-greeting-hello {
+  margin: 0;
+  font-family: var(--lp-display);
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--lp-text);
+}
+
+.lp-greeting-hello strong {
+  color: var(--lp-accent);
+  font-weight: 800;
+}
+
+.lp-greeting-sub {
+  margin: 0.35rem 0 0;
+  color: var(--lp-muted);
+  font-size: 0.95rem;
+}
+
 .lp-hero {
   position: relative;
   overflow: hidden;
