@@ -363,7 +363,20 @@
 
   function canAccessCourseExam(course, en) {
     if (!course || !course.exam || !course.exam.enabled) return false;
+    if (isEnrollmentContentLocked(en)) return false;
     return allLessonsComplete(course, en);
+  }
+
+  function isEnrollmentContentLocked(en) {
+    return !!(en && (en.status === 'completed' || en.passed === true));
+  }
+
+  function findEnrollmentCertificate(en) {
+    if (!en) return null;
+    var data = getData();
+    return (data.certificates || []).filter(function (c) {
+      return c.enrollmentId === en.id || (c.courseId === en.courseId && c.userId === en.userId);
+    })[0] || null;
   }
 
   function remainingLessonsCount(course, en) {
@@ -689,7 +702,7 @@
         '<div class="lms-progress"><span style="width:' + (en.progressPercent || 0) + '%"></span></div>' +
         '</div>' +
         '<button type="button" class="btn btn-primary btn-sm" data-lms-play="' + escapeHtml(en.id) + '">' +
-          (en.status === 'completed' ? 'Review' : 'Continue') + '</button>' +
+          (isEnrollmentContentLocked(en) ? 'View summary' : 'Continue') + '</button>' +
         '</div>';
     }).join('') + '</div>';
   }
@@ -1855,6 +1868,36 @@
       renderMyLearning();
       return;
     }
+    if (isEnrollmentContentLocked(en)) {
+      viewState.mode = 'player';
+      var cert = findEnrollmentCertificate(en);
+      var completedLocked = en.completedLessonIds || [];
+      el.innerHTML =
+        '<div class="page-header"><h2>' + escapeHtml(course.title) + '</h2>' +
+        '<div class="header-actions"><button type="button" class="btn btn-ghost" id="lms-player-back">← My learning</button></div></div>' +
+        '<div class="module-table-panel">' +
+          '<p class="lms-hint">This course is marked completed. Lessons and exams are closed.</p>' +
+          '<div class="lms-metrics" style="margin:1rem 0">' +
+            metricHtml('Status', 'Completed', 'ok') +
+            metricHtml('Progress', (en.progressPercent || 100) + '%') +
+            metricHtml('Score', en.score != null ? en.score + '%' : '—') +
+            metricHtml('Completed', (en.completedAt || '').slice(0, 10) || '—') +
+          '</div>' +
+          (cert
+            ? '<div class="lms-actions" style="margin-bottom:1rem">' +
+                '<button type="button" class="btn btn-primary" data-lms-cert-print="' + escapeHtml(cert.id) + '">View / print certificate</button>' +
+              '</div>'
+            : '') +
+          '<h3>Syllabus</h3>' +
+          '<ol class="lms-locked-syllabus">' +
+            (course.lessons || []).map(function (l, i) {
+              var done = completedLocked.indexOf(l.id) !== -1;
+              return '<li>' + escapeHtml((i + 1) + '. ' + l.title) + (done ? ' · Completed' : '') + '</li>';
+            }).join('') +
+          '</ol>' +
+        '</div>';
+      return;
+    }
     if (viewState.mode === 'exam') {
       if (!canAccessCourseExam(course, en)) {
         viewState.mode = 'player';
@@ -2036,6 +2079,12 @@
     })[0] || {}).courseId) : null);
     if (!course) return;
     if (en) {
+      if (isEnrollmentContentLocked(en)) {
+        alert('This course is completed. The exam is no longer available.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
       if (!canAccessCourseExam(course, en)) {
         alert('Finish all lessons before taking the exam.');
         viewState.mode = 'player';
@@ -2461,6 +2510,13 @@
       return;
     }
     if (t.hasAttribute('data-lms-lesson')) {
+      var enLessonNav = findEnrollment(viewState.enrollmentId);
+      if (enLessonNav && isEnrollmentContentLocked(enLessonNav)) {
+        alert('This course is completed. Lessons are no longer available.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
       viewState.lessonId = t.getAttribute('data-lms-lesson');
       renderMyLearning();
       return;
@@ -2470,9 +2526,22 @@
       var en2 = findEnrollment(viewState.enrollmentId);
       var course2 = en2 ? findCourse(en2.courseId) : null;
       if (!en2 || !course2) return;
+      if (isEnrollmentContentLocked(en2)) {
+        alert('This course is completed. Lessons are no longer available.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
       var done = (en2.completedLessonIds || []).slice();
       if (done.indexOf(lessonId) === -1) done.push(lessonId);
       updateEnrollmentProgress(en2.id, done, course2);
+      var enAfter = findEnrollment(viewState.enrollmentId);
+      if (enAfter && isEnrollmentContentLocked(enAfter)) {
+        viewState.lessonId = null;
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
       var idx = course2.lessons.findIndex(function (l) { return l.id === lessonId; });
       if (idx >= 0 && idx < course2.lessons.length - 1) viewState.lessonId = course2.lessons[idx + 1].id;
       renderMyLearning();
@@ -2487,6 +2556,12 @@
     if (t.id === 'lms-start-exam') {
       var enExam = findEnrollment(viewState.enrollmentId);
       var courseExam = enExam ? findCourse(enExam.courseId) : null;
+      if (enExam && isEnrollmentContentLocked(enExam)) {
+        alert('This course is completed. The exam is no longer available.');
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
       if (!courseExam || !enExam || !canAccessCourseExam(courseExam, enExam)) {
         alert('Finish all lessons before taking the exam.');
         viewState.mode = 'player';
