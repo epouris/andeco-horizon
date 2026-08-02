@@ -51,12 +51,28 @@
       route(pageId);
       return;
     }
+    // Auth/public screens must route immediately. Relying only on hashchange
+    // can leave users stuck (e.g. public catalog → login).
+    var directRoutePages = {
+      login: true,
+      setup: true,
+      'lms-public': true,
+      'lms-careers': true,
+      'lms-portal': true
+    };
     try {
+      var nextHash = '#' + pageId;
+      if (window.location.hash === nextHash || window.location.hash === pageId) {
+        route(pageId);
+        return;
+      }
       window.location.hash = pageId;
+      if (directRoutePages[pageId]) route(pageId);
     } catch (err) {
       route(pageId);
     }
   }
+  window.navigateTo = navigateTo;
 
   var MODULES = [
     { id: 'accounting', name: 'Accounting' },
@@ -226,8 +242,13 @@
 
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(function (s) {
-      s.classList.toggle('hidden', s.id !== id);
+      var show = s.id === id;
+      s.classList.toggle('hidden', !show);
+      // Ensure public/portal screens cannot remain visible over login.
+      if (!show) s.setAttribute('aria-hidden', 'true');
+      else s.removeAttribute('aria-hidden');
     });
+    document.body.classList.toggle('lms-portal-active', id === 'lms-portal-screen');
   }
 
   function showPage(pageId) {
@@ -594,8 +615,21 @@
     if (pageId === 'login' || pageId === 'setup') {
       clearSession();
       document.body.classList.remove('lms-portal-active');
+      try {
+        if (window.LmsModule && typeof window.LmsModule.resetPublicViews === 'function') {
+          window.LmsModule.resetPublicViews();
+        }
+      } catch (eLogin) {}
       var usersForAuth = getUsers();
-      showScreen(usersForAuth.length === 0 ? 'setup-screen' : 'login-screen');
+      var authScreen = (pageId === 'setup' || usersForAuth.length === 0) ? 'setup-screen' : 'login-screen';
+      showScreen(authScreen);
+      // Force-hide public overlays in case a prior view left them open.
+      ['lms-public-screen', 'lms-careers-screen', 'lms-portal-screen', 'app-screen'].forEach(function (sid) {
+        var el = document.getElementById(sid);
+        if (el) el.classList.add('hidden');
+      });
+      var authEl = document.getElementById(authScreen);
+      if (authEl) authEl.classList.remove('hidden');
       return;
     }
 
@@ -1247,6 +1281,12 @@
     initFileProtocolLinkGuard();
 
     document.addEventListener('click', function (e) {
+      var loginBtn = e.target.closest('[data-go-login], #lms-public-login-btn, #lms-careers-login-btn');
+      if (loginBtn) {
+        e.preventDefault();
+        navigateTo('login');
+        return;
+      }
       var publicLink = e.target.closest('a[href="#lms-public"], a[href="#lms-careers"], a[href="#login"], a[href="#lms-portal"]');
       if (!publicLink) return;
       e.preventDefault();
