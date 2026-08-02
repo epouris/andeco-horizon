@@ -95,6 +95,7 @@ window.AccountingData = (function () {
         announcements: [],
         certificates: [],
         learnerProfiles: [],
+        discussions: [],
         settings: {}
       },
       crm: { users: [] }
@@ -152,6 +153,7 @@ window.AccountingData = (function () {
           announcements: [],
           certificates: [],
           learnerProfiles: [],
+          discussions: [],
           settings: {}
         };
       })(),
