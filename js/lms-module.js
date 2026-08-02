@@ -1230,34 +1230,159 @@
       '<div id="lms-certificate-print" class="lms-certificate-sheet hidden"></div>';
   }
 
+  function formatCertDate(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) {
+      var raw = String(iso).slice(0, 10);
+      var parts = raw.split('-');
+      if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
+      return raw;
+    }
+    return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear();
+  }
+
+  function performanceRating(score) {
+    if (score == null || score === '') return 'Completed';
+    var n = Number(score);
+    if (isNaN(n)) return 'Completed';
+    if (n >= 90) return 'Excellent';
+    if (n >= 80) return 'Very good';
+    if (n >= 70) return 'Good';
+    return 'Satisfactory';
+  }
+
+  function formatCertScore(score) {
+    if (score == null || score === '') return '—';
+    var n = Number(score);
+    if (isNaN(n)) return String(score);
+    return Math.round(n) + '/100';
+  }
+
+  function formatReferenceNo(no) {
+    var raw = String(no || '').replace(/^AND-?/i, '').replace(/\D/g, '');
+    if (raw.length >= 9) {
+      return raw.slice(0, 3) + ' ' + raw.slice(3, 6) + ' ' + raw.slice(6, 9);
+    }
+    if (raw.length >= 6) {
+      return raw.slice(0, 3) + ' ' + raw.slice(3, 6) + (raw.length > 6 ? ' ' + raw.slice(6) : '');
+    }
+    return String(no || '—');
+  }
+
+  function signatureScript(name) {
+    return escapeHtml(name || 'Authorized Signer');
+  }
+
+  function buildCertificateHtml(cert, settings, course) {
+    var s = settings || {};
+    var org = s.companyLmsName || 'Andeco Learning';
+    var title = s.certificateTitle || 'Certificate of Completion';
+    var courseTitle = (cert && cert.courseTitle) || (course && course.title) || 'Course';
+    var instructorName = (course && course.instructorName) || org;
+    var instructorTitle = (course && course.instructorTitle) || 'Primary Instructor';
+    var signerName = s.certificateSigner || 'Training Manager';
+    var signerTitle = 'Training Manager';
+    if (signerName === instructorName) {
+      signerName = org;
+      signerTitle = 'Program Director';
+    }
+    var verifyText = [
+      'Certificate ' + (cert.certificateNo || ''),
+      cert.userName || '',
+      courseTitle,
+      formatCertDate(cert.issuedAt)
+    ].join(' | ');
+    var qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=' +
+      encodeURIComponent(verifyText);
+    var rating = performanceRating(cert.score);
+
+    return '' +
+      '<div class="lms-certificate" role="document" aria-label="Certificate of completion">' +
+        '<div class="lms-certificate-body">' +
+          '<header class="lms-certificate-header">' +
+            '<span class="lms-certificate-accent" aria-hidden="true"></span>' +
+            '<div>' +
+              '<h1>' + escapeHtml(String(title).toUpperCase()) + '</h1>' +
+              '<p class="lms-certificate-course">' + escapeHtml(String(courseTitle).toUpperCase()) + '</p>' +
+            '</div>' +
+          '</header>' +
+          '<p class="lms-certificate-awarded">Awarded to</p>' +
+          '<h2 class="lms-certificate-name">' + escapeHtml(String(cert.userName || '').toUpperCase()) + '</h2>' +
+          '<p class="lms-certificate-statement">Has meritoriously completed the “' +
+            escapeHtml(courseTitle) + '” course, based on ' + escapeHtml(org) + '.</p>' +
+          '<div class="lms-certificate-signs">' +
+            '<div class="lms-certificate-sign-block">' +
+              '<p class="lms-certificate-script">' + signatureScript(instructorName) + '</p>' +
+              '<div class="lms-certificate-sign-line"></div>' +
+              '<strong>' + escapeHtml(String(instructorName).toUpperCase()) + '</strong>' +
+              '<span>' + escapeHtml(String(instructorTitle).toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="lms-certificate-sign-block">' +
+              '<p class="lms-certificate-script">' + signatureScript(signerName) + '</p>' +
+              '<div class="lms-certificate-sign-line"></div>' +
+              '<strong>' + escapeHtml(String(signerName).toUpperCase()) + '</strong>' +
+              '<span>' + escapeHtml(String(signerTitle).toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="lms-certificate-qr">' +
+              '<img src="' + qrSrc + '" alt="Certificate verification QR code" width="120" height="120" loading="eager">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<footer class="lms-certificate-footer">' +
+          '<div><strong>' + escapeHtml(formatCertDate(cert.issuedAt)) + '</strong><span>Date of completion</span></div>' +
+          '<div><strong>' + escapeHtml(formatCertScore(cert.score)) + '</strong><span>Score</span></div>' +
+          '<div><strong>' + escapeHtml(String(rating).toUpperCase()) + '</strong><span>Performance rating</span></div>' +
+          '<div><strong>' + escapeHtml(formatReferenceNo(cert.certificateNo)) + '</strong><span>Reference number</span></div>' +
+        '</footer>' +
+      '</div>';
+  }
+
   function printCertificate(certId) {
     var data = getData();
     var cert = (data.certificates || []).filter(function (c) { return c.id === certId; })[0];
     if (!cert) return;
-    var s = data.settings;
+    var course = findCourse(cert.courseId);
     var host = document.getElementById('lms-certificate-print') || document.createElement('div');
     host.id = 'lms-certificate-print';
     host.className = 'lms-certificate-sheet';
     host.innerHTML =
-      '<div class="lms-certificate">' +
-        '<p class="lms-certificate-eyebrow">' + escapeHtml(s.companyLmsName || 'Andeco Learning') + '</p>' +
-        '<h1>' + escapeHtml(s.certificateTitle || 'Certificate of Completion') + '</h1>' +
-        '<p class="lms-certificate-line">This certifies that</p>' +
-        '<h2>' + escapeHtml(cert.userName) + '</h2>' +
-        '<p class="lms-certificate-line">has successfully completed</p>' +
-        '<h3>' + escapeHtml(cert.courseTitle) + '</h3>' +
-        '<p class="lms-certificate-meta">Issued ' + escapeHtml((cert.issuedAt || '').slice(0, 10)) +
-          ' · Certificate no. ' + escapeHtml(cert.certificateNo) +
-          (cert.score != null ? ' · Score ' + escapeHtml(String(cert.score)) + '%' : '') + '</p>' +
-        '<p class="lms-certificate-sign">' + escapeHtml(s.certificateSigner || 'Training Manager') + '</p>' +
-      '</div>';
+      '<div class="lms-certificate-toolbar no-print">' +
+        '<button type="button" class="btn btn-primary" id="lms-cert-do-print">Print</button>' +
+        '<button type="button" class="btn btn-ghost" id="lms-cert-close">Close</button>' +
+      '</div>' +
+      buildCertificateHtml(cert, data.settings, course);
     if (!host.parentNode) document.body.appendChild(host);
     host.classList.remove('hidden');
-    var prevTitle = document.title;
-    document.title = 'Certificate - ' + cert.userName;
-    window.print();
-    document.title = prevTitle;
-    host.classList.add('hidden');
+    document.body.classList.add('lms-cert-open');
+
+    function closeSheet() {
+      host.classList.add('hidden');
+      document.body.classList.remove('lms-cert-open');
+      host.innerHTML = '';
+    }
+
+    var printBtn = host.querySelector('#lms-cert-do-print');
+    var closeBtn = host.querySelector('#lms-cert-close');
+    if (printBtn) {
+      printBtn.onclick = function () {
+        var prevTitle = document.title;
+        document.title = 'Certificate - ' + (cert.userName || 'Learner');
+        window.print();
+        document.title = prevTitle;
+      };
+    }
+    if (closeBtn) closeBtn.onclick = closeSheet;
+
+    // Auto-open print after QR image has a moment to load
+    setTimeout(function () {
+      if (!host.classList.contains('hidden')) {
+        var prevTitle = document.title;
+        document.title = 'Certificate - ' + (cert.userName || 'Learner');
+        window.print();
+        document.title = prevTitle;
+      }
+    }, 450);
   }
 
   function renderPurchases() {
@@ -2459,6 +2584,8 @@
     saveData: saveData,
     normalizeData: normalizeData,
     normalizeDiscussion: normalizeDiscussion,
+    printCertificate: printCertificate,
+    buildCertificateHtml: buildCertificateHtml,
     STORAGE_KEY: STORAGE_KEY
   };
 

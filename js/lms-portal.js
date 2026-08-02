@@ -1894,30 +1894,15 @@
       return;
     }
     if (t.hasAttribute('data-lp-cert')) {
-      if (window.LmsModule && typeof window.LmsModule.getData === 'function') {
-        // Reuse print helper if available via temporary DOM hook
-        var certId = t.getAttribute('data-lp-cert');
-        var data = getData();
-        var cert = (data.certificates || []).filter(function (c) { return c.id === certId; })[0];
-        if (!cert) return;
-        var s = data.settings || {};
-        var w = window.open('', '_blank');
-        if (!w) {
-          alert('Certificate: ' + cert.courseTitle + ' / ' + cert.certificateNo);
-          return;
-        }
-        w.document.write('<html><head><title>Certificate</title><style>body{font-family:Georgia,serif;padding:40px;text-align:center}h1{margin-top:24px}</style></head><body>' +
-          '<p>' + escapeHtml(s.companyLmsName || 'Andeco Learning') + '</p>' +
-          '<h1>' + escapeHtml(s.certificateTitle || 'Certificate of Completion') + '</h1>' +
-          '<p>This certifies that</p><h2>' + escapeHtml(cert.userName) + '</h2>' +
-          '<p>has successfully completed</p><h3>' + escapeHtml(cert.courseTitle) + '</h3>' +
-          '<p>' + escapeHtml(cert.certificateNo) + ' · ' + escapeHtml((cert.issuedAt || '').slice(0, 10)) + '</p>' +
-          '<p>' + escapeHtml(s.certificateSigner || 'Training Manager') + '</p>' +
-          '</body></html>');
-        w.document.close();
-        w.focus();
-        w.print();
+      var certId = t.getAttribute('data-lp-cert');
+      if (window.LmsModule && typeof window.LmsModule.printCertificate === 'function') {
+        window.LmsModule.printCertificate(certId);
+        return;
       }
+      var data = getData();
+      var cert = (data.certificates || []).filter(function (c) { return c.id === certId; })[0];
+      if (!cert) return;
+      alert('Certificate: ' + cert.courseTitle + ' / ' + cert.certificateNo);
     }
   }
 
