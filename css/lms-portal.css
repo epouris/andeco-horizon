@@ -1100,6 +1100,25 @@
   border-color: rgba(47, 211, 197, 0.28);
 }
 
+.lp-course-nav-lesson.is-locked {
+  opacity: 0.72;
+  cursor: default;
+  color: var(--lp-muted);
+  pointer-events: none;
+}
+
+.lp-course-syllabus-locked {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  color: var(--lp-muted);
+}
+
+.lp-course-syllabus-locked strong {
+  color: var(--lp-text);
+  font-weight: 600;
+}
+
 .lp-course-nav-link.is-locked {
   opacity: 0.72;
   cursor: not-allowed;
