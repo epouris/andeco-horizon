@@ -1374,7 +1374,7 @@
       '</div>' +
       '<div class="module-table-panel"><h3>Hiring</h3>' +
         completionTable(hiringRows, 'No hiring exam enrollment activity yet.', false) +
-        '<h4 class="lms-subheading" style="margin:1.25rem 0 0.65rem">Applicant sessions</h4>' +
+        '<h4 style="margin:1.25rem 0 0.65rem">Applicant sessions</h4>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr>' +
           '<th>Applicant</th><th>Position</th><th>Exam</th><th>Status</th><th>Score</th><th>Date</th>' +
         '</tr></thead><tbody>' +
