@@ -9,6 +9,7 @@
   var playerState = {
     enrollmentId: null,
     lessonId: null,
+    slideIndex: 0,
     mode: 'list', // list | course | exam
     panel: 'overview' // overview | lesson | discussion | exam
   };
@@ -45,7 +46,13 @@
     text: 'Text / procedure',
     video: 'Video URL',
     link: 'Web link',
-    document: 'Document link'
+    document: 'Document link',
+    slideshow: 'Slideshow'
+  };
+
+  var SLIDE_KINDS = {
+    video: 'Video',
+    pptx: 'PowerPoint'
   };
 
   function escapeHtml(s) {
@@ -794,6 +801,7 @@
         content: '',
         contentType: 'text',
         mediaUrl: '',
+        slides: [],
         order: 0,
         durationMinutes: 0
       }],
@@ -884,12 +892,23 @@
 
     draft.lessons = [];
     form.querySelectorAll('[data-lp-lesson-block]').forEach(function (block, i) {
+      var slides = [];
+      block.querySelectorAll('[data-lp-slide-block]').forEach(function (sb, si) {
+        slides.push({
+          id: sb.getAttribute('data-slide-id') || newId('sld'),
+          title: (sb.querySelector('[data-slide-field="title"]') || {}).value || ('Slide ' + (si + 1)),
+          kind: (sb.querySelector('[data-slide-field="kind"]') || {}).value || 'video',
+          mediaUrl: (sb.querySelector('[data-slide-field="mediaUrl"]') || {}).value || '',
+          notes: (sb.querySelector('[data-slide-field="notes"]') || {}).value || ''
+        });
+      });
       draft.lessons.push({
         id: block.getAttribute('data-lesson-id') || newId('lsn'),
         title: (block.querySelector('[data-lesson-field="title"]') || {}).value || ('Lesson ' + (i + 1)),
         content: (block.querySelector('[data-lesson-field="content"]') || {}).value || '',
         contentType: (block.querySelector('[data-lesson-field="contentType"]') || {}).value || 'text',
         mediaUrl: (block.querySelector('[data-lesson-field="mediaUrl"]') || {}).value || '',
+        slides: slides,
         durationMinutes: Number((block.querySelector('[data-lesson-field="durationMinutes"]') || {}).value) || 0,
         order: i
       });
@@ -1007,22 +1026,53 @@
         '</tbody></table></div></div>';
   }
 
+  function renderPortalSlideBlocks(slides, lessonIndex) {
+    var list = Array.isArray(slides) ? slides : [];
+    return '<div class="lp-slides-editor">' +
+      '<div class="lp-slides-editor-head">' +
+        '<strong>Slideshow slides</strong>' +
+        '<p class="lp-muted-line">Add PowerPoint (.pptx URL) or video slides. PowerPoint needs a publicly accessible link to embed.</p>' +
+      '</div>' +
+      (list.length ? list.map(function (s, si) {
+        return '<div class="lp-editor-block lp-slide-block" data-lp-slide-block data-slide-id="' + escapeHtml(s.id || '') + '">' +
+          '<div class="lp-editor-block-head"><strong>Slide ' + (si + 1) + '</strong>' +
+            '<button type="button" class="lp-btn lp-btn-ghost" data-lp-remove-slide="' + lessonIndex + ':' + si + '">Remove</button></div>' +
+          '<div class="lp-form-grid">' +
+            '<label>Title<input data-slide-field="title" value="' + escapeHtml(s.title || '') + '"></label>' +
+            '<label>Media type<select data-slide-field="kind">' +
+              Object.keys(SLIDE_KINDS).map(function (k) {
+                return '<option value="' + k + '"' + ((s.kind || 'video') === k ? ' selected' : '') + '>' + escapeHtml(SLIDE_KINDS[k]) + '</option>';
+              }).join('') +
+            '</select></label>' +
+            '<label class="lp-span-2">Media URL<input data-slide-field="mediaUrl" value="' + escapeHtml(s.mediaUrl || '') + '" placeholder="https://… video or .pptx link"></label>' +
+            '<label class="lp-span-2">Slide notes<textarea data-slide-field="notes" rows="2">' + escapeHtml(s.notes || '') + '</textarea></label>' +
+          '</div></div>';
+      }).join('') : '<p class="lp-empty">No slides yet.</p>') +
+      '<button type="button" class="lp-btn lp-btn-secondary" data-lp-add-slide="' + lessonIndex + '">+ Add slide</button>' +
+    '</div>';
+  }
+
   function renderLessonEditorBlocks(lessons) {
     return (lessons || []).map(function (l, i) {
+      var isSlideshow = (l.contentType || 'text') === 'slideshow';
       return '<div class="lp-editor-block" data-lp-lesson-block data-lesson-id="' + escapeHtml(l.id) + '">' +
         '<div class="lp-editor-block-head"><strong>Lesson ' + (i + 1) + '</strong>' +
           '<button type="button" class="lp-btn lp-btn-ghost" data-lp-remove-lesson="' + i + '">Remove</button></div>' +
         '<div class="lp-form-grid">' +
           '<label>Title<input data-lesson-field="title" value="' + escapeHtml(l.title || '') + '" required></label>' +
           '<label>Duration (min)<input data-lesson-field="durationMinutes" type="number" min="0" value="' + escapeHtml(String(l.durationMinutes || 0)) + '"></label>' +
-          '<label>Content type<select data-lesson-field="contentType">' +
+          '<label>Content type<select data-lesson-field="contentType" data-lp-lesson-type>' +
             Object.keys(LESSON_CONTENT_TYPES).map(function (k) {
               return '<option value="' + k + '"' + (l.contentType === k ? ' selected' : '') + '>' + escapeHtml(LESSON_CONTENT_TYPES[k]) + '</option>';
             }).join('') +
           '</select></label>' +
-          '<label>Media / link URL<input data-lesson-field="mediaUrl" value="' + escapeHtml(l.mediaUrl || '') + '" placeholder="https://…"></label>' +
+          (isSlideshow
+            ? ''
+            : '<label>Media / link URL<input data-lesson-field="mediaUrl" value="' + escapeHtml(l.mediaUrl || '') + '" placeholder="https://…"></label>') +
           '<label class="lp-span-2">Lesson content<textarea data-lesson-field="content" rows="4">' + escapeHtml(l.content || '') + '</textarea></label>' +
-        '</div></div>';
+        '</div>' +
+        (isSlideshow ? renderPortalSlideBlocks(l.slides, i) : '') +
+      '</div>';
     }).join('') || '<p class="lp-empty">No lessons yet. Add your first lesson.</p>';
   }
 
@@ -1569,17 +1619,51 @@
     return escapeHtml(text || '').replace(/\n/g, '<br>');
   }
 
+  function portalVideoEmbed(url) {
+    if (!url) return '';
+    var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{6,})/);
+    var vim = url.match(/vimeo\.com\/(\d+)/);
+    if (yt) return '<div class="lp-media"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt[1]) + '" allowfullscreen loading="lazy"></iframe></div>';
+    if (vim) return '<div class="lp-media"><iframe src="https://player.vimeo.com/video/' + escapeHtml(vim[1]) + '" allowfullscreen loading="lazy"></iframe></div>';
+    return '<div class="lp-media"><video controls src="' + escapeHtml(url) + '"></video></div>';
+  }
+
+  function portalPptxEmbed(url) {
+    if (!url) return '';
+    var embed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(url);
+    return '<div class="lp-media lp-media--pptx"><iframe src="' + escapeHtml(embed) + '" title="PowerPoint presentation" allowfullscreen loading="lazy"></iframe></div>' +
+      '<p><a class="lp-btn lp-btn-secondary" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Open PowerPoint</a></p>';
+  }
+
+  function portalSlideshowHtml(lesson) {
+    var slides = Array.isArray(lesson && lesson.slides) ? lesson.slides : [];
+    if (!slides.length) return '<p class="lp-empty">This slideshow has no slides yet.</p>';
+    var idx = Math.max(0, Math.min(Number(playerState.slideIndex) || 0, slides.length - 1));
+    var slide = slides[idx] || {};
+    var media = !slide.mediaUrl
+      ? '<p class="lp-muted-line">No media URL set for this slide yet.</p>'
+      : (slide.kind === 'pptx' ? portalPptxEmbed(slide.mediaUrl) : portalVideoEmbed(slide.mediaUrl));
+    return '<div class="lp-slideshow">' +
+      '<div class="lp-slideshow-toolbar">' +
+        '<button type="button" class="lp-btn lp-btn-secondary"' + (idx <= 0 ? ' disabled' : '') + ' data-lp-slide-prev>← Previous</button>' +
+        '<span class="lp-slideshow-count">Slide ' + (idx + 1) + ' of ' + slides.length + '</span>' +
+        '<button type="button" class="lp-btn lp-btn-secondary"' + (idx >= slides.length - 1 ? ' disabled' : '') + ' data-lp-slide-next>Next →</button>' +
+      '</div>' +
+      '<div class="lp-slideshow-slide">' +
+        '<h4>' + escapeHtml(slide.title || ('Slide ' + (idx + 1))) + '</h4>' +
+        '<p class="lp-muted-line">' + escapeHtml(SLIDE_KINDS[slide.kind] || slide.kind || 'Video') + '</p>' +
+        media +
+        (slide.notes ? '<p class="lp-slideshow-notes">' + escapeHtml(slide.notes).replace(/\n/g, '<br>') + '</p>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
   function mediaHtml(lesson) {
     var type = lesson.contentType || 'text';
+    if (type === 'slideshow') return portalSlideshowHtml(lesson);
     var url = lesson.mediaUrl || '';
     if (!url || type === 'text') return '';
-    if (type === 'video') {
-      var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{6,})/);
-      var vim = url.match(/vimeo\.com\/(\d+)/);
-      if (yt) return '<div class="lp-media"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt[1]) + '" allowfullscreen loading="lazy"></iframe></div>';
-      if (vim) return '<div class="lp-media"><iframe src="https://player.vimeo.com/video/' + escapeHtml(vim[1]) + '" allowfullscreen loading="lazy"></iframe></div>';
-      return '<div class="lp-media"><video controls src="' + escapeHtml(url) + '"></video></div>';
-    }
+    if (type === 'video') return portalVideoEmbed(url);
     return '<p><a class="lp-btn lp-btn-secondary" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
       (type === 'document' ? 'Open document' : 'Open resource') + '</a></p>';
   }
@@ -2353,6 +2437,7 @@
     screen.addEventListener('click', onClick);
     screen.addEventListener('keydown', onKeydown);
     screen.addEventListener('submit', onSubmit);
+    screen.addEventListener('change', onChange);
     var signout = document.getElementById('lp-signout');
     if (signout) {
       signout.addEventListener('click', function () {
@@ -2381,8 +2466,37 @@
     card.click();
   }
 
+  function onChange(e) {
+    var t = e.target;
+    if (!t) return;
+    if (t.matches && t.matches('[data-lp-lesson-type]')) {
+      syncPortalCourseDraft();
+      var block = t.closest('[data-lp-lesson-block]');
+      if (block && courseEditor.draft && Array.isArray(courseEditor.draft.lessons)) {
+        var idx = Array.prototype.indexOf.call(
+          document.querySelectorAll('#lp-course-form [data-lp-lesson-block]'),
+          block
+        );
+        var lesson = courseEditor.draft.lessons[idx];
+        if (lesson && lesson.contentType === 'slideshow') {
+          lesson.slides = Array.isArray(lesson.slides) ? lesson.slides : [];
+          if (!lesson.slides.length) {
+            lesson.slides.push({
+              id: newId('sld'),
+              title: 'Slide 1',
+              kind: 'video',
+              mediaUrl: '',
+              notes: ''
+            });
+          }
+        }
+      }
+      render();
+    }
+  }
+
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-content-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-content-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-slide],[data-lp-remove-slide],[data-lp-slide-prev],[data-lp-slide-next],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
@@ -2457,9 +2571,60 @@
         content: '',
         contentType: 'text',
         mediaUrl: '',
+        slides: [],
         order: courseEditor.draft.lessons.length,
         durationMinutes: 0
       });
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-add-slide')) {
+      syncPortalCourseDraft();
+      var addSlideLessonIdx = Number(t.getAttribute('data-lp-add-slide'));
+      var addSlideLesson = courseEditor.draft && courseEditor.draft.lessons
+        ? courseEditor.draft.lessons[addSlideLessonIdx]
+        : null;
+      if (!addSlideLesson) return;
+      addSlideLesson.contentType = 'slideshow';
+      addSlideLesson.slides = Array.isArray(addSlideLesson.slides) ? addSlideLesson.slides : [];
+      addSlideLesson.slides.push({
+        id: newId('sld'),
+        title: 'Slide ' + (addSlideLesson.slides.length + 1),
+        kind: 'video',
+        mediaUrl: '',
+        notes: ''
+      });
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-remove-slide')) {
+      syncPortalCourseDraft();
+      var slideParts = String(t.getAttribute('data-lp-remove-slide') || '').split(':');
+      var rmSlideLessonIdx = Number(slideParts[0]);
+      var rmSlideIdx = Number(slideParts[1]);
+      var rmSlideLesson = courseEditor.draft && courseEditor.draft.lessons
+        ? courseEditor.draft.lessons[rmSlideLessonIdx]
+        : null;
+      if (!rmSlideLesson || !Array.isArray(rmSlideLesson.slides)) return;
+      rmSlideLesson.slides.splice(rmSlideIdx, 1);
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-slide-prev') || t.hasAttribute('data-lp-slide-next')) {
+      var enForSlides = findEnrollment(playerState.enrollmentId);
+      var courseForSlides = enForSlides ? findCourse(enForSlides.courseId) : null;
+      var lessonForSlides = courseForSlides
+        ? courseForSlides.lessons.filter(function (l) { return l.id === playerState.lessonId; })[0]
+        : null;
+      var totalSlides = lessonForSlides && Array.isArray(lessonForSlides.slides) ? lessonForSlides.slides.length : 0;
+      if (totalSlides) {
+        var curSlide = Number(playerState.slideIndex) || 0;
+        playerState.slideIndex = t.hasAttribute('data-lp-slide-next')
+          ? Math.min(totalSlides - 1, curSlide + 1)
+          : Math.max(0, curSlide - 1);
+      }
+      playerState.mode = 'course';
+      playerState.panel = 'lesson';
       render();
       return;
     }
@@ -2600,6 +2765,7 @@
     if (t.hasAttribute('data-lp-open-enroll')) {
       playerState.enrollmentId = t.getAttribute('data-lp-open-enroll');
       playerState.lessonId = null;
+      playerState.slideIndex = 0;
       playerState.mode = 'course';
       playerState.panel = 'overview';
       render();
@@ -2610,6 +2776,7 @@
       if (en) {
         playerState.enrollmentId = en.id;
         playerState.lessonId = null;
+        playerState.slideIndex = 0;
         playerState.mode = 'course';
         playerState.panel = 'overview';
         render();
@@ -2626,6 +2793,7 @@
         return;
       }
       playerState.lessonId = t.getAttribute('data-lp-lesson');
+      playerState.slideIndex = 0;
       playerState.mode = 'course';
       playerState.panel = 'lesson';
       render();
@@ -2719,6 +2887,7 @@
     var idx = course.lessons.findIndex(function (l) { return l.id === lessonId; });
     if (idx >= 0 && idx < course.lessons.length - 1) {
       playerState.lessonId = course.lessons[idx + 1].id;
+      playerState.slideIndex = 0;
       playerState.panel = 'lesson';
     } else if (course.exam && course.exam.enabled && canAccessExam(course, en)) {
       playerState.panel = 'exam';
