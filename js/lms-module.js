@@ -1622,7 +1622,7 @@
     host.innerHTML =
       '<div class="lms-certificate-toolbar no-print">' +
         '<button type="button" class="btn btn-primary" id="lms-cert-do-print">Print</button>' +
-        '<button type="button" class="btn btn-ghost" id="lms-cert-close">Close</button>' +
+        '<button type="button" class="btn btn-ghost" id="lms-cert-close" aria-label="Close certificate">Close</button>' +
       '</div>' +
       buildCertificateHtml(cert, data.settings, course);
     // Keep sheet at body root so print sizing is exactly one landscape page.

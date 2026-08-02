@@ -654,7 +654,35 @@ body.lms-cert-open {
   display: flex;
   gap: 0.6rem;
   justify-content: flex-end;
+  align-items: center;
   width: min(100%, 1100px);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.lms-certificate-toolbar .btn {
+  min-height: 40px;
+  font-weight: 600;
+}
+
+.lms-certificate-toolbar .btn-ghost,
+.lms-certificate-toolbar #lms-cert-close {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+.lms-certificate-toolbar .btn-ghost:hover,
+.lms-certificate-toolbar #lms-cert-close:hover {
+  background: #f8fafc;
+  color: #020617;
 }
 
 .lms-certificate {
