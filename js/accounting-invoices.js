@@ -258,7 +258,8 @@ const app = {
 
         // Invoice item calculations
         document.addEventListener('input', (e) => {
-            if (e.target.classList.contains('item-quantity') || 
+            if (e.target.classList.contains('item-quantity') ||
+                e.target.classList.contains('item-persons') ||
                 e.target.classList.contains('item-hours') ||
                 e.target.classList.contains('item-price') ||
                 e.target.classList.contains('item-description')) {
@@ -269,6 +270,13 @@ const app = {
         document.addEventListener('input', (e) => {
             if (e.target.classList.contains('item-product-code')) {
                 this.updateItemTotal(e.target.closest('.invoice-item'));
+                this.calculateTotals();
+            }
+        });
+        document.addEventListener('change', (e) => {
+            if (e.target && (e.target.id === 'inv-col-qty' || e.target.id === 'inv-col-persons' || e.target.id === 'inv-col-hours')) {
+                this.applyItemColumnVisibility();
+                document.querySelectorAll('#invoice-items .invoice-item').forEach((row) => this.updateItemTotal(row));
                 this.calculateTotals();
             }
         });
@@ -479,6 +487,129 @@ const app = {
     },
 
     // Invoice Form
+    defaultItemColumns() {
+        return { qty: true, persons: false, hours: true };
+    },
+
+    normalizeItemColumns(cols) {
+        const base = this.defaultItemColumns();
+        if (!cols || typeof cols !== 'object') return base;
+        return {
+            qty: cols.qty !== false && cols.qty !== 0 && cols.qty !== '0',
+            persons: !!(cols.persons === true || cols.persons === 1 || cols.persons === '1'),
+            hours: cols.hours !== false && cols.hours !== 0 && cols.hours !== '0'
+        };
+    },
+
+    getItemColumnsFromForm() {
+        const qtyEl = document.getElementById('inv-col-qty');
+        if (!qtyEl) return this.defaultItemColumns();
+        return {
+            qty: !!document.getElementById('inv-col-qty').checked,
+            persons: !!document.getElementById('inv-col-persons').checked,
+            hours: !!document.getElementById('inv-col-hours').checked
+        };
+    },
+
+    setItemColumnsOnForm(cols) {
+        const c = this.normalizeItemColumns(cols);
+        const qtyEl = document.getElementById('inv-col-qty');
+        const personsEl = document.getElementById('inv-col-persons');
+        const hoursEl = document.getElementById('inv-col-hours');
+        if (qtyEl) qtyEl.checked = c.qty;
+        if (personsEl) personsEl.checked = c.persons;
+        if (hoursEl) hoursEl.checked = c.hours;
+        this.applyItemColumnVisibility();
+    },
+
+    applyItemColumnVisibility() {
+        const cols = this.getItemColumnsFromForm();
+        const wrap = document.getElementById('invoice-items-wrap') || document.querySelector('.invoice-items-wrap');
+        if (!wrap) return;
+        wrap.classList.toggle('col-qty', cols.qty);
+        wrap.classList.toggle('col-persons', cols.persons);
+        wrap.classList.toggle('col-hours', cols.hours);
+        let metrics = '';
+        if (cols.qty) metrics += '0.35fr ';
+        if (cols.persons) metrics += '0.35fr ';
+        if (cols.hours) metrics += '0.35fr ';
+        wrap.style.setProperty('--item-grid', `0.5fr 3fr ${metrics}0.7fr 1fr auto`);
+    },
+
+    lineItemAmount(item, cols) {
+        const c = this.normalizeItemColumns(cols || (item && item._columns) || this.defaultItemColumns());
+        const price = parseFloat(item && item.price) || 0;
+        let m = 1;
+        if (c.qty) m *= (parseFloat(item && item.quantity) || 0);
+        if (c.persons) m *= (parseFloat(item && item.persons) || 0);
+        if (c.hours) m *= (parseFloat(item && item.hours) || 0);
+        return m * price;
+    },
+
+    buildInvoiceItemRowHtml(item) {
+        const it = item || {};
+        const desc = String(it.description || '').replace(/"/g, '&quot;');
+        const code = String(it.productCode || '').replace(/"/g, '&quot;');
+        const qty = it.quantity != null ? it.quantity : 1;
+        const persons = it.persons != null ? it.persons : 1;
+        const hours = it.hours != null ? it.hours : 0;
+        const price = it.price != null ? it.price : '';
+        const cols = this.getItemColumnsFromForm();
+        const amount = this.lineItemAmount({
+            quantity: qty,
+            persons: persons,
+            hours: hours,
+            price: price === '' ? 0 : price
+        }, cols);
+        return `
+            <input type="text" placeholder="Code" class="item-product-code" value="${code}" title="Enter preset product code to fill description and price">
+            <input type="text" placeholder="Description" class="item-description" value="${desc}" required>
+            <input type="number" placeholder="Qty" class="item-quantity" min="0" step="0.01" value="${qty}">
+            <input type="number" placeholder="Persons" class="item-persons" min="0" step="1" value="${persons}">
+            <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="${hours}">
+            <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" value="${price}" required>
+            <div class="item-total">${this.formatCurrency(amount)}</div>
+            <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
+        `;
+    },
+
+    buildInvoiceItemsTableHtml(invoice) {
+        const cols = this.normalizeItemColumns(invoice && invoice.itemColumns);
+        const headers = [
+            '<th>Description</th>',
+            cols.qty ? '<th class="text-center">Qty</th>' : '',
+            cols.persons ? '<th class="text-center">Persons</th>' : '',
+            cols.hours ? '<th class="text-center">Hours</th>' : '',
+            '<th class="text-center">Rate</th>',
+            '<th class="text-right">Amount</th>'
+        ].join('');
+        const colSpan = 2 + (cols.qty ? 1 : 0) + (cols.persons ? 1 : 0) + (cols.hours ? 1 : 0) + 1;
+        const rows = (invoice.items || []).map((item) => {
+            if (item.isHeader) {
+                const text = (item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return `<tr><td colspan="${colSpan}" class="item-header-cell">${text || '&nbsp;'}</td></tr>`;
+            }
+            const desc = (item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<tr>
+                <td>${desc}</td>
+                ${cols.qty ? `<td class="text-center">${item.quantity != null && item.quantity !== '' ? item.quantity : ''}</td>` : ''}
+                ${cols.persons ? `<td class="text-center">${item.persons != null && item.persons !== '' ? item.persons : ''}</td>` : ''}
+                ${cols.hours ? `<td class="text-center">${item.hours != null && item.hours !== '' ? item.hours : ''}</td>` : ''}
+                <td class="text-center">${this.formatCurrency(item.price || 0)}</td>
+                <td class="text-right">${this.formatCurrency(this.lineItemAmount(item, cols))}</td>
+            </tr>`;
+        }).join('');
+        return `
+                <table class="invoice-items-table-print">
+                    <thead>
+                        <tr>${headers}</tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>`;
+    },
+
     setupInvoiceForm(invoiceId = null) {
         this.currentInvoiceId = invoiceId;
         const form = document.getElementById('invoice-form');
@@ -511,19 +642,11 @@ const app = {
             const deleteDraftBtn = document.getElementById('btn-delete-draft-invoice');
             if (deleteDraftBtn) deleteDraftBtn.style.display = 'none';
 
+            this.setItemColumnsOnForm(this.defaultItemColumns());
+
             // Reset items
             const itemsContainer = document.getElementById('invoice-items');
-            itemsContainer.innerHTML = `
-                <div class="invoice-item">
-                    <input type="text" placeholder="Code" class="item-product-code" title="Enter preset product code to fill description and price">
-                    <input type="text" placeholder="Description" class="item-description" required>
-                    <input type="number" placeholder="Quantity" class="item-quantity" min="1" value="1" required>
-                    <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="0" required>
-                    <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" required>
-                    <div class="item-total">${this.formatCurrency(0)}</div>
-                    <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
-                </div>
-            `;
+            itemsContainer.innerHTML = `<div class="invoice-item">${this.buildInvoiceItemRowHtml({ quantity: 1, persons: 1, hours: 0, price: '' })}</div>`;
             
             // Reset client fields
             document.getElementById('client-select').value = '';
@@ -549,6 +672,7 @@ const app = {
         document.getElementById('invoice-notes').value = invoice.notes || '';
         document.getElementById('invoice-status').value = invoice.status || 'draft';
         document.getElementById('tax-rate').value = invoice.taxRate || 0;
+        this.setItemColumnsOnForm(invoice.itemColumns || this.defaultItemColumns());
 
         // Try to match client from dropdown
         const clients = DataStore.getClients();
@@ -577,17 +701,7 @@ const app = {
         const itemsContainer = document.getElementById('invoice-items');
         const items = invoice.items && Array.isArray(invoice.items) ? invoice.items : [];
         if (items.length === 0) {
-            itemsContainer.innerHTML = `
-                <div class="invoice-item">
-                    <input type="text" placeholder="Code" class="item-product-code" title="Enter preset product code to fill description and price">
-                    <input type="text" placeholder="Description" class="item-description" required>
-                    <input type="number" placeholder="Quantity" class="item-quantity" min="1" value="1" required>
-                    <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="0" required>
-                    <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" required>
-                    <div class="item-total">${this.formatCurrency(0)}</div>
-                    <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
-                </div>
-            `;
+            itemsContainer.innerHTML = `<div class="invoice-item">${this.buildInvoiceItemRowHtml({ quantity: 1, persons: 1, hours: 0, price: '' })}</div>`;
         } else {
             itemsContainer.innerHTML = items.map(item => {
                 if (item.isHeader) {
@@ -597,18 +711,10 @@ const app = {
                         <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
                     </div>`;
                 }
-                const desc = (item.description || '').replace(/"/g, '&quot;');
-                return `<div class="invoice-item">
-                    <input type="text" placeholder="Code" class="item-product-code" value="${(item.productCode || '').replace(/"/g, '&quot;')}" title="Enter preset product code to fill description and price">
-                    <input type="text" placeholder="Description" class="item-description" value="${desc}" required>
-                    <input type="number" placeholder="Quantity" class="item-quantity" min="1" value="${item.quantity || 1}" required>
-                    <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="${item.hours || 0}" required>
-                    <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" value="${item.price || 0}" required>
-                    <div class="item-total">${this.formatCurrency((item.quantity || 0) * (item.hours || 0) * (item.price || 0))}</div>
-                    <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
-                </div>`;
+                return `<div class="invoice-item">${this.buildInvoiceItemRowHtml(item)}</div>`;
             }).join('');
         }
+        this.applyItemColumnVisibility();
         this.calculateTotals();
     },
 
@@ -616,16 +722,9 @@ const app = {
         const itemsContainer = document.getElementById('invoice-items');
         const newItem = document.createElement('div');
         newItem.className = 'invoice-item';
-        newItem.innerHTML = `
-            <input type="text" placeholder="Code" class="item-product-code" title="Enter preset product code to fill description and price">
-            <input type="text" placeholder="Description" class="item-description" required>
-            <input type="number" placeholder="Quantity" class="item-quantity" min="1" value="1" required>
-            <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="0" required>
-            <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" required>
-            <div class="item-total">${this.formatCurrency(0)}</div>
-            <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
-        `;
+        newItem.innerHTML = this.buildInvoiceItemRowHtml({ quantity: 1, persons: 1, hours: 0, price: '' });
         itemsContainer.appendChild(newItem);
+        this.applyItemColumnVisibility();
     },
 
     addInvoiceItemHeader() {
@@ -650,9 +749,10 @@ const app = {
         const descEl = row.querySelector('.item-description');
         const priceEl = row.querySelector('.item-price');
         const hoursEl = row.querySelector('.item-hours');
+        const cols = this.getItemColumnsFromForm();
         if (descEl) descEl.value = product.description || '';
         if (priceEl) priceEl.value = product.price != null ? product.price : '';
-        if (hoursEl) hoursEl.value = '1';
+        if (hoursEl && cols.hours && (!hoursEl.value || hoursEl.value === '0')) hoursEl.value = '1';
         this.updateItemTotal(row);
         this.calculateTotals();
     },
@@ -726,29 +826,36 @@ const app = {
     },
 
     updateItemTotal(itemElement) {
-        if (itemElement.classList.contains('invoice-item--header')) return;
+        if (!itemElement || itemElement.classList.contains('invoice-item--header')) return;
         const quantityEl = itemElement.querySelector('.item-quantity');
-        if (!quantityEl) return;
-        const quantity = parseFloat(quantityEl.value) || 0;
-        const hours = parseFloat(itemElement.querySelector('.item-hours').value) || 0;
-        const price = parseFloat(itemElement.querySelector('.item-price').value) || 0;
-        const total = quantity * hours * price;
+        const priceEl = itemElement.querySelector('.item-price');
+        if (!priceEl) return;
+        const cols = this.getItemColumnsFromForm();
+        const total = this.lineItemAmount({
+            quantity: quantityEl ? quantityEl.value : 0,
+            persons: (itemElement.querySelector('.item-persons') || {}).value,
+            hours: (itemElement.querySelector('.item-hours') || {}).value,
+            price: priceEl.value
+        }, cols);
         const totalEl = itemElement.querySelector('.item-total');
         if (totalEl) totalEl.textContent = this.formatCurrency(total);
     },
 
     calculateTotals() {
         const items = document.querySelectorAll('.invoice-item');
+        const cols = this.getItemColumnsFromForm();
         let subtotal = 0;
 
         items.forEach(item => {
             if (item.classList.contains('invoice-item--header')) return;
-            const qEl = item.querySelector('.item-quantity');
-            if (!qEl) return;
-            const quantity = parseFloat(qEl.value) || 0;
-            const hours = parseFloat(item.querySelector('.item-hours').value) || 0;
-            const price = parseFloat(item.querySelector('.item-price').value) || 0;
-            subtotal += quantity * hours * price;
+            const priceEl = item.querySelector('.item-price');
+            if (!priceEl) return;
+            subtotal += this.lineItemAmount({
+                quantity: (item.querySelector('.item-quantity') || {}).value,
+                persons: (item.querySelector('.item-persons') || {}).value,
+                hours: (item.querySelector('.item-hours') || {}).value,
+                price: priceEl.value
+            }, cols);
         });
 
         const taxRate = parseFloat(document.getElementById('tax-rate').value) || 0;
@@ -761,6 +868,7 @@ const app = {
     },
 
     saveInvoice() {
+        const itemColumns = this.getItemColumnsFromForm();
         const items = Array.from(document.querySelectorAll('.invoice-item')).map(item => {
             if (item.classList.contains('invoice-item--header')) {
                 const textEl = item.querySelector('.item-header-text');
@@ -771,6 +879,7 @@ const app = {
                 productCode: codeEl ? (codeEl.value || '').trim() : '',
                 description: (item.querySelector('.item-description') || {}).value || '',
                 quantity: parseFloat((item.querySelector('.item-quantity') || {}).value) || 0,
+                persons: parseFloat((item.querySelector('.item-persons') || {}).value) || 0,
                 hours: parseFloat((item.querySelector('.item-hours') || {}).value) || 0,
                 price: parseFloat((item.querySelector('.item-price') || {}).value) || 0
             };
@@ -778,7 +887,7 @@ const app = {
 
         const subtotal = items.reduce((sum, item) => {
             if (item.isHeader) return sum;
-            return sum + ((item.quantity || 0) * (item.hours || 0) * (item.price || 0));
+            return sum + this.lineItemAmount(item, itemColumns);
         }, 0);
         const taxRate = parseFloat(document.getElementById('tax-rate').value) || 0;
         const taxAmount = subtotal * (taxRate / 100);
@@ -804,6 +913,7 @@ const app = {
             clientAddress: document.getElementById('client-address').value,
             clientEmail: document.getElementById('client-email').value,
             clientPhone: document.getElementById('client-phone').value,
+            itemColumns: itemColumns,
             items: items,
             subtotal: subtotal,
             taxRate: taxRate,
@@ -1002,32 +1112,7 @@ const app = {
                     </div>
                 </div>
 
-                <table class="invoice-items-table-print">
-                    <thead>
-                        <tr>
-                            <th>Description</th>
-                            <th class="text-center">Quantity</th>
-                            <th class="text-center">Hours</th>
-                            <th class="text-center">Rate</th>
-                            <th class="text-right">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${invoice.items.map(item => {
-                            if (item.isHeader) {
-                                const text = (item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                                return `<tr><td colspan="5" class="item-header-cell">${text || '&nbsp;'}</td></tr>`;
-                            }
-                            return `<tr>
-                                <td>${(item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                                <td class="text-center">${item.quantity || ''}</td>
-                                <td class="text-center">${item.hours || 0}</td>
-                                <td class="text-center">${this.formatCurrency(item.price || 0)}</td>
-                                <td class="text-right">${this.formatCurrency((item.quantity || 0) * (item.hours || 0) * (item.price || 0))}</td>
-                            </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
+                ${this.buildInvoiceItemsTableHtml(invoice)}
 
                 <div class="invoice-summary-section">
                     <div class="summary-notes-box">
@@ -1647,32 +1732,7 @@ const app = {
                         </div>
                     </div>
 
-                    <table class="invoice-items-table-print">
-                        <thead>
-                            <tr>
-                                <th>Description</th>
-                                <th class="text-center">Quantity</th>
-                                <th class="text-center">Hours</th>
-                                <th class="text-center">Rate</th>
-                                <th class="text-right">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${invoice.items.map(item => {
-                                if (item.isHeader) {
-                                    const text = (item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                                    return `<tr><td colspan="5" class="item-header-cell">${text || '&nbsp;'}</td></tr>`;
-                                }
-                                return `<tr>
-                                    <td>${(item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                                    <td class="text-center">${item.quantity || ''}</td>
-                                    <td class="text-center">${item.hours || 0}</td>
-                                    <td class="text-center">${this.formatCurrency(item.price || 0)}</td>
-                                    <td class="text-right">${this.formatCurrency((item.quantity || 0) * (item.hours || 0) * (item.price || 0))}</td>
-                                </tr>`;
-                            }).join('')}
-                        </tbody>
-                    </table>
+                    ${this.buildInvoiceItemsTableHtml(invoice)}
 
                     <div class="invoice-summary-section">
                         <div class="summary-notes-box">

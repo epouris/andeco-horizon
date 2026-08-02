@@ -127,10 +127,42 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
+.invoice-item-columns-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+.invoice-item-columns-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-right: 0.25rem;
+}
+.invoice-col-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-primary);
+}
+.invoice-col-toggle input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
 .invoice-items-wrap { margin-bottom: 0.5rem; }
 .invoice-items-header {
   display: grid;
-  grid-template-columns: 0.5fr 3fr 0.35fr 0.35fr 0.7fr 1fr auto;
+  grid-template-columns: var(--item-grid, 0.5fr 3fr 0.35fr 0.35fr 0.7fr 1fr auto);
   gap: 0.75rem;
   align-items: center;
   padding: 0.5rem 1rem;
@@ -145,7 +177,7 @@
 
 .invoice-item {
   display: grid;
-  grid-template-columns: 0.5fr 3fr 0.35fr 0.35fr 0.7fr 1fr auto;
+  grid-template-columns: var(--item-grid, 0.5fr 3fr 0.35fr 0.35fr 0.7fr 1fr auto);
   gap: 0.75rem;
   align-items: center;
   margin-bottom: 1rem;
@@ -153,6 +185,13 @@
   background-color: var(--bg-color);
   border-radius: 0.5rem;
 }
+.invoice-items-wrap:not(.col-qty) .item-col-qty,
+.invoice-items-wrap:not(.col-qty) .item-quantity { display: none; }
+.invoice-items-wrap:not(.col-persons) .item-col-persons,
+.invoice-items-wrap:not(.col-persons) .item-persons { display: none; }
+.invoice-items-wrap:not(.col-hours) .item-col-hours,
+.invoice-items-wrap:not(.col-hours) .item-hours { display: none; }
+
 .item-product-code {
   padding: 0.4rem 0.5rem;
   border: 1px solid var(--border-color);
@@ -160,14 +199,8 @@
   font-size: 0.8rem;
   max-width: 100%;
 }
-.item-quantity {
-  padding: 0.4rem 0.35rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  font-size: 0.8rem;
-  max-width: 4rem;
-  width: 100%;
-}
+.item-quantity,
+.item-persons,
 .item-hours {
   padding: 0.4rem 0.35rem;
   border: 1px solid var(--border-color);

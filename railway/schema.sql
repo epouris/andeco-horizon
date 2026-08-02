@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   total NUMERIC NOT NULL DEFAULT 0,
   notes TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'draft',
+  item_columns JSONB NOT NULL DEFAULT '{"qty":true,"persons":false,"hours":true}'::jsonb,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ
 );
@@ -129,10 +130,16 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   product_code TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   quantity NUMERIC,
+  persons NUMERIC,
   hours NUMERIC,
   price NUMERIC
 );
 CREATE INDEX IF NOT EXISTS invoice_items_invoice_id_idx ON invoice_items (invoice_id);
+
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS item_columns JSONB NOT NULL DEFAULT '{"qty":true,"persons":false,"hours":true}'::jsonb;
+ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS persons NUMERIC;
 
 CREATE TABLE IF NOT EXISTS receipts (
   id TEXT PRIMARY KEY,
