@@ -392,6 +392,23 @@
   margin-top: auto;
 }
 
+.lms-library-thumb {
+  width: 52px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 0.4rem;
+  display: block;
+  background: #0b1f33;
+}
+
+.lms-library-thumb--empty {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
 .lms-cover-preview {
   margin-top: 0.65rem;
   border: 1px dashed var(--border, #d1d5db);

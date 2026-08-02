@@ -51,6 +51,7 @@
     mode: 'list', // list | editor | player | exam
     courseId: null,
     draftCourse: null, // in-memory unsaved training editor state
+    coverImageCleared: false,
     lessonId: null,
     enrollmentId: null,
     attemptId: null,
@@ -609,10 +610,14 @@
         '</select>' +
       '</div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr>' +
-        '<th>Title</th><th>Type</th><th>Audience</th><th>Price</th><th>Lessons</th><th>Exam</th><th>Status</th><th></th>' +
+        '<th>Photo</th><th>Title</th><th>Type</th><th>Audience</th><th>Price</th><th>Lessons</th><th>Exam</th><th>Status</th><th></th>' +
       '</tr></thead><tbody>' +
       (rows.length ? rows.map(function (c) {
+        var thumb = c.coverImage
+          ? '<img class="lms-library-thumb" src="' + escapeHtml(c.coverImage) + '" alt="">'
+          : '<span class="lms-library-thumb lms-library-thumb--empty">' + escapeHtml(String(c.title || 'C').charAt(0).toUpperCase()) + '</span>';
         return '<tr>' +
+          '<td>' + thumb + '</td>' +
           '<td><strong>' + escapeHtml(c.title) + '</strong><div class="lms-meta">' + escapeHtml(c.category) + '</div></td>' +
           '<td>' + escapeHtml(typeLabel(c.type)) + '</td>' +
           '<td>' + escapeHtml(audienceLabel(c.audience)) + '</td>' +
@@ -625,7 +630,7 @@
             '<button type="button" class="btn btn-ghost btn-sm" data-lms-duplicate="' + escapeHtml(c.id) + '">Copy</button>' +
             '<button type="button" class="btn btn-danger btn-sm" data-lms-delete="' + escapeHtml(c.id) + '">Delete</button>' +
           '</td></tr>';
-      }).join('') : '<tr><td colspan="8">No training items yet. Create your first course, induction, procedure, or exam.</td></tr>') +
+      }).join('') : '<tr><td colspan="9">No training items yet. Create your first course, induction, procedure, or exam.</td></tr>') +
       '</tbody></table></div>';
   }
 
@@ -654,6 +659,7 @@
     }
     viewState.draftCourse = course;
     viewState.courseId = course.id || viewState.courseId;
+    viewState.coverImageCleared = false;
 
     el.innerHTML =
       '<div class="page-header"><h2>' + (viewState.courseId ? 'Edit training' : 'New training') + '</h2>' +
@@ -676,14 +682,18 @@
           '<div class="form-group"><label>Price</label><input name="price" type="number" min="0" step="0.01" value="' + escapeHtml(String(course.price)) + '"></div>' +
           '<div class="form-group"><label>Currency</label><input name="currency" value="' + escapeHtml(course.currency) + '"></div>' +
           '<div class="form-group full-width"><label>Course photo URL</label>' +
-            '<input name="coverImage" id="lms-cover-image-input" value="' + escapeHtml(course.coverImage || '') + '" placeholder="https://… or upload below"></div>' +
+            '<input name="coverImage" id="lms-cover-image-input" value="' +
+              escapeHtml((course.coverImage && course.coverImage.indexOf('data:image') === 0) ? '' : (course.coverImage || '')) +
+            '" placeholder="https://… or upload below">' +
+            ((course.coverImage && course.coverImage.indexOf('data:image') === 0)
+              ? '<p class="lms-hint" id="lms-cover-upload-note">Uploaded photo is saved with this course. Upload again or paste a URL to replace it.</p>'
+              : '<p class="lms-hint hidden" id="lms-cover-upload-note">Uploaded photo is saved with this course.</p>') +
+          '</div>' +
           '<div class="form-group full-width"><label>Upload course photo</label>' +
             '<input type="file" id="lms-cover-image-file" accept="image/*">' +
-            '<div class="lms-cover-preview' + (course.coverImage ? ' has-image' : '') + '" id="lms-cover-preview">' +
-              (course.coverImage
-                ? '<img src="' + escapeHtml(course.coverImage) + '" alt="Course cover preview">'
-                : '<span>No photo yet</span>') +
-            '</div></div>' +
+            '<div class="lms-cover-preview' + (course.coverImage ? ' has-image' : '') + '" id="lms-cover-preview"></div>' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="lms-cover-image-clear" style="margin-top:0.5rem">Remove photo</button>' +
+          '</div>' +
           '<div class="form-group full-width"><label>Description</label><textarea name="description" rows="3">' + escapeHtml(course.description) + '</textarea></div>' +
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="published"' + (course.published ? ' checked' : '') + '> Published</label></div>' +
         '</div></div>' +
@@ -717,21 +727,57 @@
     bindCoverImageControls();
   }
 
+  function currentCoverImageValue() {
+    var urlInput = document.getElementById('lms-cover-image-input');
+    var typed = urlInput ? String(urlInput.value || '').trim() : '';
+    if (typed) return typed;
+    if (viewState.draftCourse && viewState.draftCourse.coverImage) return viewState.draftCourse.coverImage;
+    var existingId = document.getElementById('lms-library')
+      ? document.getElementById('lms-library').getAttribute('data-editing-course-id')
+      : '';
+    return ((findCourse(existingId) || {}).coverImage) || '';
+  }
+
+  function setCoverImageValue(src) {
+    if (!viewState.draftCourse) viewState.draftCourse = normalizeCourse({});
+    viewState.draftCourse.coverImage = src || '';
+    viewState.coverImageCleared = !src;
+    var urlInput = document.getElementById('lms-cover-image-input');
+    var note = document.getElementById('lms-cover-upload-note');
+    if (urlInput) {
+      if (src && src.indexOf('data:image') === 0) urlInput.value = '';
+      else urlInput.value = src || '';
+    }
+    if (note) {
+      note.classList.toggle('hidden', !(src && src.indexOf('data:image') === 0));
+      if (src && src.indexOf('data:image') === 0) {
+        note.textContent = 'Uploaded photo is saved with this course. Upload again or paste a URL to replace it.';
+      }
+    }
+  }
+
   function bindCoverImageControls() {
     var fileInput = document.getElementById('lms-cover-image-file');
     var urlInput = document.getElementById('lms-cover-image-input');
     var preview = document.getElementById('lms-cover-preview');
+    var clearBtn = document.getElementById('lms-cover-image-clear');
     if (!fileInput || !urlInput || !preview) return;
 
     function setPreview(src) {
+      preview.innerHTML = '';
       if (src) {
         preview.classList.add('has-image');
-        preview.innerHTML = '<img src="' + escapeHtml(src) + '" alt="Course cover preview">';
+        var img = document.createElement('img');
+        img.alt = 'Course cover preview';
+        img.src = src;
+        preview.appendChild(img);
       } else {
         preview.classList.remove('has-image');
         preview.innerHTML = '<span>No photo yet</span>';
       }
     }
+
+    setPreview(currentCoverImageValue());
 
     fileInput.onchange = function () {
       var file = fileInput.files && fileInput.files[0];
@@ -744,7 +790,7 @@
       var reader = new FileReader();
       reader.onload = function () {
         var dataUrl = String(reader.result || '');
-        urlInput.value = dataUrl;
+        setCoverImageValue(dataUrl);
         setPreview(dataUrl);
         syncDraftFromEditor();
       };
@@ -752,9 +798,20 @@
     };
 
     urlInput.oninput = function () {
-      setPreview(urlInput.value.trim());
+      var typed = urlInput.value.trim();
+      setCoverImageValue(typed);
+      setPreview(typed || currentCoverImageValue());
       syncDraftFromEditor();
     };
+
+    if (clearBtn) {
+      clearBtn.onclick = function () {
+        fileInput.value = '';
+        setCoverImageValue('');
+        setPreview('');
+        syncDraftFromEditor();
+      };
+    }
   }
 
   function renderLessonsEditor(lessons) {
@@ -854,11 +911,20 @@
       });
     });
     var existingId = document.getElementById('lms-library').getAttribute('data-editing-course-id') || '';
+    var typedCover = String(fd.get('coverImage') || '').trim();
+    var coverImage = typedCover;
+    if (!coverImage && !viewState.coverImageCleared && viewState.draftCourse && viewState.draftCourse.coverImage) {
+      coverImage = viewState.draftCourse.coverImage;
+    }
+    if (!coverImage && !viewState.coverImageCleared) {
+      coverImage = ((findCourse(existingId) || {}).coverImage) || '';
+    }
+    if (viewState.coverImageCleared && !typedCover) coverImage = '';
     return normalizeCourse({
       id: existingId || id('crs'),
       title: String(fd.get('title') || '').trim(),
       description: String(fd.get('description') || '').trim(),
-      coverImage: String(fd.get('coverImage') || '').trim(),
+      coverImage: coverImage,
       instructorName: String(fd.get('instructorName') || '').trim(),
       instructorTitle: String(fd.get('instructorTitle') || '').trim(),
       instructorBio: String(fd.get('instructorBio') || '').trim(),
@@ -1396,7 +1462,7 @@
         return '<article class="lms-public-card lms-public-card--media">' +
           '<div class="lms-public-card-photo' + (c.coverImage ? '' : ' is-placeholder') + '">' +
             (c.coverImage
-              ? '<img src="' + escapeHtml(c.coverImage) + '" alt="' + escapeHtml(c.title) + '" loading="lazy">'
+              ? '<img src="' + String(c.coverImage).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" alt="' + escapeHtml(c.title) + '" loading="lazy">'
               : '<span aria-hidden="true">' + escapeHtml(letter) + '</span>') +
           '</div>' +
           '<div class="lms-public-card-body">' +
