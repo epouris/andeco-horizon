@@ -116,6 +116,14 @@
   padding-top: 1rem;
 }
 
+.lp-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .lp-main {
   min-width: 0;
   padding: 1.25rem 1.5rem 2rem;

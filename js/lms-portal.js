@@ -171,6 +171,32 @@
     }
   }
 
+  function canReturnToCrm() {
+    var s = getSession();
+    if (!s) return false;
+    if (typeof window.isLmsOnlySession === 'function') return !window.isLmsOnlySession(s);
+    if (s.isAdmin === true) return true;
+    var mods = (s.allowedModules || []).filter(Boolean);
+    return !(mods.length === 1 && mods[0] === 'lms');
+  }
+
+  function returnToCrm(pageId) {
+    if (typeof window.returnToCrmFromLmsPortal === 'function') {
+      window.returnToCrmFromLmsPortal(pageId || 'home');
+      return;
+    }
+    // Fallback if app helper is unavailable
+    document.body.classList.remove('lms-portal-active');
+    var portal = document.getElementById('lms-portal-screen');
+    if (portal) portal.classList.add('hidden');
+    var app = document.getElementById('app-screen');
+    if (app) app.classList.remove('hidden');
+    try { sessionStorage.setItem('andeco_crm_route', pageId || 'home'); } catch (e) {}
+    if (!isFileProtocol()) {
+      try { window.location.hash = pageId || 'home'; } catch (e2) {}
+    }
+  }
+
   function renderShell() {
     var screen = document.getElementById('lms-portal-screen');
     if (!screen || screen.getAttribute('data-shell') === '1') {
@@ -180,6 +206,7 @@
     var u = currentUser();
     var role = portalRole();
     var settings = getData().settings || {};
+    var crmBack = canReturnToCrm();
     screen.innerHTML =
       '<div class="lp-app">' +
         '<aside class="lp-nav">' +
@@ -190,6 +217,10 @@
           '</div>' +
           '<nav class="lp-nav-links" id="lp-nav-links"></nav>' +
           '<div class="lp-nav-footer">' +
+            (crmBack
+              ? '<button type="button" class="lp-btn lp-btn-secondary" id="lp-back-crm">← Back to CRM</button>' +
+                '<button type="button" class="lp-btn lp-btn-ghost" id="lp-back-crm-lms">CRM Learning module</button>'
+              : '') +
             '<button type="button" class="lp-btn lp-btn-ghost" id="lp-signout">Sign out</button>' +
           '</div>' +
         '</aside>' +
@@ -199,10 +230,13 @@
               '<h2 id="lp-page-title">Dashboard</h2>' +
               '<p id="lp-page-sub">Welcome back</p>' +
             '</div>' +
-            '<div class="lp-userchip">' +
-              '<div><strong id="lp-user-name">' + escapeHtml(u ? u.name : 'User') + '</strong>' +
-              '<span id="lp-user-role">' + escapeHtml(role === 'instructor' ? 'Instructor workspace' : 'Learner workspace') + '</span></div>' +
-              '<div class="lp-avatar" aria-hidden="true">' + escapeHtml(initials(u ? u.name : 'U')) + '</div>' +
+            '<div class="lp-top-actions">' +
+              (crmBack ? '<button type="button" class="lp-btn lp-btn-secondary" id="lp-back-crm-top">← Back to CRM</button>' : '') +
+              '<div class="lp-userchip">' +
+                '<div><strong id="lp-user-name">' + escapeHtml(u ? u.name : 'User') + '</strong>' +
+                '<span id="lp-user-role">' + escapeHtml(role === 'instructor' ? 'Instructor workspace' : 'Learner workspace') + '</span></div>' +
+                '<div class="lp-avatar" aria-hidden="true">' + escapeHtml(initials(u ? u.name : 'U')) + '</div>' +
+              '</div>' +
             '</div>' +
           '</header>' +
           '<div id="lms-portal-root"></div>' +
@@ -605,6 +639,16 @@
         p.finally(closeToLogin);
       });
     }
+    function bindCrmBack(id, pageId) {
+      var btn = document.getElementById(id);
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        returnToCrm(pageId);
+      });
+    }
+    bindCrmBack('lp-back-crm', 'home');
+    bindCrmBack('lp-back-crm-top', 'home');
+    bindCrmBack('lp-back-crm-lms', 'lms');
   }
 
   function onClick(e) {
@@ -782,6 +826,8 @@
     open: open,
     render: render,
     closeToLogin: closeToLogin,
+    returnToCrm: returnToCrm,
+    canReturnToCrm: canReturnToCrm,
     portalRole: portalRole,
     isOpen: function () {
       var el = document.getElementById('lms-portal-screen');

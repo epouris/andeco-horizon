@@ -104,6 +104,34 @@
     return false;
   }
 
+  /** Leave Learning Portal and restore CRM shell (admins / multi-module users). */
+  function returnToCrmFromLmsPortal(pageId) {
+    var session = getSession();
+    if (!session) {
+      showScreen('login-screen');
+      return;
+    }
+    if (isLmsOnlySession(session)) {
+      // LMS-only accounts stay in the portal.
+      openLmsPortal();
+      return;
+    }
+    pageId = (pageId || 'home').toLowerCase();
+    document.body.classList.remove('lms-portal-active');
+    var portal = document.getElementById('lms-portal-screen');
+    if (portal) portal.classList.add('hidden');
+    try { sessionStorage.setItem(ROUTE_STORAGE_KEY, pageId); } catch (e) {}
+    if (!isFileProtocol()) {
+      try { window.location.hash = pageId; } catch (e2) {}
+    }
+    showScreen('app-screen');
+    refreshHeaderUser(session);
+    applyVisibility(session);
+    route(pageId);
+  }
+  window.returnToCrmFromLmsPortal = returnToCrmFromLmsPortal;
+  window.isLmsOnlySession = isLmsOnlySession;
+
   var MODULE_IDS = MODULES.map(function (m) { return m.id; });
 
   var MODULE_SECTIONS = {
@@ -1052,12 +1080,14 @@
     if (!session) return;
 
     // LMS-only users never enter the CRM shell — go straight to Learning Portal.
+    // Admins/multi-module users only open the portal when the route is explicitly lms-portal.
     var routeId = getRoutePageId();
-    if (isLmsOnlySession(session) || routeId === 'lms-portal') {
-      if (isLmsOnlySession(session) || canAccessModule(session, 'lms') || session.isAdmin) {
-        document.body.classList.remove('home-view');
-        if (openLmsPortal()) return;
-      }
+    if (isLmsOnlySession(session)) {
+      document.body.classList.remove('home-view');
+      if (openLmsPortal()) return;
+    } else if (routeId === 'lms-portal' && (canAccessModule(session, 'lms') || session.isAdmin)) {
+      document.body.classList.remove('home-view');
+      if (openLmsPortal()) return;
     }
 
     showScreen('app-screen');
