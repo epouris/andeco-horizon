@@ -217,8 +217,19 @@
         }) : []
       },
       createdAt: c.createdAt || new Date().toISOString(),
-      updatedAt: c.updatedAt || c.createdAt || new Date().toISOString()
+      updatedAt: c.updatedAt || c.createdAt || new Date().toISOString(),
+      ownerId: c.ownerId || c.createdBy || '',
+      createdBy: c.createdBy || c.ownerId || '',
+      createdByName: c.createdByName || ''
     };
+  }
+
+  function isLmsInstructorUser() {
+    var u = currentUser();
+    if (!u) return false;
+    if (isAdmin()) return true;
+    var profile = getLearnerProfile(u.id);
+    return !!(profile && profile.role === 'instructor');
   }
 
   function getData() {
@@ -642,8 +653,8 @@
     options = options || {};
     var el = document.getElementById('lms-library');
     if (!el) return;
-    if (!isAdmin()) {
-      el.innerHTML = emptyState('Only administrators can manage the training library.');
+    if (!isAdmin() && !isLmsInstructorUser()) {
+      el.innerHTML = emptyState('Only instructors and administrators can manage the training library.');
       return;
     }
     if (viewState.mode === 'editor' && viewState.courseId !== undefined) {
@@ -1011,7 +1022,10 @@
         questions: questions
       },
       updatedAt: new Date().toISOString(),
-      createdAt: (findCourse(existingId) || {}).createdAt || new Date().toISOString()
+      createdAt: (findCourse(existingId) || {}).createdAt || new Date().toISOString(),
+      ownerId: (findCourse(existingId) || {}).ownerId || (currentUser() || {}).id || '',
+      createdBy: (findCourse(existingId) || {}).createdBy || (currentUser() || {}).id || '',
+      createdByName: (findCourse(existingId) || {}).createdByName || (currentUser() || {}).name || ''
     });
   }
 

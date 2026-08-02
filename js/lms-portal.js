@@ -20,6 +20,33 @@
   };
   var examTimerHandle = null;
   var examSubmitLock = false;
+  var courseEditor = {
+    open: false,
+    courseId: null,
+    draft: null,
+    coverCleared: false
+  };
+
+  var COURSE_TYPES = {
+    course: 'Training course',
+    induction: 'Induction',
+    procedure: 'Procedure training',
+    exam: 'Exam only'
+  };
+
+  var COURSE_AUDIENCES = {
+    employee: 'Employees only',
+    public: 'Public (for sale)',
+    applicant: 'Hiring applicants',
+    all: 'Employees + public'
+  };
+
+  var LESSON_CONTENT_TYPES = {
+    text: 'Text / procedure',
+    video: 'Video URL',
+    link: 'Web link',
+    document: 'Document link'
+  };
 
   function escapeHtml(s) {
     if (s == null) return '';
@@ -575,7 +602,8 @@
       if (isInstructor()) renderInstructorHome(root);
       else renderLearnerHome(root);
     } else if (view === 'courses') {
-      if (isInstructor()) renderInstructorCourses(root);
+      if (isInstructor() && courseEditor.open) renderInstructorCourseEditor(root);
+      else if (isInstructor()) renderInstructorCourses(root);
       else renderLearnerCourses(root);
     } else if (view === 'catalog') renderCatalog(root);
     else if (view === 'discussions') renderDiscussions(root);
@@ -636,7 +664,8 @@
         '<h3>Teach with clarity</h3>' +
         '<p>Monitor progress, communicate updates, and keep your training library moving.</p>' +
         '<div class="lp-hero-actions">' +
-          '<button type="button" class="lp-btn lp-btn-primary" data-lp-view="courses">Review courses</button>' +
+          '<button type="button" class="lp-btn lp-btn-primary" data-lp-create-course>Create course</button>' +
+          '<button type="button" class="lp-btn lp-btn-secondary" data-lp-view="courses">Review courses</button>' +
           '<button type="button" class="lp-btn lp-btn-secondary" data-lp-view="discussions">Discussions</button>' +
           '<button type="button" class="lp-btn lp-btn-secondary" data-lp-view="reports">Open reports</button>' +
         '</div>' +
@@ -737,25 +766,392 @@
       : '<div class="lp-card"><p class="lp-empty">No published employee courses yet.</p></div>';
   }
 
+  function blankCourseDraft() {
+    var u = currentUser();
+    return {
+      id: newId('crs'),
+      title: '',
+      description: '',
+      coverImage: '',
+      instructorName: u ? u.name : '',
+      instructorTitle: 'Instructor',
+      instructorBio: '',
+      type: 'course',
+      category: 'General',
+      audience: 'employee',
+      price: 0,
+      currency: 'EUR',
+      published: false,
+      durationMinutes: 0,
+      passScore: 70,
+      lessons: [{
+        id: newId('lsn'),
+        title: 'Introduction',
+        content: '',
+        contentType: 'text',
+        mediaUrl: '',
+        order: 0,
+        durationMinutes: 0
+      }],
+      exam: {
+        enabled: false,
+        timeLimitMinutes: 0,
+        passScore: 70,
+        shuffle: false,
+        questions: []
+      },
+      ownerId: u ? u.id : '',
+      createdBy: u ? u.id : '',
+      createdByName: u ? u.name : '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function openCourseEditor(courseId) {
+    if (!isInstructor()) return;
+    courseEditor.open = true;
+    courseEditor.coverCleared = false;
+    courseEditor.courseId = courseId || null;
+    if (courseId) {
+      var existing = findCourse(courseId);
+      courseEditor.draft = existing
+        ? JSON.parse(JSON.stringify(existing))
+        : blankCourseDraft();
+      if (!existing) courseEditor.courseId = courseEditor.draft.id;
+    } else {
+      courseEditor.draft = blankCourseDraft();
+      courseEditor.courseId = courseEditor.draft.id;
+    }
+    view = 'courses';
+    playerState.mode = 'list';
+    render();
+  }
+
+  function closeCourseEditor() {
+    courseEditor.open = false;
+    courseEditor.courseId = null;
+    courseEditor.draft = null;
+    courseEditor.coverCleared = false;
+  }
+
+  function canManageCourse(course) {
+    if (!isInstructor() || !course) return false;
+    var u = currentUser();
+    var session = getSession();
+    if (session && session.isAdmin) return true;
+    if (!course.ownerId && !course.createdBy) return true;
+    return !!(u && (course.ownerId === u.id || course.createdBy === u.id));
+  }
+
+  function syncPortalCourseDraft() {
+    var form = document.getElementById('lp-course-form');
+    if (!form || !courseEditor.draft) return courseEditor.draft;
+    var fd = new FormData(form);
+    var draft = courseEditor.draft;
+    draft.title = String(fd.get('title') || '').trim();
+    draft.description = String(fd.get('description') || '').trim();
+    draft.type = String(fd.get('type') || 'course');
+    draft.audience = String(fd.get('audience') || 'employee');
+    draft.category = String(fd.get('category') || 'General').trim() || 'General';
+    draft.durationMinutes = Number(fd.get('durationMinutes')) || 0;
+    draft.price = Number(fd.get('price')) || 0;
+    draft.currency = String(fd.get('currency') || 'EUR').trim() || 'EUR';
+    draft.published = !!form.querySelector('[name="published"]').checked;
+    draft.instructorName = String(fd.get('instructorName') || '').trim();
+    draft.instructorTitle = String(fd.get('instructorTitle') || '').trim();
+    draft.instructorBio = String(fd.get('instructorBio') || '').trim();
+    var typedCover = String(fd.get('coverImage') || '').trim();
+    if (typedCover) draft.coverImage = typedCover;
+    else if (courseEditor.coverCleared) draft.coverImage = '';
+    draft.exam = draft.exam || {};
+    draft.exam.enabled = !!form.querySelector('[name="examEnabled"]').checked || draft.type === 'exam';
+    draft.exam.passScore = Number(fd.get('passScore')) || 70;
+    draft.passScore = draft.exam.passScore;
+    draft.exam.timeLimitMinutes = Number(fd.get('timeLimitMinutes')) || 0;
+    draft.exam.shuffle = !!form.querySelector('[name="shuffle"]').checked;
+
+    draft.lessons = [];
+    form.querySelectorAll('[data-lp-lesson-block]').forEach(function (block, i) {
+      draft.lessons.push({
+        id: block.getAttribute('data-lesson-id') || newId('lsn'),
+        title: (block.querySelector('[data-lesson-field="title"]') || {}).value || ('Lesson ' + (i + 1)),
+        content: (block.querySelector('[data-lesson-field="content"]') || {}).value || '',
+        contentType: (block.querySelector('[data-lesson-field="contentType"]') || {}).value || 'text',
+        mediaUrl: (block.querySelector('[data-lesson-field="mediaUrl"]') || {}).value || '',
+        durationMinutes: Number((block.querySelector('[data-lesson-field="durationMinutes"]') || {}).value) || 0,
+        order: i
+      });
+    });
+
+    draft.exam.questions = [];
+    form.querySelectorAll('[data-lp-question-block]').forEach(function (block) {
+      var options = [];
+      var correct = [];
+      block.querySelectorAll('[data-q-option]').forEach(function (input) {
+        var oi = input.getAttribute('data-q-option');
+        var oid = (block.querySelector('[data-q-option-id="' + oi + '"]') || {}).value || newId('opt');
+        options.push({ id: oid, text: input.value || '' });
+        var cb = block.querySelector('[data-q-correct="' + oi + '"]');
+        if (cb && cb.checked) correct.push(oid);
+      });
+      draft.exam.questions.push({
+        id: block.getAttribute('data-question-id') || newId('q'),
+        prompt: (block.querySelector('[data-q-field="prompt"]') || {}).value || '',
+        type: (block.querySelector('[data-q-field="type"]') || {}).value || 'single',
+        points: Number((block.querySelector('[data-q-field="points"]') || {}).value) || 1,
+        options: options,
+        correctOptionIds: correct
+      });
+    });
+
+    courseEditor.draft = draft;
+    return draft;
+  }
+
+  function savePortalCourse() {
+    if (!isInstructor()) return;
+    var draft = syncPortalCourseDraft();
+    if (!draft || !draft.title) {
+      alert('Please enter a course title before saving.');
+      return;
+    }
+    var existing = findCourse(draft.id);
+    if (existing && !canManageCourse(existing)) {
+      alert('You can only edit courses you created.');
+      return;
+    }
+    var u = currentUser();
+    draft.updatedAt = new Date().toISOString();
+    if (!existing) {
+      draft.createdAt = new Date().toISOString();
+      draft.ownerId = u ? u.id : draft.ownerId;
+      draft.createdBy = u ? u.id : draft.createdBy;
+      draft.createdByName = u ? u.name : draft.createdByName;
+    } else {
+      draft.ownerId = existing.ownerId || draft.ownerId || (u ? u.id : '');
+      draft.createdBy = existing.createdBy || draft.createdBy || (u ? u.id : '');
+      draft.createdByName = existing.createdByName || draft.createdByName || (u ? u.name : '');
+      draft.createdAt = existing.createdAt || draft.createdAt;
+    }
+    if (window.LmsModule && typeof window.LmsModule.normalizeData === 'function') {
+      // Normalize shape against the shared LMS course schema.
+      draft = window.LmsModule.normalizeData({ courses: [draft] }).courses[0] || draft;
+    }
+    var data = getData();
+    var idx = data.courses.findIndex(function (c) { return c.id === draft.id; });
+    if (idx >= 0) data.courses[idx] = draft;
+    else data.courses.push(draft);
+    saveData(data);
+    closeCourseEditor();
+    view = 'courses';
+    alert(draft.published ? 'Course saved and published.' : 'Course saved as draft.');
+    render();
+  }
+
   function renderInstructorCourses(root) {
     var data = getData();
-    setTitle('Courses', 'Library overview for instructors');
+    var u = currentUser();
+    setTitle('Courses', 'Create and manage training for your learners');
     root.innerHTML =
-      '<div class="lp-card"><div style="overflow:auto"><table class="lp-table"><thead><tr>' +
-        '<th>Title</th><th>Type</th><th>Audience</th><th>Lessons</th><th>Exam</th><th>Status</th><th>Enrolled</th><th></th>' +
-      '</tr></thead><tbody>' +
-      (data.courses.length ? data.courses.map(function (c) {
-        var count = data.enrollments.filter(function (e) { return e.courseId === c.id; }).length;
-        return '<tr><td><strong>' + escapeHtml(c.title) + '</strong></td>' +
-          '<td>' + escapeHtml(c.type) + '</td><td>' + escapeHtml(c.audience) + '</td>' +
-          '<td>' + (c.lessons || []).length + '</td>' +
-          '<td>' + (c.exam && c.exam.enabled ? (c.exam.questions || []).length + ' Q' : '—') + '</td>' +
-          '<td>' + badge(c.published ? 'published' : 'draft') + '</td>' +
-          '<td>' + count + '</td>' +
-          '<td><button type="button" class="lp-btn lp-btn-secondary" data-lp-enroll="' + escapeHtml(c.id) + '">Open</button></td></tr>';
-      }).join('') : '<tr><td colspan="8">No courses yet. Ask an administrator to create training in the CRM LMS library.</td></tr>') +
-      '</tbody></table></div>' +
-      '<p class="lp-empty" style="margin-top:0.8rem">Course authoring stays in the admin CRM Learning module. Open a course page to review content, progress context, and discussion.</p></div>';
+      '<div class="lp-card">' +
+        '<div class="lp-section-head">' +
+          '<div>' +
+            '<h3>Training library</h3>' +
+            '<p class="lp-muted-line">Create courses, add lessons and exams, then publish them for learners.</p>' +
+          '</div>' +
+          '<button type="button" class="lp-btn lp-btn-primary" data-lp-create-course>+ Create course</button>' +
+        '</div>' +
+        '<div style="overflow:auto"><table class="lp-table"><thead><tr>' +
+          '<th>Title</th><th>Type</th><th>Audience</th><th>Lessons</th><th>Exam</th><th>Status</th><th>Owner</th><th>Enrolled</th><th></th>' +
+        '</tr></thead><tbody>' +
+        (data.courses.length ? data.courses.map(function (c) {
+          var count = data.enrollments.filter(function (e) { return e.courseId === c.id; }).length;
+          var mine = u && (c.ownerId === u.id || c.createdBy === u.id);
+          return '<tr><td><strong>' + escapeHtml(c.title) + '</strong>' +
+            (c.category ? '<div class="lp-muted-line">' + escapeHtml(c.category) + '</div>' : '') +
+            '</td>' +
+            '<td>' + escapeHtml(COURSE_TYPES[c.type] || c.type) + '</td>' +
+            '<td>' + escapeHtml(COURSE_AUDIENCES[c.audience] || c.audience) + '</td>' +
+            '<td>' + (c.lessons || []).length + '</td>' +
+            '<td>' + (c.exam && c.exam.enabled ? (c.exam.questions || []).length + ' Q' : '—') + '</td>' +
+            '<td>' + badge(c.published ? 'published' : 'draft') + '</td>' +
+            '<td>' + escapeHtml(c.createdByName || c.instructorName || (mine ? 'You' : '—')) + '</td>' +
+            '<td>' + count + '</td>' +
+            '<td class="lp-row-actions">' +
+              (canManageCourse(c)
+                ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-edit-course="' + escapeHtml(c.id) + '">Edit</button>'
+                : '') +
+              '<button type="button" class="lp-btn lp-btn-ghost" data-lp-enroll="' + escapeHtml(c.id) + '">Open</button>' +
+              (canManageCourse(c)
+                ? '<button type="button" class="lp-btn lp-btn-danger" data-lp-delete-course="' + escapeHtml(c.id) + '">Delete</button>'
+                : '') +
+            '</td></tr>';
+        }).join('') : '<tr><td colspan="9">No courses yet. Create your first course to get started.</td></tr>') +
+        '</tbody></table></div></div>';
+  }
+
+  function renderLessonEditorBlocks(lessons) {
+    return (lessons || []).map(function (l, i) {
+      return '<div class="lp-editor-block" data-lp-lesson-block data-lesson-id="' + escapeHtml(l.id) + '">' +
+        '<div class="lp-editor-block-head"><strong>Lesson ' + (i + 1) + '</strong>' +
+          '<button type="button" class="lp-btn lp-btn-ghost" data-lp-remove-lesson="' + i + '">Remove</button></div>' +
+        '<div class="lp-form-grid">' +
+          '<label>Title<input data-lesson-field="title" value="' + escapeHtml(l.title || '') + '" required></label>' +
+          '<label>Duration (min)<input data-lesson-field="durationMinutes" type="number" min="0" value="' + escapeHtml(String(l.durationMinutes || 0)) + '"></label>' +
+          '<label>Content type<select data-lesson-field="contentType">' +
+            Object.keys(LESSON_CONTENT_TYPES).map(function (k) {
+              return '<option value="' + k + '"' + (l.contentType === k ? ' selected' : '') + '>' + escapeHtml(LESSON_CONTENT_TYPES[k]) + '</option>';
+            }).join('') +
+          '</select></label>' +
+          '<label>Media / link URL<input data-lesson-field="mediaUrl" value="' + escapeHtml(l.mediaUrl || '') + '" placeholder="https://…"></label>' +
+          '<label class="lp-span-2">Lesson content<textarea data-lesson-field="content" rows="4">' + escapeHtml(l.content || '') + '</textarea></label>' +
+        '</div></div>';
+    }).join('') || '<p class="lp-empty">No lessons yet. Add your first lesson.</p>';
+  }
+
+  function renderQuestionEditorBlocks(questions) {
+    return (questions || []).map(function (q, i) {
+      var options = q.options && q.options.length
+        ? q.options
+        : [{ id: newId('opt'), text: 'Option A' }, { id: newId('opt'), text: 'Option B' }];
+      return '<div class="lp-editor-block" data-lp-question-block data-question-id="' + escapeHtml(q.id) + '">' +
+        '<div class="lp-editor-block-head"><strong>Question ' + (i + 1) + '</strong>' +
+          '<button type="button" class="lp-btn lp-btn-ghost" data-lp-remove-question="' + i + '">Remove</button></div>' +
+        '<div class="lp-form-grid">' +
+          '<label class="lp-span-2">Prompt<textarea data-q-field="prompt" rows="2">' + escapeHtml(q.prompt || '') + '</textarea></label>' +
+          '<label>Type<select data-q-field="type">' +
+            '<option value="single"' + (q.type !== 'multi' ? ' selected' : '') + '>Single answer</option>' +
+            '<option value="multi"' + (q.type === 'multi' ? ' selected' : '') + '>Multiple answers</option>' +
+          '</select></label>' +
+          '<label>Points<input data-q-field="points" type="number" min="1" value="' + escapeHtml(String(q.points || 1)) + '"></label>' +
+        '</div>' +
+        '<div class="lp-options-editor">' + options.map(function (o, oi) {
+          var checked = (q.correctOptionIds || []).indexOf(o.id) !== -1;
+          return '<label class="lp-option-edit">' +
+            '<input type="checkbox" data-q-correct="' + oi + '"' + (checked ? ' checked' : '') + '> Correct' +
+            '<input type="text" data-q-option="' + oi + '" value="' + escapeHtml(o.text || '') + '" placeholder="Option text">' +
+            '<input type="hidden" data-q-option-id="' + oi + '" value="' + escapeHtml(o.id) + '">' +
+          '</label>';
+        }).join('') + '</div>' +
+        '<div class="lp-form-actions">' +
+          '<button type="button" class="lp-btn lp-btn-ghost" data-lp-add-option="' + i + '">+ Option</button>' +
+        '</div></div>';
+    }).join('') || '<p class="lp-empty">No exam questions yet. Add questions after enabling the exam.</p>';
+  }
+
+  function renderInstructorCourseEditor(root) {
+    var course = courseEditor.draft || blankCourseDraft();
+    courseEditor.draft = course;
+    var isNew = !findCourse(course.id);
+    setTitle(isNew ? 'Create course' : 'Edit course', isNew ? 'Build a new training course' : course.title || 'Update training');
+    var coverPreview = course.coverImage
+      ? '<div class="lp-cover-preview has-image"><img src="' + escapeHtml(course.coverImage) + '" alt="Course cover"></div>'
+      : '<div class="lp-cover-preview"><span>No photo yet</span></div>';
+
+    root.innerHTML =
+      '<div class="lp-card lp-course-editor">' +
+        '<div class="lp-section-head">' +
+          '<div><h3>' + (isNew ? 'New course' : 'Edit course') + '</h3>' +
+            '<p class="lp-muted-line">Add the basics, lessons, and optional exam. Publish when ready for learners.</p></div>' +
+          '<button type="button" class="lp-btn lp-btn-ghost" data-lp-cancel-course-editor>← Back to courses</button>' +
+        '</div>' +
+        '<form id="lp-course-form" class="lp-form">' +
+          '<section class="lp-editor-section"><h4>Basics</h4><div class="lp-form-grid">' +
+            '<label class="lp-span-2">Title<input name="title" required value="' + escapeHtml(course.title || '') + '" placeholder="e.g. Communication skills"></label>' +
+            '<label>Type<select name="type">' +
+              Object.keys(COURSE_TYPES).map(function (k) {
+                return '<option value="' + k + '"' + (course.type === k ? ' selected' : '') + '>' + escapeHtml(COURSE_TYPES[k]) + '</option>';
+              }).join('') +
+            '</select></label>' +
+            '<label>Audience<select name="audience">' +
+              Object.keys(COURSE_AUDIENCES).map(function (k) {
+                return '<option value="' + k + '"' + (course.audience === k ? ' selected' : '') + '>' + escapeHtml(COURSE_AUDIENCES[k]) + '</option>';
+              }).join('') +
+            '</select></label>' +
+            '<label>Category<input name="category" value="' + escapeHtml(course.category || 'General') + '"></label>' +
+            '<label>Duration (minutes)<input name="durationMinutes" type="number" min="0" value="' + escapeHtml(String(course.durationMinutes || 0)) + '"></label>' +
+            '<label>Price<input name="price" type="number" min="0" step="0.01" value="' + escapeHtml(String(course.price || 0)) + '"></label>' +
+            '<label>Currency<input name="currency" value="' + escapeHtml(course.currency || 'EUR') + '"></label>' +
+            '<label class="lp-span-2">Description<textarea name="description" rows="3" placeholder="What will learners gain from this course?">' + escapeHtml(course.description || '') + '</textarea></label>' +
+            '<label class="lp-span-2">Course photo URL<input name="coverImage" id="lp-cover-image-input" value="' +
+              escapeHtml((course.coverImage && course.coverImage.indexOf('data:image') === 0) ? '' : (course.coverImage || '')) +
+              '" placeholder="https://… or upload below"></label>' +
+            '<div class="lp-span-2">' +
+              '<label>Upload course photo<input type="file" id="lp-cover-image-file" accept="image/*"></label>' +
+              coverPreview +
+              '<button type="button" class="lp-btn lp-btn-ghost" data-lp-clear-cover style="margin-top:0.5rem">Remove photo</button>' +
+            '</div>' +
+            '<label class="lp-check"><input type="checkbox" name="published"' + (course.published ? ' checked' : '') + '> Published (visible to learners)</label>' +
+          '</div></section>' +
+          '<section class="lp-editor-section"><h4>Instructor</h4><div class="lp-form-grid">' +
+            '<label>Instructor name<input name="instructorName" value="' + escapeHtml(course.instructorName || '') + '"></label>' +
+            '<label>Instructor title<input name="instructorTitle" value="' + escapeHtml(course.instructorTitle || '') + '" placeholder="e.g. Senior Trainer"></label>' +
+            '<label class="lp-span-2">Instructor bio<textarea name="instructorBio" rows="2">' + escapeHtml(course.instructorBio || '') + '</textarea></label>' +
+          '</div></section>' +
+          '<section class="lp-editor-section"><h4>Lessons</h4>' +
+            '<div id="lp-lessons-editor">' + renderLessonEditorBlocks(course.lessons || []) + '</div>' +
+            '<button type="button" class="lp-btn lp-btn-secondary" data-lp-add-lesson>+ Add lesson</button>' +
+          '</section>' +
+          '<section class="lp-editor-section"><h4>Exam</h4><div class="lp-form-grid">' +
+            '<label class="lp-check"><input type="checkbox" name="examEnabled"' + (course.exam && course.exam.enabled ? ' checked' : '') + '> Enable exam</label>' +
+            '<label>Pass score (%)<input name="passScore" type="number" min="0" max="100" value="' + escapeHtml(String((course.exam && course.exam.passScore) || course.passScore || 70)) + '"></label>' +
+            '<label>Time limit (minutes)<input name="timeLimitMinutes" type="number" min="0" value="' + escapeHtml(String((course.exam && course.exam.timeLimitMinutes) || 0)) + '"></label>' +
+            '<label class="lp-check"><input type="checkbox" name="shuffle"' + (course.exam && course.exam.shuffle ? ' checked' : '') + '> Shuffle questions</label>' +
+          '</div>' +
+            '<div id="lp-questions-editor">' + renderQuestionEditorBlocks((course.exam && course.exam.questions) || []) + '</div>' +
+            '<button type="button" class="lp-btn lp-btn-secondary" data-lp-add-question>+ Add question</button>' +
+          '</section>' +
+          '<div class="lp-form-actions">' +
+            '<button type="submit" class="lp-btn lp-btn-primary">Save course</button>' +
+            '<button type="button" class="lp-btn lp-btn-ghost" data-lp-cancel-course-editor>Cancel</button>' +
+          '</div>' +
+        '</form></div>';
+
+    bindPortalCoverControls();
+  }
+
+  function bindPortalCoverControls() {
+    var fileInput = document.getElementById('lp-cover-image-file');
+    var urlInput = document.getElementById('lp-cover-image-input');
+    var preview = document.querySelector('.lp-cover-preview');
+    if (!fileInput || !urlInput || !preview || !courseEditor.draft) return;
+
+    function setPreview(src) {
+      if (src) {
+        preview.className = 'lp-cover-preview has-image';
+        preview.innerHTML = '<img src="' + src + '" alt="Course cover">';
+      } else {
+        preview.className = 'lp-cover-preview';
+        preview.innerHTML = '<span>No photo yet</span>';
+      }
+    }
+
+    fileInput.onchange = function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      if (file.size > 2.5 * 1024 * 1024) {
+        alert('Please choose an image under 2.5 MB.');
+        fileInput.value = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = String(reader.result || '');
+        courseEditor.draft.coverImage = dataUrl;
+        courseEditor.coverCleared = false;
+        urlInput.value = '';
+        setPreview(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    };
+
+    urlInput.oninput = function () {
+      var typed = urlInput.value.trim();
+      courseEditor.draft.coverImage = typed;
+      courseEditor.coverCleared = !typed;
+      setPreview(typed);
+    };
   }
 
   function renderInstructorLearners(root) {
@@ -1747,13 +2143,115 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
       playerState.mode = 'list';
       playerState.panel = 'overview';
+      if (view !== 'courses') closeCourseEditor();
       if (view === 'discussions') discussionState.composingPrivate = false;
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-create-course')) {
+      openCourseEditor(null);
+      return;
+    }
+    if (t.hasAttribute('data-lp-edit-course')) {
+      openCourseEditor(t.getAttribute('data-lp-edit-course'));
+      return;
+    }
+    if (t.hasAttribute('data-lp-delete-course')) {
+      var delId = t.getAttribute('data-lp-delete-course');
+      var delCourse = findCourse(delId);
+      if (!delCourse || !canManageCourse(delCourse)) {
+        alert('You can only delete courses you created.');
+        return;
+      }
+      if (!window.confirm('Delete “' + delCourse.title + '”? This cannot be undone.')) return;
+      var dataDel = getData();
+      dataDel.courses = dataDel.courses.filter(function (c) { return c.id !== delId; });
+      saveData(dataDel);
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-cancel-course-editor')) {
+      closeCourseEditor();
+      view = 'courses';
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-clear-cover')) {
+      if (!courseEditor.draft) return;
+      courseEditor.draft.coverImage = '';
+      courseEditor.coverCleared = true;
+      var coverInput = document.getElementById('lp-cover-image-input');
+      if (coverInput) coverInput.value = '';
+      var preview = document.querySelector('.lp-cover-preview');
+      if (preview) {
+        preview.className = 'lp-cover-preview';
+        preview.innerHTML = '<span>No photo yet</span>';
+      }
+      return;
+    }
+    if (t.hasAttribute('data-lp-add-lesson')) {
+      syncPortalCourseDraft();
+      courseEditor.draft.lessons = courseEditor.draft.lessons || [];
+      courseEditor.draft.lessons.push({
+        id: newId('lsn'),
+        title: 'New lesson',
+        content: '',
+        contentType: 'text',
+        mediaUrl: '',
+        order: courseEditor.draft.lessons.length,
+        durationMinutes: 0
+      });
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-remove-lesson')) {
+      syncPortalCourseDraft();
+      var li = Number(t.getAttribute('data-lp-remove-lesson'));
+      if (courseEditor.draft && courseEditor.draft.lessons) {
+        courseEditor.draft.lessons.splice(li, 1);
+      }
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-add-question')) {
+      syncPortalCourseDraft();
+      courseEditor.draft.exam = courseEditor.draft.exam || { enabled: true, questions: [], passScore: 70, timeLimitMinutes: 0, shuffle: false };
+      courseEditor.draft.exam.enabled = true;
+      courseEditor.draft.exam.questions = courseEditor.draft.exam.questions || [];
+      courseEditor.draft.exam.questions.push({
+        id: newId('q'),
+        prompt: '',
+        type: 'single',
+        points: 1,
+        options: [{ id: newId('opt'), text: 'Option A' }, { id: newId('opt'), text: 'Option B' }],
+        correctOptionIds: []
+      });
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-remove-question')) {
+      syncPortalCourseDraft();
+      var qi = Number(t.getAttribute('data-lp-remove-question'));
+      if (courseEditor.draft && courseEditor.draft.exam && courseEditor.draft.exam.questions) {
+        courseEditor.draft.exam.questions.splice(qi, 1);
+      }
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-add-option')) {
+      syncPortalCourseDraft();
+      var qIdx = Number(t.getAttribute('data-lp-add-option'));
+      var qList = courseEditor.draft && courseEditor.draft.exam && courseEditor.draft.exam.questions;
+      if (qList && qList[qIdx]) {
+        qList[qIdx].options = qList[qIdx].options || [];
+        qList[qIdx].options.push({ id: newId('opt'), text: '' });
+      }
       render();
       return;
     }
@@ -1939,6 +2437,11 @@
   }
 
   function onSubmit(e) {
+    if (e.target && e.target.id === 'lp-course-form') {
+      e.preventDefault();
+      savePortalCourse();
+      return;
+    }
     if (e.target && e.target.id === 'lp-discussion-reply') {
       e.preventDefault();
       var threadId = e.target.getAttribute('data-thread-id');
