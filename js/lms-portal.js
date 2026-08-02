@@ -802,6 +802,7 @@
         shuffle: false,
         questions: []
       },
+      certificateValidMonths: 0,
       ownerId: u ? u.id : '',
       createdBy: u ? u.id : '',
       createdByName: u ? u.name : '',
@@ -877,6 +878,7 @@
     draft.passScore = draft.exam.passScore;
     draft.exam.timeLimitMinutes = Number(fd.get('timeLimitMinutes')) || 0;
     draft.exam.shuffle = !!form.querySelector('[name="shuffle"]').checked;
+    draft.certificateValidMonths = Math.max(0, Number(fd.get('certificateValidMonths')) || 0);
 
     draft.lessons = [];
     form.querySelectorAll('[data-lp-lesson-block]').forEach(function (block, i) {
@@ -1110,6 +1112,7 @@
             '<label>Pass score (%)<input name="passScore" type="number" min="0" max="100" value="' + escapeHtml(String((course.exam && course.exam.passScore) || course.passScore || 70)) + '"></label>' +
             '<label>Time limit (minutes)<input name="timeLimitMinutes" type="number" min="0" value="' + escapeHtml(String((course.exam && course.exam.timeLimitMinutes) || 0)) + '"></label>' +
             '<label class="lp-check"><input type="checkbox" name="shuffle"' + (course.exam && course.exam.shuffle ? ' checked' : '') + '> Shuffle questions</label>' +
+            '<label>Certificate validity (months)<input name="certificateValidMonths" type="number" min="0" value="' + escapeHtml(String(course.certificateValidMonths || 0)) + '"><span class="lp-muted-line">0 = no expiration</span></label>' +
           '</div>' +
             '<div id="lp-questions-editor">' + renderQuestionEditorBlocks((course.exam && course.exam.questions) || []) + '</div>' +
             '<button type="button" class="lp-btn lp-btn-secondary" data-lp-add-question>+ Add question</button>' +
@@ -1487,18 +1490,74 @@
       '<div class="lp-card">' + renderEnrollmentTable(data.enrollments.slice().reverse().slice(0, 30), true) + '</div>';
   }
 
+  function portalCertExpiry(cert) {
+    if (cert && cert.expiresAt) return cert.expiresAt;
+    var course = findCourse(cert && cert.courseId);
+    var months = course ? Number(course.certificateValidMonths) || 0 : Number(cert && cert.validMonths) || 0;
+    return computePortalCertificateExpiry(cert && cert.issuedAt, months);
+  }
+
+  function portalCertExpired(cert) {
+    var expiresAt = portalCertExpiry(cert);
+    if (!expiresAt) return false;
+    var t = new Date(expiresAt).getTime();
+    return !isNaN(t) && t < Date.now();
+  }
+
+  function formatPortalCertDate(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso).slice(0, 10);
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    return p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + d.getFullYear();
+  }
+
   function renderCertificates(root) {
     var data = getData();
     var u = currentUser();
     var certs = isInstructor()
       ? (data.certificates || [])
       : (data.certificates || []).filter(function (c) { return u && c.userId === u.id; });
-    setTitle('Certificates', 'Recognise completed learning');
+    setTitle('Certificates', isInstructor() ? 'All learner certifications' : 'Recognise completed learning');
+    if (isInstructor()) {
+      var sorted = certs.slice().sort(function (a, b) {
+        return String(b.issuedAt || '').localeCompare(String(a.issuedAt || ''));
+      });
+      root.innerHTML =
+        '<div class="lp-card">' +
+          '<div class="lp-section-head"><div><h3>Certifications obtained</h3>' +
+            '<p class="lp-muted-line">Track certificate numbers, scores, and expiration dates for every learner.</p></div></div>' +
+          '<div style="overflow:auto"><table class="lp-table"><thead><tr>' +
+            '<th>Certification No</th><th>Name</th><th>Course</th><th>Date</th><th>Score</th><th>Expiration Date</th><th>Status</th><th></th>' +
+          '</tr></thead><tbody>' +
+          (sorted.length ? sorted.map(function (c) {
+            var expiresAt = portalCertExpiry(c);
+            var expired = portalCertExpired(c);
+            return '<tr>' +
+              '<td><strong>' + escapeHtml(c.certificateNo || '—') + '</strong></td>' +
+              '<td>' + escapeHtml(c.userName || '—') + '</td>' +
+              '<td>' + escapeHtml(c.courseTitle || '—') + '</td>' +
+              '<td>' + escapeHtml(formatPortalCertDate(c.issuedAt)) + '</td>' +
+              '<td>' + (c.score != null ? escapeHtml(String(c.score)) + '%' : '—') + '</td>' +
+              '<td>' + escapeHtml(expiresAt ? formatPortalCertDate(expiresAt) : 'Never') + '</td>' +
+              '<td><span class="lp-badge ' + (expired ? 'lp-badge-warn' : 'lp-badge-ok') + '">' +
+                (expired ? 'Expired' : 'Valid') + '</span></td>' +
+              '<td><button type="button" class="lp-btn lp-btn-secondary" data-lp-cert="' + escapeHtml(c.id) + '">Open</button></td></tr>';
+          }).join('') : '<tr><td colspan="8">No certificates issued yet.</td></tr>') +
+          '</tbody></table></div></div>';
+      return;
+    }
     root.innerHTML = '<div class="lp-card"><div class="lp-list">' +
       (certs.length ? certs.slice().reverse().map(function (c) {
+        var expiresAt = portalCertExpiry(c);
+        var expired = portalCertExpired(c);
         return '<div class="lp-item"><div><h4>' + escapeHtml(c.courseTitle) + '</h4>' +
-          '<p>' + escapeHtml(c.userName) + ' · ' + escapeHtml((c.issuedAt || '').slice(0, 10)) +
-          ' · ' + escapeHtml(c.certificateNo) + '</p></div>' +
+          '<p>' + escapeHtml(c.certificateNo || '') +
+          ' · Score ' + (c.score != null ? escapeHtml(String(c.score)) + '%' : '—') +
+          ' · Issued ' + escapeHtml(formatPortalCertDate(c.issuedAt)) +
+          ' · Expires ' + escapeHtml(expiresAt ? formatPortalCertDate(expiresAt) : 'Never') +
+          (expired ? ' · Expired' : '') +
+          '</p></div>' +
           '<button type="button" class="lp-btn lp-btn-secondary" data-lp-cert="' + escapeHtml(c.id) + '">Open</button></div>';
       }).join('') : '<p class="lp-empty">No certificates yet.</p>') +
     '</div></div>';
@@ -2190,12 +2249,22 @@
     return { percent: percent, passed: percent >= passScore, passScore: passScore };
   }
 
+  function computePortalCertificateExpiry(issuedAt, validMonths) {
+    var months = Math.max(0, Number(validMonths) || 0);
+    if (!months || !issuedAt) return '';
+    var d = new Date(issuedAt);
+    if (isNaN(d.getTime())) return '';
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString();
+  }
+
   function maybeIssueCertificate(data, enrollment, course) {
     if (!data.settings || data.settings.autoIssueCertificates === false) return;
     var exists = (data.certificates || []).some(function (c) {
       return c.enrollmentId === enrollment.id || (c.userId === enrollment.userId && c.courseId === course.id);
     });
     if (exists) return;
+    var issuedAt = new Date().toISOString();
     data.certificates = data.certificates || [];
     data.certificates.push({
       id: 'cert' + Date.now().toString(36),
@@ -2204,7 +2273,9 @@
       courseId: course.id,
       courseTitle: course.title,
       enrollmentId: enrollment.id,
-      issuedAt: new Date().toISOString(),
+      issuedAt: issuedAt,
+      expiresAt: computePortalCertificateExpiry(issuedAt, course.certificateValidMonths),
+      validMonths: Math.max(0, Number(course.certificateValidMonths) || 0),
       certificateNo: 'AND-' + String(Date.now()).slice(-8),
       score: enrollment.score != null ? enrollment.score : null
     });

@@ -188,6 +188,7 @@
       published: c.published !== false,
       durationMinutes: Number(c.durationMinutes) || 0,
       passScore: Number(c.passScore) || 70,
+      certificateValidMonths: Math.max(0, Number(c.certificateValidMonths) || 0),
       lessons: Array.isArray(c.lessons) ? c.lessons.map(function (l, i) {
         return {
           id: l.id || id('lsn'),
@@ -415,6 +416,31 @@
     }
   }
 
+  function computeCertificateExpiry(issuedAt, validMonths) {
+    var months = Math.max(0, Number(validMonths) || 0);
+    if (!months || !issuedAt) return '';
+    var d = new Date(issuedAt);
+    if (isNaN(d.getTime())) return '';
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString();
+  }
+
+  function resolveCertificateExpiry(cert, course) {
+    if (!cert) return '';
+    if (cert.expiresAt) return cert.expiresAt;
+    var months = course && course.certificateValidMonths != null
+      ? course.certificateValidMonths
+      : ((findCourse(cert.courseId) || {}).certificateValidMonths || 0);
+    return computeCertificateExpiry(cert.issuedAt, months);
+  }
+
+  function isCertificateExpired(cert, course) {
+    var expiresAt = resolveCertificateExpiry(cert, course);
+    if (!expiresAt) return false;
+    var t = new Date(expiresAt).getTime();
+    return !isNaN(t) && t < Date.now();
+  }
+
   function maybeIssueCertificate(data, enrollment, course) {
     if (!data.settings.autoIssueCertificates) return null;
     if (!enrollment || !course) return null;
@@ -423,6 +449,7 @@
       return c.enrollmentId === enrollment.id || (c.userId === enrollment.userId && c.courseId === course.id);
     });
     if (exists) return null;
+    var issuedAt = new Date().toISOString();
     var cert = {
       id: id('cert'),
       userId: enrollment.userId,
@@ -430,7 +457,9 @@
       courseId: course.id,
       courseTitle: course.title,
       enrollmentId: enrollment.id,
-      issuedAt: new Date().toISOString(),
+      issuedAt: issuedAt,
+      expiresAt: computeCertificateExpiry(issuedAt, course.certificateValidMonths),
+      validMonths: Math.max(0, Number(course.certificateValidMonths) || 0),
       certificateNo: 'AND-' + String(Date.now()).slice(-8),
       score: enrollment.score != null ? enrollment.score : null
     };
@@ -828,6 +857,10 @@
           '<div class="form-group"><label>Pass score (%)</label><input name="passScore" type="number" min="0" max="100" value="' + escapeHtml(String(course.exam.passScore || course.passScore || 70)) + '"></div>' +
           '<div class="form-group"><label>Time limit (minutes, 0 = none)</label><input name="timeLimitMinutes" type="number" min="0" value="' + escapeHtml(String(course.exam.timeLimitMinutes || 0)) + '"></div>' +
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="shuffle"' + (course.exam.shuffle ? ' checked' : '') + '> Shuffle questions</label></div>' +
+          '<div class="form-group"><label>Certificate validity (months)</label>' +
+            '<input name="certificateValidMonths" type="number" min="0" value="' + escapeHtml(String(course.certificateValidMonths || 0)) + '">' +
+            '<p class="lms-hint">Set how long the certificate stays valid after it is issued. Use 0 for no expiration.</p>' +
+          '</div>' +
         '</div>' +
           '<div id="lms-questions-editor"></div>' +
           '<button type="button" class="btn btn-secondary" id="lms-add-question">+ Add question</button>' +
@@ -1055,6 +1088,7 @@
       currency: String(fd.get('currency') || 'EUR').trim() || 'EUR',
       published: form.querySelector('[name="published"]').checked,
       passScore: Number(fd.get('passScore')) || 70,
+      certificateValidMonths: Math.max(0, Number(fd.get('certificateValidMonths')) || 0),
       lessons: lessons,
       exam: {
         enabled: form.querySelector('[name="examEnabled"]').checked || String(fd.get('type')) === 'exam',
@@ -1336,14 +1370,56 @@
   function renderCertificateList(certs, adminView) {
     if (!certs.length) return emptyState(adminView ? 'No certificates issued yet.' : 'No certificates yet. Complete a course to earn one.');
     return '<div class="lms-cert-list">' + certs.slice().reverse().map(function (c) {
+      var course = findCourse(c.courseId);
+      var expiresAt = resolveCertificateExpiry(c, course);
+      var expired = isCertificateExpired(c, course);
       return '<div class="lms-cert-card">' +
         '<div><strong>' + escapeHtml(c.courseTitle) + '</strong>' +
         '<div class="lms-meta">' + escapeHtml(c.userName) + ' · ' + escapeHtml((c.issuedAt || '').slice(0, 10)) +
         ' · No. ' + escapeHtml(c.certificateNo) +
-        (c.score != null ? ' · Score ' + escapeHtml(String(c.score)) + '%' : '') + '</div></div>' +
+        (c.score != null ? ' · Score ' + escapeHtml(String(c.score)) + '%' : '') +
+        ' · Expires ' + escapeHtml(expiresAt ? formatCertDate(expiresAt) : 'Never') +
+        (expired ? ' · Expired' : '') +
+        '</div></div>' +
         '<button type="button" class="btn btn-secondary btn-sm" data-lms-cert-print="' + escapeHtml(c.id) + '">View / print</button>' +
       '</div>';
     }).join('') + '</div>';
+  }
+
+  function renderAdminCertificatesTable(certs) {
+    if (!certs.length) return emptyState('No certificates issued yet.');
+    var rows = certs.slice().sort(function (a, b) {
+      return String(b.issuedAt || '').localeCompare(String(a.issuedAt || ''));
+    });
+    return '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+      '<th>Certification No</th>' +
+      '<th>Name</th>' +
+      '<th>Course</th>' +
+      '<th>Date</th>' +
+      '<th>Score</th>' +
+      '<th>Expiration Date</th>' +
+      '<th>Status</th>' +
+      '<th></th>' +
+      '</tr></thead><tbody>' +
+      rows.map(function (c) {
+        var course = findCourse(c.courseId);
+        var expiresAt = resolveCertificateExpiry(c, course);
+        var expired = isCertificateExpired(c, course);
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(c.certificateNo || '—') + '</strong></td>' +
+          '<td>' + escapeHtml(c.userName || '—') + '</td>' +
+          '<td>' + escapeHtml(c.courseTitle || (course && course.title) || '—') + '</td>' +
+          '<td>' + escapeHtml(formatCertDate(c.issuedAt)) + '</td>' +
+          '<td>' + (c.score != null ? escapeHtml(String(c.score)) + '%' : '—') + '</td>' +
+          '<td>' + escapeHtml(expiresAt ? formatCertDate(expiresAt) : 'Never') + '</td>' +
+          '<td>' + (expired
+            ? '<span class="lms-badge lms-badge--failed">Expired</span>'
+            : '<span class="lms-badge lms-badge--published">Valid</span>') + '</td>' +
+          '<td class="lms-row-actions">' +
+            '<button type="button" class="btn btn-secondary btn-sm" data-lms-cert-print="' + escapeHtml(c.id) + '">View / print</button>' +
+          '</td></tr>';
+      }).join('') +
+      '</tbody></table></div>';
   }
 
   function renderCertificates() {
@@ -1354,10 +1430,21 @@
     var certs = isAdmin()
       ? (data.certificates || [])
       : (data.certificates || []).filter(function (c) { return u && c.userId === u.id; });
+    var validCount = certs.filter(function (c) { return !isCertificateExpired(c); }).length;
+    var expiredCount = certs.length - validCount;
     el.innerHTML =
       '<div class="page-header"><h2>Certification</h2>' +
-      '<p class="lms-hint">Certificates are issued automatically when learners complete training (if enabled in settings).</p></div>' +
-      renderCertificateList(certs, isAdmin()) +
+      '<p class="lms-hint">Certificates are issued automatically when learners complete training (if enabled in settings). Set certificate validity months on each course.</p></div>' +
+      (isAdmin()
+        ? '<div class="lms-metrics">' +
+            metricHtml('Issued', certs.length) +
+            metricHtml('Valid', validCount, 'ok') +
+            metricHtml('Expired', expiredCount, expiredCount ? 'warn' : '') +
+          '</div>' +
+          '<div class="module-table-panel"><h3>All learner certifications</h3>' +
+            renderAdminCertificatesTable(certs) +
+          '</div>'
+        : renderCertificateList(certs, false)) +
       '<div id="lms-certificate-print" class="lms-certificate-sheet hidden"></div>';
   }
 
@@ -1443,7 +1530,7 @@
     ].join(' | ');
     var qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=' +
       encodeURIComponent(verifyText);
-    var rating = performanceRating(cert.score);
+    var expiresAt = resolveCertificateExpiry(cert, course);
 
     return '' +
       '<div class="lms-certificate" role="document" aria-label="Certificate of completion">' +
@@ -1479,7 +1566,7 @@
         '<footer class="lms-certificate-footer">' +
           '<div><strong>' + escapeHtml(formatCertDate(cert.issuedAt)) + '</strong><span>Date of completion</span></div>' +
           '<div><strong>' + escapeHtml(formatCertScore(cert.score)) + '</strong><span>Score</span></div>' +
-          '<div><strong>' + escapeHtml(String(rating).toUpperCase()) + '</strong><span>Performance rating</span></div>' +
+          '<div><strong>' + escapeHtml(expiresAt ? formatCertDate(expiresAt) : 'No expiry') + '</strong><span>Expiration date</span></div>' +
           '<div><strong>' + escapeHtml(formatReferenceNo(cert.certificateNo)) + '</strong><span>Reference number</span></div>' +
         '</footer>' +
       '</div>';
