@@ -169,7 +169,11 @@ const app = {
                 }
                 if (data.lms && typeof data.lms === 'object') {
                     try { localStorage.setItem('andeco_lms_data', JSON.stringify(data.lms)); } catch (e) {}
-                    if (typeof window.LmsModule !== 'undefined' && window.LmsModule.render) window.LmsModule.render();
+                    if (typeof window.LmsModule !== 'undefined' && window.LmsModule.render) {
+                        if (!(window.LmsModule.isBusy && window.LmsModule.isBusy())) {
+                            window.LmsModule.render();
+                        }
+                    }
                 }
                 if (data.payroll && typeof data.payroll === 'object') {
                     if (Array.isArray(data.payroll.employees)) setLocal('employees', data.payroll.employees);

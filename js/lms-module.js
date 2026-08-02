@@ -35,12 +35,39 @@
   var viewState = {
     mode: 'list', // list | editor | player | exam
     courseId: null,
+    draftCourse: null, // in-memory unsaved training editor state
     lessonId: null,
     enrollmentId: null,
     attemptId: null,
     publicCourseId: null,
     applicantId: null
   };
+
+  function isCourseEditorOpen() {
+    return viewState.mode === 'editor' && !!document.getElementById('lms-course-form');
+  }
+
+  function isInteractiveLmsFormOpen() {
+    if (isCourseEditorOpen()) return true;
+    if (viewState.mode === 'exam' && document.getElementById('lms-exam-form')) return true;
+    if (currentSection === 'settings' && document.getElementById('lms-settings-form')) return true;
+    if (currentSection === 'hiring' && document.getElementById('lms-applicant-form')) return true;
+    if (currentSection === 'learners' && document.getElementById('lms-assign-form')) return true;
+    return false;
+  }
+
+  function syncDraftFromEditor() {
+    if (!isCourseEditorOpen()) return viewState.draftCourse;
+    try {
+      var collected = collectEditorCourse();
+      if (collected) viewState.draftCourse = collected;
+    } catch (e) {}
+    return viewState.draftCourse;
+  }
+
+  function clearEditorDraft() {
+    viewState.draftCourse = null;
+  }
 
   function id(prefix) {
     return (prefix || 'lms') + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -369,7 +396,8 @@
       renderMyLearningCards(myEnrollments(), false);
   }
 
-  function renderLibrary() {
+  function renderLibrary(options) {
+    options = options || {};
     var el = document.getElementById('lms-library');
     if (!el) return;
     if (!isAdmin()) {
@@ -377,6 +405,11 @@
       return;
     }
     if (viewState.mode === 'editor' && viewState.courseId !== undefined) {
+      // Keep unsaved editor DOM intact during background data polls.
+      if (!options.force && isCourseEditorOpen()) {
+        syncDraftFromEditor();
+        return;
+      }
       renderCourseEditor(el);
       return;
     }
@@ -422,21 +455,30 @@
   }
 
   function renderCourseEditor(el) {
-    var data = getData();
-    var course = viewState.courseId ? findCourse(viewState.courseId) : normalizeCourse({
-      id: '',
-      title: '',
-      type: 'course',
-      audience: 'employee',
-      published: true,
-      lessons: [{ id: id('lsn'), title: 'Introduction', content: '', order: 0 }],
-      exam: { enabled: false, questions: [], passScore: 70, timeLimitMinutes: 0, shuffle: false }
-    });
+    var course = null;
+    if (viewState.draftCourse) {
+      course = normalizeCourse(viewState.draftCourse);
+    } else if (viewState.courseId) {
+      course = findCourse(viewState.courseId);
+    } else {
+      course = normalizeCourse({
+        id: id('crs'),
+        title: '',
+        type: 'course',
+        audience: 'employee',
+        published: true,
+        lessons: [{ id: id('lsn'), title: 'Introduction', content: '', order: 0 }],
+        exam: { enabled: false, questions: [], passScore: 70, timeLimitMinutes: 0, shuffle: false }
+      });
+    }
     if (!course) {
       viewState.mode = 'list';
-      renderLibrary();
+      clearEditorDraft();
+      renderLibrary({ force: true });
       return;
     }
+    viewState.draftCourse = course;
+    viewState.courseId = course.id || viewState.courseId;
 
     el.innerHTML =
       '<div class="page-header"><h2>' + (viewState.courseId ? 'Edit training' : 'New training') + '</h2>' +
@@ -926,7 +968,11 @@
   function setSection(sectionId) {
     currentSection = sectionId || 'dashboard';
     if (currentSection !== 'library') {
-      if (viewState.mode === 'editor') viewState.mode = 'list';
+      if (viewState.mode === 'editor') {
+        syncDraftFromEditor();
+        viewState.mode = 'list';
+        clearEditorDraft();
+      }
     }
     if (currentSection !== 'my-learning') {
       if (viewState.mode === 'player' || (viewState.mode === 'exam' && !viewState.applicantId)) {
@@ -937,7 +983,13 @@
     }
   }
 
-  function render() {
+  function render(options) {
+    options = options || {};
+    // Background shared-data polls must not wipe open LMS forms.
+    if (!options.force && isInteractiveLmsFormOpen()) {
+      if (isCourseEditorOpen()) syncDraftFromEditor();
+      return;
+    }
     document.querySelectorAll('#page-lms .lms-section-panel').forEach(function (p) {
       var match = p.getAttribute('data-section') === currentSection;
       p.style.display = match ? 'block' : 'none';
@@ -945,7 +997,7 @@
     });
     if (currentSection === 'dashboard') renderDashboard();
     else if (currentSection === 'my-learning') renderMyLearning();
-    else if (currentSection === 'library') renderLibrary();
+    else if (currentSection === 'library') renderLibrary(options);
     else if (currentSection === 'learners') renderLearners();
     else if (currentSection === 'purchases') renderPurchases();
     else if (currentSection === 'hiring') renderHiring();
@@ -973,7 +1025,12 @@
       page.addEventListener('submit', onPageSubmit);
       page.addEventListener('change', onPageChange);
       page.addEventListener('input', function (e) {
-        if (e.target && (e.target.id === 'lms-library-search')) renderLibrary();
+        if (!e.target) return;
+        if (e.target.id === 'lms-library-search') {
+          if (viewState.mode !== 'editor') renderLibrary({ force: true });
+          return;
+        }
+        if (e.target.closest('#lms-course-form')) syncDraftFromEditor();
       });
     }
 
@@ -999,50 +1056,62 @@
     if (t.id === 'lms-add-course') {
       viewState.mode = 'editor';
       viewState.courseId = null;
-      renderLibrary();
+      clearEditorDraft();
+      renderLibrary({ force: true });
       return;
     }
     if (t.id === 'lms-editor-cancel' || t.id === 'lms-editor-cancel-2') {
       viewState.mode = 'list';
       viewState.courseId = null;
-      renderLibrary();
+      clearEditorDraft();
+      renderLibrary({ force: true });
       return;
     }
     if (t.id === 'lms-add-lesson') {
-      var course = collectEditorCourse() || normalizeCourse({});
+      var course = syncDraftFromEditor() || viewState.draftCourse || normalizeCourse({});
       course.lessons.push({ id: id('lsn'), title: 'New lesson', content: '', order: course.lessons.length, durationMinutes: 0 });
+      viewState.draftCourse = course;
+      viewState.courseId = course.id;
       renderLessonsEditor(course.lessons);
       return;
     }
     if (t.id === 'lms-add-question') {
-      var c2 = collectEditorCourse() || normalizeCourse({});
+      var c2 = syncDraftFromEditor() || viewState.draftCourse || normalizeCourse({});
       c2.exam.questions.push({
         id: id('q'), prompt: '', type: 'single', points: 1,
         options: [{ id: id('opt'), text: 'Option A' }, { id: id('opt'), text: 'Option B' }],
         correctOptionIds: []
       });
+      viewState.draftCourse = c2;
+      viewState.courseId = c2.id;
       renderQuestionsEditor(c2.exam.questions);
       return;
     }
     if (t.hasAttribute('data-remove-lesson')) {
-      var c3 = collectEditorCourse();
+      var c3 = syncDraftFromEditor() || viewState.draftCourse;
+      if (!c3) return;
       var li = Number(t.getAttribute('data-remove-lesson'));
       c3.lessons.splice(li, 1);
+      viewState.draftCourse = c3;
       renderLessonsEditor(c3.lessons);
       return;
     }
     if (t.hasAttribute('data-remove-question')) {
-      var c4 = collectEditorCourse();
+      var c4 = syncDraftFromEditor() || viewState.draftCourse;
+      if (!c4) return;
       var qi = Number(t.getAttribute('data-remove-question'));
       c4.exam.questions.splice(qi, 1);
+      viewState.draftCourse = c4;
       renderQuestionsEditor(c4.exam.questions);
       return;
     }
     if (t.hasAttribute('data-add-option')) {
-      var c5 = collectEditorCourse();
+      var c5 = syncDraftFromEditor() || viewState.draftCourse;
+      if (!c5) return;
       var qIdx = Number(t.getAttribute('data-add-option'));
       if (c5.exam.questions[qIdx]) {
         c5.exam.questions[qIdx].options.push({ id: id('opt'), text: '' });
+        viewState.draftCourse = c5;
         renderQuestionsEditor(c5.exam.questions);
       }
       return;
@@ -1080,7 +1149,8 @@
     if (t.hasAttribute('data-lms-edit')) {
       viewState.mode = 'editor';
       viewState.courseId = t.getAttribute('data-lms-edit');
-      renderLibrary();
+      clearEditorDraft();
+      renderLibrary({ force: true });
       return;
     }
     if (t.hasAttribute('data-lms-duplicate')) {
@@ -1106,7 +1176,7 @@
       });
       data.courses.push(copy);
       saveData(data);
-      renderLibrary();
+      renderLibrary({ force: true });
       return;
     }
     if (t.hasAttribute('data-lms-delete')) {
@@ -1115,7 +1185,7 @@
       var delId = t.getAttribute('data-lms-delete');
       dataDel.courses = dataDel.courses.filter(function (c) { return c.id !== delId; });
       saveData(dataDel);
-      renderLibrary();
+      renderLibrary({ force: true });
       return;
     }
     if (t.hasAttribute('data-lms-lesson')) {
@@ -1178,7 +1248,10 @@
     if (e.target && e.target.id === 'lms-course-form') {
       e.preventDefault();
       var course = collectEditorCourse();
-      if (!course || !course.title) return;
+      if (!course || !course.title) {
+        alert('Please enter a training title before saving.');
+        return;
+      }
       var data = getData();
       var idx = data.courses.findIndex(function (c) { return c.id === course.id; });
       if (idx >= 0) data.courses[idx] = course;
@@ -1186,7 +1259,8 @@
       saveData(data);
       viewState.mode = 'list';
       viewState.courseId = null;
-      renderLibrary();
+      clearEditorDraft();
+      renderLibrary({ force: true });
       return;
     }
     if (e.target && e.target.id === 'lms-assign-form') {
@@ -1267,7 +1341,12 @@
   }
 
   function onPageChange(e) {
-    if (e.target && e.target.id === 'lms-library-filter') renderLibrary();
+    if (!e.target) return;
+    if (e.target.id === 'lms-library-filter') {
+      if (viewState.mode !== 'editor') renderLibrary({ force: true });
+      return;
+    }
+    if (e.target.closest('#lms-course-form')) syncDraftFromEditor();
   }
 
   function submitExam(form) {
@@ -1431,6 +1510,7 @@
     init: init,
     setSection: setSection,
     render: render,
+    isBusy: isInteractiveLmsFormOpen,
     showPublicScreen: showPublicScreen,
     renderPublicCatalog: renderPublicCatalog,
     renderCareersPortal: renderCareersPortal,
