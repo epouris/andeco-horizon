@@ -112,7 +112,38 @@
       announcements: [],
       certificates: [],
       learnerProfiles: [],
+      discussions: [],
       settings: Object.assign({}, defaultSettings)
+    };
+  }
+
+  function normalizeMessage(m) {
+    m = m && typeof m === 'object' ? m : {};
+    return {
+      id: m.id || id('msg'),
+      authorId: m.authorId || '',
+      authorName: m.authorName || 'User',
+      authorRole: m.authorRole === 'instructor' ? 'instructor' : 'learner',
+      body: m.body || '',
+      createdAt: m.createdAt || new Date().toISOString()
+    };
+  }
+
+  function normalizeDiscussion(d) {
+    d = d && typeof d === 'object' ? d : {};
+    var kind = d.kind === 'private' ? 'private' : 'course';
+    return {
+      id: d.id || id('dsc'),
+      kind: kind,
+      courseId: d.courseId || '',
+      learnerId: d.learnerId || '',
+      learnerName: d.learnerName || '',
+      title: d.title || (kind === 'private' ? 'Private discussion' : 'Course discussion'),
+      createdAt: d.createdAt || new Date().toISOString(),
+      updatedAt: d.updatedAt || d.createdAt || new Date().toISOString(),
+      createdBy: d.createdBy || '',
+      createdByName: d.createdByName || '',
+      messages: Array.isArray(d.messages) ? d.messages.map(normalizeMessage) : []
     };
   }
 
@@ -127,6 +158,7 @@
       announcements: Array.isArray(d.announcements) ? d.announcements : [],
       certificates: Array.isArray(d.certificates) ? d.certificates : [],
       learnerProfiles: Array.isArray(d.learnerProfiles) ? d.learnerProfiles : [],
+      discussions: Array.isArray(d.discussions) ? d.discussions.map(normalizeDiscussion) : [],
       settings: Object.assign({}, defaultSettings, d.settings && typeof d.settings === 'object' ? d.settings : {})
     };
   }
@@ -423,7 +455,7 @@
       { title: 'User Management', desc: 'Learners, instructors, enrollments', goto: 'learners', ready: true },
       { title: 'Content Delivery', desc: 'Text, video, documents & links', goto: 'my-learning', ready: true },
       { title: 'Assessment & Evaluation', desc: 'Quizzes, scoring, pass marks', goto: 'library', ready: true },
-      { title: 'Communication Tools', desc: 'Announcements for staff & learners', goto: 'announcements', ready: true },
+      { title: 'Communication Tools', desc: 'Announcements plus course & private discussions', goto: 'announcements', ready: true },
       { title: 'Tracking & Reporting', desc: 'Progress, completion and scores', goto: 'reports', ready: true },
       { title: 'Certification', desc: 'Auto certificates on completion', goto: 'certificates', ready: true },
       { title: 'Mobile Access', desc: 'Responsive layout on phones & tablets', goto: 'settings', ready: true }
@@ -1976,7 +2008,9 @@
     renderPublicCatalog: renderPublicCatalog,
     renderCareersPortal: renderCareersPortal,
     getData: getData,
+    saveData: saveData,
     normalizeData: normalizeData,
+    normalizeDiscussion: normalizeDiscussion,
     STORAGE_KEY: STORAGE_KEY
   };
 

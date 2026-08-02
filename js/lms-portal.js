@@ -11,6 +11,12 @@
     lessonId: null,
     mode: 'list' // list | player | exam
   };
+  var discussionState = {
+    tab: 'course', // course | private
+    courseId: null,
+    threadId: null,
+    composingPrivate: false
+  };
 
   function escapeHtml(s) {
     if (s == null) return '';
@@ -33,19 +39,179 @@
     }
     try {
       var raw = localStorage.getItem('andeco_lms_data');
-      return raw ? JSON.parse(raw) : { courses: [], enrollments: [], certificates: [], announcements: [], attempts: [], learnerProfiles: [], settings: {} };
+      return raw ? JSON.parse(raw) : {
+        courses: [], enrollments: [], certificates: [], announcements: [],
+        attempts: [], learnerProfiles: [], discussions: [], settings: {}
+      };
     } catch (e) {
-      return { courses: [], enrollments: [], certificates: [], announcements: [], attempts: [], learnerProfiles: [], settings: {} };
+      return {
+        courses: [], enrollments: [], certificates: [], announcements: [],
+        attempts: [], learnerProfiles: [], discussions: [], settings: {}
+      };
     }
   }
 
   function saveData(data) {
+    var payload = data;
+    if (window.LmsModule && typeof window.LmsModule.normalizeData === 'function') {
+      payload = window.LmsModule.normalizeData(data);
+    }
+    if (window.LmsModule && typeof window.LmsModule.saveData === 'function') {
+      window.LmsModule.saveData(payload);
+      return;
+    }
     try {
-      localStorage.setItem('andeco_lms_data', JSON.stringify(data));
+      localStorage.setItem('andeco_lms_data', JSON.stringify(payload));
     } catch (e) {}
     try {
       if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll();
     } catch (e2) {}
+  }
+
+  function newId(prefix) {
+    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  function formatWhen(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso).slice(0, 16);
+      return d.toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    } catch (e) {
+      return String(iso).slice(0, 16);
+    }
+  }
+
+  function discussions() {
+    return getData().discussions || [];
+  }
+
+  function accessibleCoursesForDiscussion() {
+    var data = getData();
+    if (isInstructor()) {
+      return data.courses.filter(function (c) { return c.published !== false; });
+    }
+    var mine = myEnrollments().map(function (e) { return e.courseId; });
+    return data.courses.filter(function (c) {
+      return c.published !== false && mine.indexOf(c.id) !== -1;
+    });
+  }
+
+  function ensureCourseDiscussion(courseId) {
+    var data = getData();
+    data.discussions = data.discussions || [];
+    var existing = data.discussions.filter(function (d) {
+      return d.kind === 'course' && d.courseId === courseId;
+    })[0];
+    if (existing) return existing;
+    var course = data.courses.filter(function (c) { return c.id === courseId; })[0];
+    var u = currentUser();
+    var thread = {
+      id: newId('dsc'),
+      kind: 'course',
+      courseId: courseId,
+      learnerId: '',
+      learnerName: '',
+      title: course ? (course.title + ' — general discussion') : 'Course discussion',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: u ? u.id : '',
+      createdByName: u ? u.name : 'System',
+      messages: []
+    };
+    data.discussions.push(thread);
+    saveData(data);
+    return thread;
+  }
+
+  function visiblePrivateThreads() {
+    var u = currentUser();
+    if (!u) return [];
+    var list = discussions().filter(function (d) { return d.kind === 'private'; });
+    if (isInstructor()) return list.slice().sort(function (a, b) {
+      return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+    });
+    return list.filter(function (d) { return d.learnerId === u.id; }).sort(function (a, b) {
+      return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+    });
+  }
+
+  function findDiscussion(id) {
+    return discussions().filter(function (d) { return d.id === id; })[0] || null;
+  }
+
+  function canAccessDiscussion(thread) {
+    var u = currentUser();
+    if (!u || !thread) return false;
+    if (isInstructor()) return true;
+    if (thread.kind === 'private') return thread.learnerId === u.id;
+    return myEnrollments().some(function (e) { return e.courseId === thread.courseId; });
+  }
+
+  function postDiscussionMessage(threadId, body) {
+    var u = currentUser();
+    var text = String(body || '').trim();
+    if (!u || !text) return false;
+    var data = getData();
+    var thread = (data.discussions || []).filter(function (d) { return d.id === threadId; })[0];
+    if (!thread || !canAccessDiscussion(thread)) return false;
+    thread.messages = thread.messages || [];
+    thread.messages.push({
+      id: newId('msg'),
+      authorId: u.id,
+      authorName: u.name,
+      authorRole: isInstructor() ? 'instructor' : 'learner',
+      body: text,
+      createdAt: new Date().toISOString()
+    });
+    thread.updatedAt = new Date().toISOString();
+    saveData(data);
+    return true;
+  }
+
+  function createPrivateDiscussion(opts) {
+    var u = currentUser();
+    if (!u) return null;
+    var title = String(opts.title || '').trim();
+    var body = String(opts.body || '').trim();
+    if (!title || !body) return null;
+    var learnerId = opts.learnerId || u.id;
+    var learnerName = opts.learnerName || u.name;
+    if (isInstructor() && opts.learnerId) {
+      learnerId = opts.learnerId;
+      learnerName = opts.learnerName || learnerId;
+    } else if (!isInstructor()) {
+      learnerId = u.id;
+      learnerName = u.name;
+    }
+    var data = getData();
+    data.discussions = data.discussions || [];
+    var thread = {
+      id: newId('dsc'),
+      kind: 'private',
+      courseId: opts.courseId || '',
+      learnerId: learnerId,
+      learnerName: learnerName,
+      title: title,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: u.id,
+      createdByName: u.name,
+      messages: [{
+        id: newId('msg'),
+        authorId: u.id,
+        authorName: u.name,
+        authorRole: isInstructor() ? 'instructor' : 'learner',
+        body: body,
+        createdAt: new Date().toISOString()
+      }]
+    };
+    data.discussions.push(thread);
+    saveData(data);
+    return thread;
   }
 
   function currentUser() {
@@ -255,6 +421,7 @@
           { id: 'home', label: 'Instructor home' },
           { id: 'courses', label: 'Courses' },
           { id: 'learners', label: 'Learners' },
+          { id: 'discussions', label: 'Discussions' },
           { id: 'announcements', label: 'Announcements' },
           { id: 'reports', label: 'Reports' },
           { id: 'certificates', label: 'Certificates' }
@@ -263,6 +430,7 @@
           { id: 'home', label: 'My dashboard' },
           { id: 'courses', label: 'My courses' },
           { id: 'catalog', label: 'Browse training' },
+          { id: 'discussions', label: 'Discussions' },
           { id: 'announcements', label: 'Announcements' },
           { id: 'certificates', label: 'Certificates' }
         ];
@@ -321,6 +489,7 @@
       if (isInstructor()) renderInstructorCourses(root);
       else renderLearnerCourses(root);
     } else if (view === 'catalog') renderCatalog(root);
+    else if (view === 'discussions') renderDiscussions(root);
     else if (view === 'learners') renderInstructorLearners(root);
     else if (view === 'announcements') renderAnnouncements(root);
     else if (view === 'reports') renderReports(root);
@@ -348,6 +517,7 @@
         '<p>Your personal learning space for courses, inductions, procedures, and certificates.</p>' +
         '<div class="lp-hero-actions">' +
           '<button type="button" class="lp-btn lp-btn-primary" data-lp-view="courses">Continue learning</button>' +
+          '<button type="button" class="lp-btn lp-btn-secondary" data-lp-view="discussions">Open discussions</button>' +
           '<button type="button" class="lp-btn lp-btn-secondary" data-lp-view="catalog">Browse training</button>' +
         '</div>' +
       '</section>' +
@@ -378,6 +548,7 @@
         '<p>Monitor progress, communicate updates, and keep your training library moving.</p>' +
         '<div class="lp-hero-actions">' +
           '<button type="button" class="lp-btn lp-btn-primary" data-lp-view="courses">Review courses</button>' +
+          '<button type="button" class="lp-btn lp-btn-secondary" data-lp-view="discussions">Discussions</button>' +
           '<button type="button" class="lp-btn lp-btn-secondary" data-lp-view="reports">Open reports</button>' +
         '</div>' +
       '</section>' +
@@ -483,6 +654,183 @@
     var data = getData();
     setTitle('Learners', 'People and progress');
     root.innerHTML = '<div class="lp-card">' + renderEnrollmentTable(data.enrollments.slice().reverse(), true) + '</div>';
+  }
+
+  function renderDiscussionMessages(thread) {
+    var messages = (thread && thread.messages) || [];
+    if (!messages.length) {
+      return '<p class="lp-empty">No messages yet. Start the conversation below.</p>';
+    }
+    var u = currentUser();
+    return '<div class="lp-discussion-messages">' + messages.map(function (m) {
+      var mine = u && m.authorId === u.id;
+      return '<article class="lp-discussion-msg' + (mine ? ' is-mine' : '') + '">' +
+        '<header>' +
+          '<strong>' + escapeHtml(m.authorName || 'User') + '</strong>' +
+          '<span class="lp-badge' + (m.authorRole === 'instructor' ? ' lp-badge-accent' : '') + '">' +
+            escapeHtml(m.authorRole === 'instructor' ? 'Tutor' : 'Learner') +
+          '</span>' +
+          '<time>' + escapeHtml(formatWhen(m.createdAt)) + '</time>' +
+        '</header>' +
+        '<p>' + escapeHtml(m.body) + '</p>' +
+      '</article>';
+    }).join('') + '</div>';
+  }
+
+  function renderMessageComposer(threadId) {
+    return '<form id="lp-discussion-reply" class="lp-discussion-composer" data-thread-id="' + escapeHtml(threadId) + '">' +
+      '<label>Write a message<textarea name="body" rows="3" required placeholder="Share an update or ask a question…"></textarea></label>' +
+      '<div class="lp-form-actions"><button type="submit" class="lp-btn lp-btn-primary">Post message</button></div>' +
+    '</form>';
+  }
+
+  function renderPrivateComposeForm() {
+    var courses = accessibleCoursesForDiscussion();
+    var learners = [];
+    if (isInstructor()) {
+      var seen = {};
+      getData().enrollments.forEach(function (e) {
+        if (!e.userId || seen[e.userId]) return;
+        seen[e.userId] = true;
+        learners.push({ id: e.userId, name: e.userName || e.userId });
+      });
+      learners.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    }
+    return '<div class="lp-card">' +
+      '<h3>New private discussion</h3>' +
+      '<form id="lp-private-new" class="lp-form">' +
+        (isInstructor()
+          ? '<label>Learner<select name="learnerId" required>' +
+              '<option value="">Select learner…</option>' +
+              learners.map(function (l) {
+                return '<option value="' + escapeHtml(l.id) + '">' + escapeHtml(l.name) + '</option>';
+              }).join('') +
+            '</select></label>'
+          : '') +
+        '<label>Subject<input name="title" required maxlength="120" placeholder="What do you need help with?"></label>' +
+        '<label>Related course (optional)<select name="courseId">' +
+          '<option value="">None</option>' +
+          courses.map(function (c) {
+            return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.title) + '</option>';
+          }).join('') +
+        '</select></label>' +
+        '<label>Message<textarea name="body" rows="4" required placeholder="Write your message to the tutors…"></textarea></label>' +
+        '<div class="lp-form-actions">' +
+          '<button type="submit" class="lp-btn lp-btn-primary">Start discussion</button>' +
+          '<button type="button" class="lp-btn lp-btn-ghost" data-lp-discuss-cancel-private>Cancel</button>' +
+        '</div>' +
+      '</form></div>';
+  }
+
+  function renderDiscussions(root) {
+    var tab = discussionState.tab === 'private' ? 'private' : 'course';
+    setTitle('Discussions', tab === 'private'
+      ? (isInstructor() ? 'Private learner conversations' : 'Private chats with tutors')
+      : 'General discussion for each course');
+
+    var tabs =
+      '<div class="lp-discuss-tabs" role="tablist">' +
+        '<button type="button" class="lp-discuss-tab' + (tab === 'course' ? ' active' : '') + '" data-lp-discuss-tab="course">Course discussions</button>' +
+        '<button type="button" class="lp-discuss-tab' + (tab === 'private' ? ' active' : '') + '" data-lp-discuss-tab="private">' +
+          (isInstructor() ? 'Private with learners' : 'Private with tutors') +
+        '</button>' +
+      '</div>';
+
+    if (tab === 'private' && discussionState.composingPrivate) {
+      root.innerHTML = tabs + renderPrivateComposeForm();
+      return;
+    }
+
+    if (tab === 'course') {
+      var courses = accessibleCoursesForDiscussion();
+      if (!discussionState.courseId && courses[0]) discussionState.courseId = courses[0].id;
+      if (discussionState.courseId && !courses.some(function (c) { return c.id === discussionState.courseId; })) {
+        discussionState.courseId = courses[0] ? courses[0].id : null;
+      }
+      var activeCourse = courses.filter(function (c) { return c.id === discussionState.courseId; })[0] || null;
+      var thread = activeCourse ? ensureCourseDiscussion(activeCourse.id) : null;
+      root.innerHTML = tabs +
+        '<div class="lp-discuss-layout">' +
+          '<aside class="lp-discuss-sidebar">' +
+            '<h3>Courses</h3>' +
+            (courses.length
+              ? '<div class="lp-discuss-list">' + courses.map(function (c) {
+                  var count = ((discussions().filter(function (d) {
+                    return d.kind === 'course' && d.courseId === c.id;
+                  })[0] || {}).messages || []).length;
+                  return '<button type="button" class="lp-discuss-item' + (activeCourse && activeCourse.id === c.id ? ' active' : '') +
+                    '" data-lp-discuss-course="' + escapeHtml(c.id) + '">' +
+                    '<strong>' + escapeHtml(c.title) + '</strong>' +
+                    '<span>' + escapeHtml(c.category || 'General') + (count ? ' · ' + count + ' messages' : '') + '</span>' +
+                  '</button>';
+                }).join('') + '</div>'
+              : '<p class="lp-empty">' + (isInstructor()
+                  ? 'No published courses yet.'
+                  : 'Enroll in a course to join its discussion.') + '</p>') +
+          '</aside>' +
+          '<section class="lp-discuss-panel">' +
+            (thread && activeCourse
+              ? '<div class="lp-card lp-discuss-thread">' +
+                  '<div class="lp-discuss-thread-head">' +
+                    '<h3>' + escapeHtml(activeCourse.title) + '</h3>' +
+                    '<p>General course discussion — visible to tutors and enrolled learners.</p>' +
+                  '</div>' +
+                  renderDiscussionMessages(thread) +
+                  renderMessageComposer(thread.id) +
+                '</div>'
+              : '<div class="lp-card"><p class="lp-empty">Select a course to open its discussion.</p></div>') +
+          '</section>' +
+        '</div>';
+      return;
+    }
+
+    // Private tab
+    var threads = visiblePrivateThreads();
+    if (discussionState.threadId && !threads.some(function (t) { return t.id === discussionState.threadId; })) {
+      discussionState.threadId = null;
+    }
+    if (!discussionState.threadId && threads[0]) discussionState.threadId = threads[0].id;
+    var active = threads.filter(function (t) { return t.id === discussionState.threadId; })[0] || null;
+    var data = getData();
+
+    root.innerHTML = tabs +
+      '<div class="lp-discuss-layout">' +
+        '<aside class="lp-discuss-sidebar">' +
+          '<div class="lp-discuss-sidebar-head">' +
+            '<h3>Private threads</h3>' +
+            '<button type="button" class="lp-btn lp-btn-primary" data-lp-discuss-new-private>New</button>' +
+          '</div>' +
+          (threads.length
+            ? '<div class="lp-discuss-list">' + threads.map(function (t) {
+                var course = t.courseId ? data.courses.filter(function (c) { return c.id === t.courseId; })[0] : null;
+                return '<button type="button" class="lp-discuss-item' + (active && active.id === t.id ? ' active' : '') +
+                  '" data-lp-discuss-thread="' + escapeHtml(t.id) + '">' +
+                  '<strong>' + escapeHtml(t.title) + '</strong>' +
+                  '<span>' + escapeHtml(isInstructor() ? (t.learnerName || 'Learner') : 'Tutors') +
+                    (course ? ' · ' + escapeHtml(course.title) : '') +
+                    ' · ' + escapeHtml(formatWhen(t.updatedAt)) +
+                  '</span>' +
+                '</button>';
+              }).join('') + '</div>'
+            : '<p class="lp-empty">' + (isInstructor()
+                ? 'No private learner discussions yet.'
+                : 'Start a private discussion with a tutor when you need help.') + '</p>') +
+        '</aside>' +
+        '<section class="lp-discuss-panel">' +
+          (active
+            ? '<div class="lp-card lp-discuss-thread">' +
+                '<div class="lp-discuss-thread-head">' +
+                  '<h3>' + escapeHtml(active.title) + '</h3>' +
+                  '<p>Private discussion' +
+                    (isInstructor() ? ' with ' + escapeHtml(active.learnerName || 'learner') : ' with tutors') +
+                    ' — only participants and tutors can see this.</p>' +
+                '</div>' +
+                renderDiscussionMessages(active) +
+                renderMessageComposer(active.id) +
+              '</div>'
+            : '<div class="lp-card"><p class="lp-empty">Select a thread, or start a new private discussion.</p></div>') +
+        '</section>' +
+      '</div>';
   }
 
   function renderAnnouncements(root) {
@@ -673,11 +1021,43 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
       playerState.mode = 'list';
+      if (view === 'discussions') discussionState.composingPrivate = false;
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-discuss-tab')) {
+      discussionState.tab = t.getAttribute('data-lp-discuss-tab') === 'private' ? 'private' : 'course';
+      discussionState.composingPrivate = false;
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-discuss-course')) {
+      discussionState.tab = 'course';
+      discussionState.courseId = t.getAttribute('data-lp-discuss-course');
+      discussionState.composingPrivate = false;
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-discuss-thread')) {
+      discussionState.tab = 'private';
+      discussionState.threadId = t.getAttribute('data-lp-discuss-thread');
+      discussionState.composingPrivate = false;
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-discuss-new-private')) {
+      discussionState.tab = 'private';
+      discussionState.composingPrivate = true;
+      render();
+      return;
+    }
+    if (t.hasAttribute('data-lp-discuss-cancel-private')) {
+      discussionState.composingPrivate = false;
       render();
       return;
     }
@@ -776,6 +1156,45 @@
   }
 
   function onSubmit(e) {
+    if (e.target && e.target.id === 'lp-discussion-reply') {
+      e.preventDefault();
+      var threadId = e.target.getAttribute('data-thread-id');
+      var body = String(new FormData(e.target).get('body') || '').trim();
+      if (!postDiscussionMessage(threadId, body)) {
+        alert('Unable to post message. Check that you still have access to this discussion.');
+        return;
+      }
+      render();
+      return;
+    }
+    if (e.target && e.target.id === 'lp-private-new') {
+      e.preventDefault();
+      var fdPriv = new FormData(e.target);
+      var opts = {
+        title: String(fdPriv.get('title') || '').trim(),
+        body: String(fdPriv.get('body') || '').trim(),
+        courseId: String(fdPriv.get('courseId') || '').trim()
+      };
+      if (isInstructor()) {
+        opts.learnerId = String(fdPriv.get('learnerId') || '').trim();
+        var en = getData().enrollments.filter(function (x) { return x.userId === opts.learnerId; })[0];
+        opts.learnerName = en ? en.userName : opts.learnerId;
+        if (!opts.learnerId) {
+          alert('Select a learner for the private discussion.');
+          return;
+        }
+      }
+      var created = createPrivateDiscussion(opts);
+      if (!created) {
+        alert('Please enter a subject and message.');
+        return;
+      }
+      discussionState.tab = 'private';
+      discussionState.threadId = created.id;
+      discussionState.composingPrivate = false;
+      render();
+      return;
+    }
     if (e.target && e.target.id === 'lp-announce-form') {
       e.preventDefault();
       if (!isInstructor()) return;
