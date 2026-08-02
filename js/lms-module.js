@@ -84,6 +84,7 @@
 
   function clearEditorDraft() {
     viewState.draftCourse = null;
+    viewState.coverImageCleared = false;
   }
 
   function id(prefix) {
