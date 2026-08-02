@@ -22,13 +22,28 @@
     all: 'Employees + public'
   };
 
+  var CONTENT_TYPES = {
+    text: 'Text / procedure',
+    video: 'Video URL',
+    link: 'Web link',
+    document: 'Document link'
+  };
+
+  var LEARNER_ROLES = {
+    learner: 'Learner',
+    instructor: 'Instructor'
+  };
+
   var defaultSettings = {
     companyLmsName: 'Andeco Learning',
     publicCatalogEnabled: true,
     careersPortalEnabled: true,
     currency: 'EUR',
     purchaseInstructions: 'Complete the form to request this course. Our team will contact you with payment and access details.',
-    careersIntro: 'Apply for a role by completing the required assessment. Enter the access code provided by HR to begin.'
+    careersIntro: 'Apply for a role by completing the required assessment. Enter the access code provided by HR to begin.',
+    certificateTitle: 'Certificate of Completion',
+    certificateSigner: 'Training Manager',
+    autoIssueCertificates: true
   };
 
   var currentSection = 'dashboard';
@@ -52,7 +67,8 @@
     if (viewState.mode === 'exam' && document.getElementById('lms-exam-form')) return true;
     if (currentSection === 'settings' && document.getElementById('lms-settings-form')) return true;
     if (currentSection === 'hiring' && document.getElementById('lms-applicant-form')) return true;
-    if (currentSection === 'learners' && document.getElementById('lms-assign-form')) return true;
+    if (currentSection === 'learners' && (document.getElementById('lms-assign-form') || document.getElementById('lms-profile-form'))) return true;
+    if (currentSection === 'announcements' && document.getElementById('lms-announce-form')) return true;
     return false;
   }
 
@@ -93,6 +109,9 @@
       attempts: [],
       purchases: [],
       applicants: [],
+      announcements: [],
+      certificates: [],
+      learnerProfiles: [],
       settings: Object.assign({}, defaultSettings)
     };
   }
@@ -105,6 +124,9 @@
       attempts: Array.isArray(d.attempts) ? d.attempts : [],
       purchases: Array.isArray(d.purchases) ? d.purchases : [],
       applicants: Array.isArray(d.applicants) ? d.applicants : [],
+      announcements: Array.isArray(d.announcements) ? d.announcements : [],
+      certificates: Array.isArray(d.certificates) ? d.certificates : [],
+      learnerProfiles: Array.isArray(d.learnerProfiles) ? d.learnerProfiles : [],
       settings: Object.assign({}, defaultSettings, d.settings && typeof d.settings === 'object' ? d.settings : {})
     };
   }
@@ -129,6 +151,8 @@
           id: l.id || id('lsn'),
           title: l.title || ('Lesson ' + (i + 1)),
           content: l.content || '',
+          contentType: CONTENT_TYPES[l.contentType] ? l.contentType : 'text',
+          mediaUrl: l.mediaUrl || '',
           order: l.order != null ? Number(l.order) : i,
           durationMinutes: Number(l.durationMinutes) || 0
         };
@@ -271,8 +295,75 @@
       en.progressPercent = 100;
       en.completedAt = new Date().toISOString();
       en.passed = true;
+      maybeIssueCertificate(data, en, course);
     }
     saveData(data);
+  }
+
+  function maybeIssueCertificate(data, enrollment, course) {
+    if (!data.settings.autoIssueCertificates) return null;
+    if (!enrollment || !course) return null;
+    if (!(enrollment.status === 'completed' || enrollment.passed === true)) return null;
+    var exists = (data.certificates || []).some(function (c) {
+      return c.enrollmentId === enrollment.id || (c.userId === enrollment.userId && c.courseId === course.id);
+    });
+    if (exists) return null;
+    var cert = {
+      id: id('cert'),
+      userId: enrollment.userId,
+      userName: enrollment.userName,
+      courseId: course.id,
+      courseTitle: course.title,
+      enrollmentId: enrollment.id,
+      issuedAt: new Date().toISOString(),
+      certificateNo: 'AND-' + String(Date.now()).slice(-8),
+      score: enrollment.score != null ? enrollment.score : null
+    };
+    data.certificates = data.certificates || [];
+    data.certificates.push(cert);
+    return cert;
+  }
+
+  function getLearnerProfile(userId) {
+    var data = getData();
+    return (data.learnerProfiles || []).filter(function (p) { return p.userId === userId; })[0] || null;
+  }
+
+  function upsertLearnerProfile(userId, patch) {
+    var data = getData();
+    var idx = (data.learnerProfiles || []).findIndex(function (p) { return p.userId === userId; });
+    var base = idx >= 0 ? data.learnerProfiles[idx] : { userId: userId, role: 'learner', department: '', notes: '' };
+    var next = Object.assign({}, base, patch || {}, { userId: userId });
+    if (!LEARNER_ROLES[next.role]) next.role = 'learner';
+    if (idx >= 0) data.learnerProfiles[idx] = next;
+    else {
+      data.learnerProfiles = data.learnerProfiles || [];
+      data.learnerProfiles.push(next);
+    }
+    saveData(data);
+    return next;
+  }
+
+  function embedMediaHtml(lesson) {
+    var type = lesson.contentType || 'text';
+    var url = lesson.mediaUrl || '';
+    if (!url || type === 'text') return '';
+    if (type === 'video') {
+      var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{6,})/);
+      var vim = url.match(/vimeo\.com\/(\d+)/);
+      if (yt) {
+        return '<div class="lms-media"><iframe src="https://www.youtube.com/embed/' + escapeHtml(yt[1]) +
+          '" title="Lesson video" allowfullscreen loading="lazy"></iframe></div>';
+      }
+      if (vim) {
+        return '<div class="lms-media"><iframe src="https://player.vimeo.com/video/' + escapeHtml(vim[1]) +
+          '" title="Lesson video" allowfullscreen loading="lazy"></iframe></div>';
+      }
+      return '<div class="lms-media"><video controls src="' + escapeHtml(url) + '"></video></div>';
+    }
+    return '<p class="lms-actions"><a class="btn btn-secondary" href="' + escapeHtml(url) +
+      '" target="_blank" rel="noopener noreferrer">' +
+      (type === 'document' ? 'Open document' : 'Open resource') + '</a></p>';
   }
 
   function scoreAttempt(course, answers) {
@@ -321,15 +412,49 @@
       return a.status === 'invited' || a.status === 'started';
     }).length;
     var completed = mine.filter(function (e) { return e.status === 'completed' || e.passed === true; }).length;
+    var myCerts = (data.certificates || []).filter(function (c) {
+      var u = currentUser();
+      return u && c.userId === u.id;
+    }).length;
+    var pinned = (data.announcements || []).filter(function (a) { return a.pinned; }).slice(0, 3);
+
+    var capabilities = [
+      { title: 'Course Management', desc: 'Create courses, inductions, procedures, exams', goto: 'library', ready: true },
+      { title: 'User Management', desc: 'Learners, instructors, enrollments', goto: 'learners', ready: true },
+      { title: 'Content Delivery', desc: 'Text, video, documents & links', goto: 'my-learning', ready: true },
+      { title: 'Assessment & Evaluation', desc: 'Quizzes, scoring, pass marks', goto: 'library', ready: true },
+      { title: 'Communication Tools', desc: 'Announcements for staff & learners', goto: 'announcements', ready: true },
+      { title: 'Tracking & Reporting', desc: 'Progress, completion and scores', goto: 'reports', ready: true },
+      { title: 'Certification', desc: 'Auto certificates on completion', goto: 'certificates', ready: true },
+      { title: 'Mobile Access', desc: 'Responsive layout on phones & tablets', goto: 'settings', ready: true }
+    ];
 
     el.innerHTML =
       '<div class="lms-metrics">' +
         metricHtml('Published courses', published.length) +
         metricHtml('My enrollments', mine.length) +
         metricHtml('Completed', completed, 'ok') +
+        metricHtml('My certificates', myCerts, myCerts ? 'ok' : '') +
         (isAdmin() ? metricHtml('Pending purchases', pendingPurchases, pendingPurchases ? 'warn' : '') : '') +
         (isAdmin() ? metricHtml('Open applicants', openApplicants, openApplicants ? 'warn' : '') : '') +
       '</div>' +
+      '<div class="module-table-panel">' +
+        '<h3>LMS capabilities</h3>' +
+        '<div class="lms-capability-grid">' +
+          capabilities.map(function (cap) {
+            return '<button type="button" class="lms-capability-card" data-lms-goto="' + escapeHtml(cap.goto) + '">' +
+              '<strong>' + escapeHtml(cap.title) + '</strong>' +
+              '<span>' + escapeHtml(cap.desc) + '</span>' +
+              '<em class="lms-capability-ready">Ready</em></button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      (pinned.length ? '<div class="module-table-panel"><h3>Announcements</h3><div class="lms-announce-list">' +
+        pinned.map(function (a) {
+          return '<article class="lms-announce-card"><strong>' + escapeHtml(a.title) + '</strong>' +
+            '<p>' + escapeHtml(a.body) + '</p></article>';
+        }).join('') +
+        '</div></div>' : '') +
       '<div class="lms-dashboard-grid">' +
         '<div class="module-table-panel">' +
           '<h3>Continue learning</h3>' +
@@ -344,8 +469,9 @@
       '</div>' +
       (isAdmin() ? '<div class="module-table-panel"><h3>Admin shortcuts</h3>' +
         '<div class="lms-actions">' +
-          '<button type="button" class="btn btn-primary" data-lms-goto="library">Manage library</button>' +
-          '<button type="button" class="btn btn-secondary" data-lms-goto="purchases">Purchases</button>' +
+          '<button type="button" class="btn btn-primary" data-lms-goto="library">Course management</button>' +
+          '<button type="button" class="btn btn-secondary" data-lms-goto="reports">Reports</button>' +
+          '<button type="button" class="btn btn-secondary" data-lms-goto="announcements">Announcements</button>' +
           '<button type="button" class="btn btn-secondary" data-lms-goto="hiring">Hiring exams</button>' +
           '<button type="button" class="btn btn-ghost" data-lms-goto="settings">LMS settings</button>' +
         '</div>' +
@@ -391,9 +517,21 @@
       renderPlayer(el);
       return;
     }
+    var data = getData();
+    var u = currentUser();
+    var announcements = (data.announcements || []).filter(function (a) {
+      return !a.audience || a.audience === 'all' || a.audience === 'employees';
+    }).slice(0, 3);
     el.innerHTML =
-      '<div class="page-header"><h2>My learning</h2></div>' +
-      renderMyLearningCards(myEnrollments(), false);
+      '<div class="page-header"><h2>My learning</h2><p class="lms-hint">Content delivery for your assigned and self-enrolled training.</p></div>' +
+      (announcements.length ? '<div class="module-table-panel"><h3>Latest announcements</h3><div class="lms-announce-list">' +
+        announcements.map(function (a) {
+          return '<article class="lms-announce-card"><strong>' + escapeHtml(a.title) + '</strong><p>' + escapeHtml(a.body) + '</p></article>';
+        }).join('') + '</div></div>' : '') +
+      renderMyLearningCards(myEnrollments(), false) +
+      '<div class="module-table-panel" style="margin-top:1rem"><h3>My certificates</h3>' +
+        renderCertificateList((data.certificates || []).filter(function (c) { return u && c.userId === u.id; }), false) +
+      '</div>';
   }
 
   function renderLibrary(options) {
@@ -537,7 +675,14 @@
             '<input data-lesson-field="title" value="' + escapeHtml(l.title) + '"></div>' +
           '<div class="form-group"><label>Minutes</label>' +
             '<input data-lesson-field="durationMinutes" type="number" min="0" value="' + escapeHtml(String(l.durationMinutes || 0)) + '"></div>' +
-          '<div class="form-group full-width"><label>Content</label>' +
+          '<div class="form-group"><label>Content type</label><select data-lesson-field="contentType">' +
+            Object.keys(CONTENT_TYPES).map(function (k) {
+              return '<option value="' + k + '"' + ((l.contentType || 'text') === k ? ' selected' : '') + '>' + escapeHtml(CONTENT_TYPES[k]) + '</option>';
+            }).join('') +
+          '</select></div>' +
+          '<div class="form-group"><label>Media / document URL</label>' +
+            '<input data-lesson-field="mediaUrl" value="' + escapeHtml(l.mediaUrl || '') + '" placeholder="https://…"></div>' +
+          '<div class="form-group full-width"><label>Content / notes</label>' +
             '<textarea data-lesson-field="content" rows="4" placeholder="Training content, procedure steps, induction notes…">' + escapeHtml(l.content) + '</textarea></div>' +
         '</div>' +
         '<button type="button" class="btn btn-ghost btn-sm" data-remove-lesson="' + i + '">Remove lesson</button>' +
@@ -589,6 +734,8 @@
         id: (block.querySelector('[data-lesson-field="id"]') || {}).value || id('lsn'),
         title: (block.querySelector('[data-lesson-field="title"]') || {}).value || ('Lesson ' + (i + 1)),
         content: (block.querySelector('[data-lesson-field="content"]') || {}).value || '',
+        contentType: (block.querySelector('[data-lesson-field="contentType"]') || {}).value || 'text',
+        mediaUrl: (block.querySelector('[data-lesson-field="mediaUrl"]') || {}).value || '',
         durationMinutes: Number((block.querySelector('[data-lesson-field="durationMinutes"]') || {}).value) || 0,
         order: i
       });
@@ -650,7 +797,41 @@
     var data = getData();
     var users = getUsers();
     el.innerHTML =
-      '<div class="page-header"><h2>Learners & enrollments</h2></div>' +
+      '<div class="page-header"><h2>User management</h2>' +
+      '<p class="lms-hint">Manage learner/instructor roles and assign training. App login accounts are still created under Admin.</p></div>' +
+      '<div class="invoice-form-container" style="margin-bottom:1.5rem"><form id="lms-profile-form" class="invoice-form">' +
+        '<div class="form-section"><h3>Learner / instructor profile</h3><div class="form-row">' +
+          '<div class="form-group"><label>User</label><select name="userId" required>' +
+            '<option value="">Select user…</option>' +
+            users.map(function (u) {
+              return '<option value="' + escapeHtml(u.id) + '">' + escapeHtml(u.displayName || u.username) + '</option>';
+            }).join('') +
+          '</select></div>' +
+          '<div class="form-group"><label>LMS role</label><select name="role">' +
+            Object.keys(LEARNER_ROLES).map(function (k) {
+              return '<option value="' + k + '">' + escapeHtml(LEARNER_ROLES[k]) + '</option>';
+            }).join('') +
+          '</select></div>' +
+          '<div class="form-group"><label>Department</label><input name="department" placeholder="e.g. Deck, Office"></div>' +
+          '<div class="form-group full-width"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>' +
+        '</div><div class="form-actions"><button type="submit" class="btn btn-primary">Save profile</button></div></div>' +
+      '</form></div>' +
+      '<div class="table-wrap" style="margin-bottom:1.5rem"><table class="data-table"><thead><tr>' +
+        '<th>User</th><th>LMS role</th><th>Department</th><th>Enrollments</th><th>Completed</th><th>Certificates</th>' +
+      '</tr></thead><tbody>' +
+      (users.length ? users.map(function (u) {
+        var profile = getLearnerProfile(u.id) || { role: 'learner', department: '' };
+        var ens = data.enrollments.filter(function (e) { return e.userId === u.id; });
+        var done = ens.filter(function (e) { return e.status === 'completed' || e.passed === true; }).length;
+        var certs = (data.certificates || []).filter(function (c) { return c.userId === u.id; }).length;
+        return '<tr><td><strong>' + escapeHtml(u.displayName || u.username) + '</strong>' +
+          (u.isAdmin ? ' <span class="lms-badge">admin</span>' : '') +
+          '<div class="lms-meta">' + escapeHtml(u.username) + '</div></td>' +
+          '<td>' + escapeHtml(LEARNER_ROLES[profile.role] || 'Learner') + '</td>' +
+          '<td>' + escapeHtml(profile.department || '—') + '</td>' +
+          '<td>' + ens.length + '</td><td>' + done + '</td><td>' + certs + '</td></tr>';
+      }).join('') : '<tr><td colspan="6">No users found.</td></tr>') +
+      '</tbody></table></div>' +
       '<div class="invoice-form-container" style="margin-bottom:1.5rem"><form id="lms-assign-form" class="invoice-form">' +
         '<div class="form-section"><h3>Assign training</h3><div class="form-row">' +
           '<div class="form-group"><label>User</label><select name="userId" required>' +
@@ -677,6 +858,178 @@
           statusBadge(en.status) + '</td><td>' + (en.score != null ? escapeHtml(String(en.score)) + '%' : '—') + '</td></tr>';
       }).join('') : '<tr><td colspan="6">No enrollments yet.</td></tr>') +
       '</tbody></table></div>';
+  }
+
+  function renderAnnouncements() {
+    var el = document.getElementById('lms-announcements');
+    if (!el) return;
+    var data = getData();
+    var list = (data.announcements || []).slice().sort(function (a, b) {
+      return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    });
+    el.innerHTML =
+      '<div class="page-header"><h2>Communication</h2>' +
+      '<p class="lms-hint">Share announcements with employees and learners.</p></div>' +
+      (isAdmin() ? '<div class="invoice-form-container" style="margin-bottom:1.5rem"><form id="lms-announce-form" class="invoice-form">' +
+        '<div class="form-section"><h3>New announcement</h3><div class="form-row">' +
+          '<div class="form-group full-width"><label>Title</label><input name="title" required></div>' +
+          '<div class="form-group full-width"><label>Message</label><textarea name="body" rows="3" required></textarea></div>' +
+          '<div class="form-group"><label>Audience</label><select name="audience">' +
+            '<option value="employees">Employees</option><option value="all">Everyone</option><option value="public">Public catalog visitors</option>' +
+          '</select></div>' +
+          '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="pinned"> Pin to dashboard</label></div>' +
+        '</div><div class="form-actions"><button type="submit" class="btn btn-primary">Publish</button></div></div>' +
+      '</form></div>' : '') +
+      '<div class="lms-announce-list">' +
+        (list.length ? list.map(function (a) {
+          return '<article class="lms-announce-card">' +
+            '<div class="lms-announce-head"><strong>' + escapeHtml(a.title) + '</strong>' +
+            (a.pinned ? ' <span class="lms-badge lms-badge--published">Pinned</span>' : '') +
+            '<span class="lms-meta"> · ' + escapeHtml((a.createdAt || '').slice(0, 10)) +
+            ' · ' + escapeHtml(a.audience || 'employees') + '</span></div>' +
+            '<p>' + escapeHtml(a.body) + '</p>' +
+            (isAdmin() ? '<button type="button" class="btn btn-ghost btn-sm" data-lms-announce-delete="' + escapeHtml(a.id) + '">Delete</button>' : '') +
+          '</article>';
+        }).join('') : emptyState('No announcements yet.')) +
+      '</div>';
+  }
+
+  function renderReports() {
+    var el = document.getElementById('lms-reports');
+    if (!el) return;
+    var data = getData();
+    var totalEnroll = data.enrollments.length;
+    var completed = data.enrollments.filter(function (e) { return e.status === 'completed' || e.passed === true; }).length;
+    var inProgress = data.enrollments.filter(function (e) { return e.status === 'in_progress' || e.status === 'enrolled'; }).length;
+    var failed = data.enrollments.filter(function (e) { return e.status === 'failed'; }).length;
+    var scored = data.enrollments.filter(function (e) { return e.score != null; });
+    var avgScore = scored.length
+      ? Math.round(scored.reduce(function (sum, e) { return sum + Number(e.score); }, 0) / scored.length)
+      : null;
+    var byCourse = data.courses.map(function (c) {
+      var ens = data.enrollments.filter(function (e) { return e.courseId === c.id; });
+      var done = ens.filter(function (e) { return e.status === 'completed' || e.passed === true; }).length;
+      return {
+        title: c.title,
+        type: c.type,
+        enrollments: ens.length,
+        completed: done,
+        rate: ens.length ? Math.round((done / ens.length) * 100) : 0
+      };
+    }).filter(function (r) { return r.enrollments > 0; });
+
+    if (!isAdmin()) {
+      var mine = myEnrollments();
+      el.innerHTML =
+        '<div class="page-header"><h2>My progress</h2></div>' +
+        '<div class="lms-metrics">' +
+          metricHtml('Enrolled', mine.length) +
+          metricHtml('Completed', mine.filter(function (e) { return e.status === 'completed' || e.passed; }).length, 'ok') +
+          metricHtml('In progress', mine.filter(function (e) { return e.status === 'in_progress' || e.status === 'enrolled'; }).length) +
+        '</div>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr><th>Training</th><th>Progress</th><th>Status</th><th>Score</th></tr></thead><tbody>' +
+        (mine.length ? mine.map(function (en) {
+          var course = findCourse(en.courseId);
+          return '<tr><td>' + escapeHtml(course ? course.title : '—') + '</td><td>' +
+            escapeHtml(String(en.progressPercent || 0)) + '%</td><td>' + statusBadge(en.status) + '</td><td>' +
+            (en.score != null ? escapeHtml(String(en.score)) + '%' : '—') + '</td></tr>';
+        }).join('') : '<tr><td colspan="4">No enrollments yet.</td></tr>') +
+        '</tbody></table></div>';
+      return;
+    }
+
+    el.innerHTML =
+      '<div class="page-header"><h2>Tracking &amp; reporting</h2></div>' +
+      '<div class="lms-metrics">' +
+        metricHtml('Enrollments', totalEnroll) +
+        metricHtml('Completed', completed, 'ok') +
+        metricHtml('In progress', inProgress) +
+        metricHtml('Failed', failed, failed ? 'warn' : '') +
+        metricHtml('Avg score', avgScore != null ? avgScore + '%' : '—') +
+        metricHtml('Certificates', (data.certificates || []).length, 'ok') +
+        metricHtml('Exam attempts', (data.attempts || []).length) +
+      '</div>' +
+      '<div class="module-table-panel"><h3>Completion by course</h3>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+          '<th>Course</th><th>Type</th><th>Enrolled</th><th>Completed</th><th>Completion %</th>' +
+        '</tr></thead><tbody>' +
+        (byCourse.length ? byCourse.map(function (r) {
+          return '<tr><td>' + escapeHtml(r.title) + '</td><td>' + escapeHtml(typeLabel(r.type)) +
+            '</td><td>' + r.enrollments + '</td><td>' + r.completed + '</td><td>' + r.rate + '%</td></tr>';
+        }).join('') : '<tr><td colspan="5">No enrollment activity yet.</td></tr>') +
+        '</tbody></table></div></div>' +
+      '<div class="module-table-panel"><h3>Recent assessment attempts</h3>' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+          '<th>Date</th><th>Learner</th><th>Course</th><th>Score</th><th>Result</th>' +
+        '</tr></thead><tbody>' +
+        ((data.attempts || []).length ? data.attempts.slice().reverse().slice(0, 25).map(function (a) {
+          var course = findCourse(a.courseId);
+          var en = data.enrollments.filter(function (e) { return e.id === a.enrollmentId; })[0];
+          return '<tr><td>' + escapeHtml((a.finishedAt || '').slice(0, 16).replace('T', ' ')) + '</td>' +
+            '<td>' + escapeHtml(en ? en.userName : a.userId) + '</td>' +
+            '<td>' + escapeHtml(course ? course.title : '—') + '</td>' +
+            '<td>' + escapeHtml(String(a.score)) + '%</td>' +
+            '<td>' + statusBadge(a.passed ? 'passed' : 'failed') + '</td></tr>';
+        }).join('') : '<tr><td colspan="5">No exam attempts yet.</td></tr>') +
+        '</tbody></table></div></div>';
+  }
+
+  function renderCertificateList(certs, adminView) {
+    if (!certs.length) return emptyState(adminView ? 'No certificates issued yet.' : 'No certificates yet. Complete a course to earn one.');
+    return '<div class="lms-cert-list">' + certs.slice().reverse().map(function (c) {
+      return '<div class="lms-cert-card">' +
+        '<div><strong>' + escapeHtml(c.courseTitle) + '</strong>' +
+        '<div class="lms-meta">' + escapeHtml(c.userName) + ' · ' + escapeHtml((c.issuedAt || '').slice(0, 10)) +
+        ' · No. ' + escapeHtml(c.certificateNo) +
+        (c.score != null ? ' · Score ' + escapeHtml(String(c.score)) + '%' : '') + '</div></div>' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-lms-cert-print="' + escapeHtml(c.id) + '">View / print</button>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function renderCertificates() {
+    var el = document.getElementById('lms-certificates');
+    if (!el) return;
+    var data = getData();
+    var u = currentUser();
+    var certs = isAdmin()
+      ? (data.certificates || [])
+      : (data.certificates || []).filter(function (c) { return u && c.userId === u.id; });
+    el.innerHTML =
+      '<div class="page-header"><h2>Certification</h2>' +
+      '<p class="lms-hint">Certificates are issued automatically when learners complete training (if enabled in settings).</p></div>' +
+      renderCertificateList(certs, isAdmin()) +
+      '<div id="lms-certificate-print" class="lms-certificate-sheet hidden"></div>';
+  }
+
+  function printCertificate(certId) {
+    var data = getData();
+    var cert = (data.certificates || []).filter(function (c) { return c.id === certId; })[0];
+    if (!cert) return;
+    var s = data.settings;
+    var host = document.getElementById('lms-certificate-print') || document.createElement('div');
+    host.id = 'lms-certificate-print';
+    host.className = 'lms-certificate-sheet';
+    host.innerHTML =
+      '<div class="lms-certificate">' +
+        '<p class="lms-certificate-eyebrow">' + escapeHtml(s.companyLmsName || 'Andeco Learning') + '</p>' +
+        '<h1>' + escapeHtml(s.certificateTitle || 'Certificate of Completion') + '</h1>' +
+        '<p class="lms-certificate-line">This certifies that</p>' +
+        '<h2>' + escapeHtml(cert.userName) + '</h2>' +
+        '<p class="lms-certificate-line">has successfully completed</p>' +
+        '<h3>' + escapeHtml(cert.courseTitle) + '</h3>' +
+        '<p class="lms-certificate-meta">Issued ' + escapeHtml((cert.issuedAt || '').slice(0, 10)) +
+          ' · Certificate no. ' + escapeHtml(cert.certificateNo) +
+          (cert.score != null ? ' · Score ' + escapeHtml(String(cert.score)) + '%' : '') + '</p>' +
+        '<p class="lms-certificate-sign">' + escapeHtml(s.certificateSigner || 'Training Manager') + '</p>' +
+      '</div>';
+    if (!host.parentNode) document.body.appendChild(host);
+    host.classList.remove('hidden');
+    var prevTitle = document.title;
+    document.title = 'Certificate - ' + cert.userName;
+    window.print();
+    document.title = prevTitle;
+    host.classList.add('hidden');
   }
 
   function renderPurchases() {
@@ -762,7 +1115,12 @@
     var el = document.getElementById('lms-settings');
     if (!el) return;
     if (!isAdmin()) {
-      el.innerHTML = emptyState('LMS settings are available to administrators.');
+      el.innerHTML =
+        '<div class="page-header"><h2>Mobile access</h2></div>' +
+        '<div class="module-table-panel">' +
+          '<p>The LMS is responsive for phones and tablets. Use your usual login URL on mobile browsers.</p>' +
+          '<p class="lms-hint">Tip: add the site to your home screen for quick access to My learning, announcements, and certificates.</p>' +
+        '</div>';
       return;
     }
     var s = getData().settings;
@@ -774,6 +1132,9 @@
           '<div class="form-group"><label>Default currency</label><input name="currency" value="' + escapeHtml(s.currency) + '"></div>' +
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="publicCatalogEnabled"' + (s.publicCatalogEnabled ? ' checked' : '') + '> Enable public course catalog</label></div>' +
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="careersPortalEnabled"' + (s.careersPortalEnabled ? ' checked' : '') + '> Enable careers / hiring exam portal</label></div>' +
+          '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="autoIssueCertificates"' + (s.autoIssueCertificates !== false ? ' checked' : '') + '> Auto-issue certificates on completion</label></div>' +
+          '<div class="form-group"><label>Certificate title</label><input name="certificateTitle" value="' + escapeHtml(s.certificateTitle || '') + '"></div>' +
+          '<div class="form-group"><label>Certificate signer</label><input name="certificateSigner" value="' + escapeHtml(s.certificateSigner || '') + '"></div>' +
           '<div class="form-group full-width"><label>Public purchase instructions</label><textarea name="purchaseInstructions" rows="3">' + escapeHtml(s.purchaseInstructions) + '</textarea></div>' +
           '<div class="form-group full-width"><label>Careers portal intro</label><textarea name="careersIntro" rows="3">' + escapeHtml(s.careersIntro) + '</textarea></div>' +
         '</div></div>' +
@@ -783,6 +1144,7 @@
         '<p><strong>Public links</strong></p>' +
         '<p>Course catalog: add <code>#lms-public</code> to your app URL</p>' +
         '<p>Hiring exams: add <code>#lms-careers</code> to your app URL</p>' +
+        '<p><strong>Mobile access:</strong> the LMS layout adapts to phones and tablets.</p>' +
       '</div></div>';
   }
 
@@ -815,6 +1177,9 @@
         '</aside>' +
         '<div class="lms-player-content module-table-panel">' +
           (lesson ? '<h3>' + escapeHtml(lesson.title) + '</h3>' +
+            '<p class="lms-meta">' + escapeHtml(CONTENT_TYPES[lesson.contentType] || 'Text / procedure') +
+            (lesson.durationMinutes ? ' · ' + escapeHtml(String(lesson.durationMinutes)) + ' min' : '') + '</p>' +
+            embedMediaHtml(lesson) +
             '<div class="lms-lesson-body">' + formatContent(lesson.content) + '</div>' +
             '<div class="lms-actions">' +
               '<button type="button" class="btn btn-primary" data-lms-complete-lesson="' + escapeHtml(lesson.id) + '">Mark complete &amp; continue</button>' +
@@ -904,8 +1269,15 @@
     var courses = data.courses.filter(function (c) {
       return c.published && (c.audience === 'public' || c.audience === 'all');
     });
+    var publicAnnouncements = (data.announcements || []).filter(function (a) {
+      return a.audience === 'public' || a.audience === 'all';
+    }).slice(0, 3);
     root.innerHTML =
       '<div class="lms-public-hero-copy"><p>Browse training courses available to visitors and partners.</p></div>' +
+      (publicAnnouncements.length ? '<div class="lms-announce-list" style="margin-bottom:1rem">' +
+        publicAnnouncements.map(function (a) {
+          return '<article class="lms-announce-card"><strong>' + escapeHtml(a.title) + '</strong><p>' + escapeHtml(a.body) + '</p></article>';
+        }).join('') + '</div>' : '') +
       (courses.length ? '<div class="lms-public-grid">' + courses.map(function (c) {
         return '<article class="lms-public-card">' +
           '<h3>' + escapeHtml(c.title) + '</h3>' +
@@ -999,6 +1371,9 @@
     else if (currentSection === 'my-learning') renderMyLearning();
     else if (currentSection === 'library') renderLibrary(options);
     else if (currentSection === 'learners') renderLearners();
+    else if (currentSection === 'announcements') renderAnnouncements();
+    else if (currentSection === 'reports') renderReports();
+    else if (currentSection === 'certificates') renderCertificates();
     else if (currentSection === 'purchases') renderPurchases();
     else if (currentSection === 'hiring') renderHiring();
     else if (currentSection === 'settings') renderSettings();
@@ -1050,7 +1425,7 @@
   }
 
   function onPageClick(e) {
-    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-remove-lesson],[data-remove-question],[data-add-option],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back');
+    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back');
     if (!t) return;
 
     if (t.id === 'lms-add-course') {
@@ -1241,6 +1616,18 @@
       app.status = parts[1];
       saveData(dataA);
       renderHiring();
+      return;
+    }
+    if (t.hasAttribute('data-lms-announce-delete')) {
+      var dataAn = getData();
+      var aid = t.getAttribute('data-lms-announce-delete');
+      dataAn.announcements = (dataAn.announcements || []).filter(function (a) { return a.id !== aid; });
+      saveData(dataAn);
+      renderAnnouncements();
+      return;
+    }
+    if (t.hasAttribute('data-lms-cert-print')) {
+      printCertificate(t.getAttribute('data-lms-cert-print'));
     }
   }
 
@@ -1261,6 +1648,19 @@
       viewState.courseId = null;
       clearEditorDraft();
       renderLibrary({ force: true });
+      return;
+    }
+    if (e.target && e.target.id === 'lms-profile-form') {
+      e.preventDefault();
+      var fdP = new FormData(e.target);
+      var profileUserId = String(fdP.get('userId') || '');
+      if (!profileUserId) return;
+      upsertLearnerProfile(profileUserId, {
+        role: String(fdP.get('role') || 'learner'),
+        department: String(fdP.get('department') || '').trim(),
+        notes: String(fdP.get('notes') || '').trim()
+      });
+      renderLearners();
       return;
     }
     if (e.target && e.target.id === 'lms-assign-form') {
@@ -1287,9 +1687,32 @@
           score: null,
           passed: null
         });
+        if (!getLearnerProfile(userId)) {
+          data2.learnerProfiles = data2.learnerProfiles || [];
+          data2.learnerProfiles.push({ userId: userId, role: 'learner', department: '', notes: '' });
+        }
         saveData(data2);
       }
       renderLearners();
+      return;
+    }
+    if (e.target && e.target.id === 'lms-announce-form') {
+      e.preventDefault();
+      var fdN = new FormData(e.target);
+      var dataN = getData();
+      var uN = currentUser();
+      dataN.announcements = dataN.announcements || [];
+      dataN.announcements.push({
+        id: id('ann'),
+        title: String(fdN.get('title') || '').trim(),
+        body: String(fdN.get('body') || '').trim(),
+        audience: String(fdN.get('audience') || 'employees'),
+        pinned: !!e.target.querySelector('[name="pinned"]').checked,
+        createdAt: new Date().toISOString(),
+        createdBy: uN ? uN.name : 'Admin'
+      });
+      saveData(dataN);
+      renderAnnouncements();
       return;
     }
     if (e.target && e.target.id === 'lms-applicant-form') {
@@ -1326,6 +1749,9 @@
         currency: String(fdS.get('currency') || 'EUR').trim() || 'EUR',
         publicCatalogEnabled: !!e.target.querySelector('[name="publicCatalogEnabled"]').checked,
         careersPortalEnabled: !!e.target.querySelector('[name="careersPortalEnabled"]').checked,
+        autoIssueCertificates: !!e.target.querySelector('[name="autoIssueCertificates"]').checked,
+        certificateTitle: String(fdS.get('certificateTitle') || '').trim() || defaultSettings.certificateTitle,
+        certificateSigner: String(fdS.get('certificateSigner') || '').trim() || defaultSettings.certificateSigner,
         purchaseInstructions: String(fdS.get('purchaseInstructions') || ''),
         careersIntro: String(fdS.get('careersIntro') || '')
       });
@@ -1385,6 +1811,7 @@
         en.status = result.passed ? 'completed' : 'failed';
         en.progressPercent = 100;
         en.completedAt = new Date().toISOString();
+        if (result.passed) maybeIssueCertificate(data, en, course);
       }
     }
     if (applicantId) {
