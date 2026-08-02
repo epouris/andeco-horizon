@@ -1,6 +1,6 @@
 # Single-file storage (e.g. OneDrive)
 
-All accounting data (invoices, receipts, clients, company settings, products) is stored in one file: **`andeco_data.json`**.
+All app data (invoices, receipts, clients, company settings, products, fleet, crew, shifts, payroll, LMS, users) is stored in one file: **`andeco_data.json`** (or Postgres on Railway).
 
 ## How it works
 

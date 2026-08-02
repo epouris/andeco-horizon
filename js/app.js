@@ -67,8 +67,11 @@
     { id: 'shifts', name: 'Shifts' },
     { id: 'documents', name: 'Document ISO' },
     { id: 'contacts', name: 'Contacts' },
+    { id: 'lms', name: 'Learning (LMS)' },
     { id: 'settings', name: 'Settings' }
   ];
+
+  var PUBLIC_PAGES = ['lms-public', 'lms-careers'];
 
   var MODULE_IDS = MODULES.map(function (m) { return m.id; });
 
@@ -115,6 +118,15 @@
     ],
     clients: [
       { id: 'list', label: 'Clients' }
+    ],
+    lms: [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'my-learning', label: 'My learning' },
+      { id: 'library', label: 'Training library' },
+      { id: 'learners', label: 'Learners' },
+      { id: 'purchases', label: 'Purchases' },
+      { id: 'hiring', label: 'Hiring exams' },
+      { id: 'settings', label: 'LMS settings' }
     ],
     settings: [
       { id: 'company', label: 'Company Information' },
@@ -266,8 +278,9 @@
   function setGenericSectionPanels(pageSelector, panelSelector, sectionId) {
     document.querySelectorAll(pageSelector + ' ' + panelSelector).forEach(function (p) {
       var match = p.getAttribute('data-section') === sectionId;
-      if (p.classList.contains('shifts-section-panel')) {
+      if (p.classList.contains('shifts-section-panel') || p.classList.contains('lms-section-panel')) {
         p.classList.toggle('active', match);
+        p.style.display = match ? 'block' : 'none';
       } else {
         p.style.display = match ? '' : 'none';
       }
@@ -404,6 +417,20 @@
     if (typeof window.CrewManagement !== 'undefined' && window.CrewManagement.render) window.CrewManagement.render();
   }
 
+  function setLmsSection(sectionId) {
+    if (currentModulePageId !== 'lms') return;
+    setGenericSectionPanels('#page-lms', '.lms-section-panel', sectionId);
+    if (window.AndecoModuleNav) {
+      window.AndecoModuleNav.setActiveSectionOnSubtabs('lms', sectionId);
+      window.AndecoModuleNav.activateSection('lms', sectionId);
+    }
+    if (typeof window.LmsModule !== 'undefined') {
+      if (window.LmsModule.setSection) window.LmsModule.setSection(sectionId);
+      if (window.LmsModule.render) window.LmsModule.render();
+    }
+  }
+  window.setLmsSection = setLmsSection;
+
   function setPayrollSubsection(subId) {
     if (subId === 'employees' || subId === 'company') subId = 'ytd';
     var container = document.getElementById('accounting-payroll-content');
@@ -448,6 +475,7 @@
     if (pageId === 'contacts') setContactsSection(sectionId);
     if (pageId === 'clients') setClientsSection(sectionId);
     if (pageId === 'crew') setCrewSection(sectionId);
+    if (pageId === 'lms') setLmsSection(sectionId);
   }
 
   function initSidebarDelegation() {
@@ -490,6 +518,7 @@
       shifts: 'Shifts',
       documents: 'Document ISO',
       contacts: 'Contacts',
+      lms: 'Learning (LMS)',
       settings: 'Settings',
       admin: 'Admin'
     };
@@ -522,9 +551,35 @@
     }
   }
 
+  function isPublicPage(pageId) {
+    return PUBLIC_PAGES.indexOf(pageId) !== -1;
+  }
+
+  function openPublicPage(pageId) {
+    if (typeof window.LmsModule !== 'undefined' && window.LmsModule.showPublicScreen) {
+      window.LmsModule.showPublicScreen(pageId === 'lms-careers' ? 'careers' : 'public');
+      return;
+    }
+    var screenId = pageId === 'lms-careers' ? 'lms-careers-screen' : 'lms-public-screen';
+    showScreen(screenId);
+  }
+
   function route(forcedPageId) {
     var pageId = forcedPageId != null ? String(forcedPageId).toLowerCase() : getRoutePageId();
     if (!pageId) pageId = 'home';
+
+    if (isPublicPage(pageId)) {
+      openPublicPage(pageId);
+      return;
+    }
+
+    if (pageId === 'login' || pageId === 'setup') {
+      clearSession();
+      var usersForAuth = getUsers();
+      showScreen(usersForAuth.length === 0 ? 'setup-screen' : 'login-screen');
+      return;
+    }
+
     var session = getSession();
     if (!session) return;
 
@@ -548,6 +603,7 @@
       if (pageId === 'fleet' && typeof window.FleetManagement !== 'undefined' && window.FleetManagement.render) window.FleetManagement.render();
       if (pageId === 'crew' && typeof window.CrewManagement !== 'undefined' && window.CrewManagement.render) window.CrewManagement.render();
       if (pageId === 'shifts' && typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) window.ShiftsManagement.render();
+      if (pageId === 'lms' && typeof window.LmsModule !== 'undefined' && window.LmsModule.render) window.LmsModule.render();
     } else {
       showPage('home');
     }
@@ -1133,6 +1189,14 @@
     }
     initFileProtocolLinkGuard();
 
+    document.addEventListener('click', function (e) {
+      var publicLink = e.target.closest('a[href="#lms-public"], a[href="#lms-careers"], a[href="#login"]');
+      if (!publicLink) return;
+      e.preventDefault();
+      var target = (publicLink.getAttribute('href') || '').slice(1).toLowerCase();
+      navigateTo(target || 'login');
+    });
+
     var appScreen = document.getElementById('app-screen');
     if (appScreen) {
       appScreen.addEventListener('click', function (e) {
@@ -1216,6 +1280,12 @@
     if (isEmbeddedPreview()) return;
 
     function showAuthScreen() {
+      var initialRoute = getRoutePageId();
+      if (isPublicPage(initialRoute)) {
+        openPublicPage(initialRoute);
+        return;
+      }
+
       var ds = window.AccountingData;
       var cloudAuth = usesCloudLogin();
       configureUnifiedLoginUI(cloudAuth);

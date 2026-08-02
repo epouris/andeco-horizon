@@ -140,6 +140,29 @@
         { id: 'communications', label: 'Communications' }
       ]
     },
+    lms: {
+      dashboard: [
+        { id: 'overview', label: 'Overview' }
+      ],
+      'my-learning': [
+        { id: 'enrolled', label: 'My courses' }
+      ],
+      library: [
+        { id: 'all', label: 'All training' }
+      ],
+      learners: [
+        { id: 'enrollments', label: 'Enrollments' }
+      ],
+      purchases: [
+        { id: 'requests', label: 'Purchase requests' }
+      ],
+      hiring: [
+        { id: 'applicants', label: 'Applicants' }
+      ],
+      settings: [
+        { id: 'portal', label: 'Portal settings' }
+      ]
+    },
     settings: {
       company: [
         { id: 'profile', label: 'Company profile' },
@@ -161,6 +184,7 @@
     contacts: '.contacts-section-panel[data-section]',
     clients: '.clients-section-panel[data-section]',
     crew: '.crew-section-panel[data-section]',
+    lms: '.lms-section-panel[data-section]',
     accounting: '.accounting-section-panel[data-section]'
   };
 

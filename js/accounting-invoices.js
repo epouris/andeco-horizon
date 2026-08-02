@@ -167,6 +167,10 @@ const app = {
                     try { localStorage.setItem('andeco_shifts_data', JSON.stringify(data.shifts)); } catch (e) {}
                     if (typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) window.ShiftsManagement.render();
                 }
+                if (data.lms && typeof data.lms === 'object') {
+                    try { localStorage.setItem('andeco_lms_data', JSON.stringify(data.lms)); } catch (e) {}
+                    if (typeof window.LmsModule !== 'undefined' && window.LmsModule.render) window.LmsModule.render();
+                }
                 if (data.payroll && typeof data.payroll === 'object') {
                     if (Array.isArray(data.payroll.employees)) setLocal('employees', data.payroll.employees);
                     if (data.payroll.payrollData && typeof data.payroll.payrollData === 'object') setLocal('payrollData', data.payroll.payrollData);
@@ -3152,7 +3156,15 @@ const app = {
                 crewMembers: getLocal('andeco_crew_members', []),
                 crewDocuments: getLocal('andeco_crew_documents', []),
                 crewAssignments: getLocal('andeco_crew_assignments', [])
-            }
+            },
+            lms: getLocal('andeco_lms_data', {
+                courses: [],
+                enrollments: [],
+                attempts: [],
+                purchases: [],
+                applicants: [],
+                settings: {}
+            })
         };
 
         const dataStr = JSON.stringify(data, null, 2);
@@ -3166,7 +3178,7 @@ const app = {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        alert('Data exported successfully! (Accounting, Fleet, Crew)');
+        alert('Data exported successfully! (Accounting, Fleet, Crew, LMS)');
     },
 
     importData(event) {
@@ -3215,6 +3227,9 @@ const app = {
                     if (Array.isArray(importedData.crew.crewMembers)) setLocal('andeco_crew_members', importedData.crew.crewMembers);
                     if (Array.isArray(importedData.crew.crewDocuments)) setLocal('andeco_crew_documents', importedData.crew.crewDocuments);
                     if (Array.isArray(importedData.crew.crewAssignments)) setLocal('andeco_crew_assignments', importedData.crew.crewAssignments);
+                }
+                if (importedData.lms && typeof importedData.lms === 'object') {
+                    setLocal('andeco_lms_data', importedData.lms);
                 }
 
                 alert('Data imported successfully! The page will reload to apply changes.');
