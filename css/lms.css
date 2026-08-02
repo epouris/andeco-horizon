@@ -301,7 +301,7 @@
 .lms-public-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
 .lms-public-card {
@@ -312,10 +312,76 @@
   border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
+.lms-public-card--media {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.lms-public-card--media:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+}
+
+.lms-public-card-photo {
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(135deg, #0b1f33 0%, #1d4f8c 100%);
+  overflow: hidden;
+}
+
+.lms-public-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lms-public-card-photo.is-placeholder {
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: Outfit, Plus Jakarta Sans, sans-serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+}
+
+.lms-public-card-body {
+  padding: 1.1rem 1.2rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
 .lms-public-card h2,
 .lms-public-card h3 {
-  margin-top: 0;
+  margin: 0;
   font-family: Outfit, Plus Jakarta Sans, sans-serif;
+}
+
+.lms-public-card-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.lms-public-card-meta-item {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.92rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+.lms-public-card-meta-item em {
+  font-style: normal;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+  font-weight: 600;
 }
 
 .lms-public-card-footer {
@@ -323,7 +389,31 @@
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  margin-top: 1rem;
+  margin-top: auto;
+}
+
+.lms-cover-preview {
+  margin-top: 0.65rem;
+  border: 1px dashed var(--border, #d1d5db);
+  border-radius: 0.65rem;
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  background: #f8fafc;
+  color: var(--text-secondary, #6b7280);
+  overflow: hidden;
+}
+
+.lms-cover-preview.has-image {
+  border-style: solid;
+  background: #0b1f33;
+}
+
+.lms-cover-preview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
 }
 
 .lms-public-links {

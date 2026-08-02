@@ -138,6 +138,7 @@
       id: c.id || id('crs'),
       title: c.title || 'Untitled',
       description: c.description || '',
+      coverImage: c.coverImage || '',
       type: COURSE_TYPES[c.type] ? c.type : 'course',
       category: c.category || 'General',
       audience: AUDIENCES[c.audience] ? c.audience : 'employee',
@@ -639,6 +640,15 @@
           '<div class="form-group"><label>Duration (minutes)</label><input name="durationMinutes" type="number" min="0" value="' + escapeHtml(String(course.durationMinutes)) + '"></div>' +
           '<div class="form-group"><label>Price</label><input name="price" type="number" min="0" step="0.01" value="' + escapeHtml(String(course.price)) + '"></div>' +
           '<div class="form-group"><label>Currency</label><input name="currency" value="' + escapeHtml(course.currency) + '"></div>' +
+          '<div class="form-group full-width"><label>Course photo URL</label>' +
+            '<input name="coverImage" id="lms-cover-image-input" value="' + escapeHtml(course.coverImage || '') + '" placeholder="https://… or upload below"></div>' +
+          '<div class="form-group full-width"><label>Upload course photo</label>' +
+            '<input type="file" id="lms-cover-image-file" accept="image/*">' +
+            '<div class="lms-cover-preview' + (course.coverImage ? ' has-image' : '') + '" id="lms-cover-preview">' +
+              (course.coverImage
+                ? '<img src="' + escapeHtml(course.coverImage) + '" alt="Course cover preview">'
+                : '<span>No photo yet</span>') +
+            '</div></div>' +
           '<div class="form-group full-width"><label>Description</label><textarea name="description" rows="3">' + escapeHtml(course.description) + '</textarea></div>' +
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="published"' + (course.published ? ' checked' : '') + '> Published</label></div>' +
         '</div></div>' +
@@ -664,6 +674,47 @@
     renderLessonsEditor(course.lessons);
     renderQuestionsEditor(course.exam.questions);
     el.setAttribute('data-editing-course-id', course.id || '');
+    bindCoverImageControls();
+  }
+
+  function bindCoverImageControls() {
+    var fileInput = document.getElementById('lms-cover-image-file');
+    var urlInput = document.getElementById('lms-cover-image-input');
+    var preview = document.getElementById('lms-cover-preview');
+    if (!fileInput || !urlInput || !preview) return;
+
+    function setPreview(src) {
+      if (src) {
+        preview.classList.add('has-image');
+        preview.innerHTML = '<img src="' + escapeHtml(src) + '" alt="Course cover preview">';
+      } else {
+        preview.classList.remove('has-image');
+        preview.innerHTML = '<span>No photo yet</span>';
+      }
+    }
+
+    fileInput.onchange = function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      if (file.size > 2.5 * 1024 * 1024) {
+        alert('Please choose an image under 2.5 MB.');
+        fileInput.value = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = String(reader.result || '');
+        urlInput.value = dataUrl;
+        setPreview(dataUrl);
+        syncDraftFromEditor();
+      };
+      reader.readAsDataURL(file);
+    };
+
+    urlInput.oninput = function () {
+      setPreview(urlInput.value.trim());
+      syncDraftFromEditor();
+    };
   }
 
   function renderLessonsEditor(lessons) {
@@ -767,6 +818,7 @@
       id: existingId || id('crs'),
       title: String(fd.get('title') || '').trim(),
       description: String(fd.get('description') || '').trim(),
+      coverImage: String(fd.get('coverImage') || '').trim(),
       type: String(fd.get('type') || 'course'),
       audience: String(fd.get('audience') || 'employee'),
       category: String(fd.get('category') || 'General').trim() || 'General',
@@ -1281,13 +1333,28 @@
           return '<article class="lms-announce-card"><strong>' + escapeHtml(a.title) + '</strong><p>' + escapeHtml(a.body) + '</p></article>';
         }).join('') + '</div>' : '') +
       (courses.length ? '<div class="lms-public-grid">' + courses.map(function (c) {
-        return '<article class="lms-public-card">' +
-          '<h3>' + escapeHtml(c.title) + '</h3>' +
-          '<p class="lms-meta">' + escapeHtml(typeLabel(c.type)) + ' · ' + escapeHtml(c.category) + '</p>' +
-          '<p>' + escapeHtml(c.description || 'Professional training course.') + '</p>' +
-          '<div class="lms-public-card-footer">' +
-            '<strong>' + escapeHtml(formatMoney(c.price, c.currency || settings.currency)) + '</strong>' +
-            '<button type="button" class="btn btn-primary" data-lms-public-buy="' + escapeHtml(c.id) + '">Buy / request</button>' +
+        var mins = Number(c.durationMinutes) || 0;
+        if (!mins && Array.isArray(c.lessons)) {
+          mins = c.lessons.reduce(function (sum, l) { return sum + (Number(l.durationMinutes) || 0); }, 0);
+        }
+        var durationLabel = mins ? (mins >= 60 ? (Math.floor(mins / 60) + 'h' + (mins % 60 ? ' ' + (mins % 60) + 'm' : '')) : mins + ' min') : 'Self-paced';
+        var letter = String(c.title || 'C').charAt(0).toUpperCase();
+        return '<article class="lms-public-card lms-public-card--media">' +
+          '<div class="lms-public-card-photo' + (c.coverImage ? '' : ' is-placeholder') + '">' +
+            (c.coverImage
+              ? '<img src="' + escapeHtml(c.coverImage) + '" alt="' + escapeHtml(c.title) + '" loading="lazy">'
+              : '<span aria-hidden="true">' + escapeHtml(letter) + '</span>') +
+          '</div>' +
+          '<div class="lms-public-card-body">' +
+            '<h3>' + escapeHtml(c.title) + '</h3>' +
+            '<div class="lms-public-card-meta">' +
+              '<span class="lms-public-card-meta-item"><em>Category</em>' + escapeHtml(c.category || 'General') + '</span>' +
+              '<span class="lms-public-card-meta-item"><em>Duration</em>' + escapeHtml(durationLabel) + '</span>' +
+            '</div>' +
+            '<div class="lms-public-card-footer">' +
+              '<strong>' + escapeHtml(formatMoney(c.price, c.currency || settings.currency)) + '</strong>' +
+              '<button type="button" class="btn btn-primary" data-lms-public-buy="' + escapeHtml(c.id) + '">Buy / request</button>' +
+            '</div>' +
           '</div></article>';
       }).join('') + '</div>' : '<div class="lms-public-card"><p>No public courses are published yet.</p></div>');
   }
