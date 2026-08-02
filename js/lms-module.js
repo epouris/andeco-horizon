@@ -1303,13 +1303,36 @@
       var ens = data.enrollments.filter(function (e) { return e.courseId === c.id; });
       var done = ens.filter(function (e) { return e.status === 'completed' || e.passed === true; }).length;
       return {
+        id: c.id,
         title: c.title,
         type: c.type,
+        audience: c.audience,
         enrollments: ens.length,
         completed: done,
         rate: ens.length ? Math.round((done / ens.length) * 100) : 0
       };
-    }).filter(function (r) { return r.enrollments > 0; });
+    });
+    var activeByCourse = byCourse.filter(function (r) { return r.enrollments > 0; });
+    var inductionRows = activeByCourse.filter(function (r) { return r.type === 'induction'; });
+    var hiringRows = activeByCourse.filter(function (r) { return r.audience === 'applicant'; });
+    var courseRows = activeByCourse.filter(function (r) {
+      return r.type !== 'induction' && r.audience !== 'applicant';
+    });
+    var applicants = (data.applicants || []).slice().reverse();
+
+    function completionTable(rows, emptyMessage, includeType) {
+      var head = '<th>Course</th>' +
+        (includeType ? '<th>Type</th>' : '') +
+        '<th>Enrolled</th><th>Completed</th><th>Completion %</th>';
+      var cols = includeType ? 5 : 4;
+      var body = rows.length ? rows.map(function (r) {
+        return '<tr><td>' + escapeHtml(r.title) + '</td>' +
+          (includeType ? '<td>' + escapeHtml(typeLabel(r.type)) + '</td>' : '') +
+          '<td>' + r.enrollments + '</td><td>' + r.completed + '</td><td>' + r.rate + '%</td></tr>';
+      }).join('') : '<tr><td colspan="' + cols + '">' + escapeHtml(emptyMessage) + '</td></tr>';
+      return '<div class="table-wrap"><table class="data-table"><thead><tr>' + head +
+        '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    }
 
     if (!isAdmin()) {
       var mine = myEnrollments();
@@ -1341,16 +1364,33 @@
         metricHtml('Avg score', avgScore != null ? avgScore + '%' : '—') +
         metricHtml('Certificates', (data.certificates || []).length, 'ok') +
         metricHtml('Exam attempts', (data.attempts || []).length) +
+        metricHtml('Hiring applicants', applicants.length) +
       '</div>' +
-      '<div class="module-table-panel"><h3>Completion by course</h3>' +
+      '<div class="module-table-panel"><h3>Courses</h3>' +
+        completionTable(courseRows, 'No course enrollment activity yet.', true) +
+      '</div>' +
+      '<div class="module-table-panel"><h3>Induction</h3>' +
+        completionTable(inductionRows, 'No induction enrollment activity yet.', false) +
+      '</div>' +
+      '<div class="module-table-panel"><h3>Hiring</h3>' +
+        completionTable(hiringRows, 'No hiring exam enrollment activity yet.', false) +
+        '<h4 class="lms-subheading" style="margin:1.25rem 0 0.65rem">Applicant sessions</h4>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr>' +
-          '<th>Course</th><th>Type</th><th>Enrolled</th><th>Completed</th><th>Completion %</th>' +
+          '<th>Applicant</th><th>Position</th><th>Exam</th><th>Status</th><th>Score</th><th>Date</th>' +
         '</tr></thead><tbody>' +
-        (byCourse.length ? byCourse.map(function (r) {
-          return '<tr><td>' + escapeHtml(r.title) + '</td><td>' + escapeHtml(typeLabel(r.type)) +
-            '</td><td>' + r.enrollments + '</td><td>' + r.completed + '</td><td>' + r.rate + '%</td></tr>';
-        }).join('') : '<tr><td colspan="5">No enrollment activity yet.</td></tr>') +
-        '</tbody></table></div></div>' +
+        (applicants.length ? applicants.map(function (a) {
+          var course = findCourse(a.courseId);
+          var when = (a.finishedAt || a.startedAt || a.createdAt || '').slice(0, 16).replace('T', ' ');
+          return '<tr><td><strong>' + escapeHtml(a.fullName || '—') + '</strong>' +
+            '<div class="lms-meta">' + escapeHtml(a.email || '') + '</div></td>' +
+            '<td>' + escapeHtml(a.positionApplied || '—') + '</td>' +
+            '<td>' + escapeHtml(course ? course.title : '—') + '</td>' +
+            '<td>' + statusBadge(a.status) + '</td>' +
+            '<td>' + (a.score != null ? escapeHtml(String(a.score)) + '%' : '—') + '</td>' +
+            '<td>' + escapeHtml(when || '—') + '</td></tr>';
+        }).join('') : '<tr><td colspan="6">No hiring applicant sessions yet.</td></tr>') +
+        '</tbody></table></div>' +
+      '</div>' +
       '<div class="module-table-panel"><h3>Recent assessment attempts</h3>' +
         '<div class="table-wrap"><table class="data-table"><thead><tr>' +
           '<th>Date</th><th>Learner</th><th>Course</th><th>Score</th><th>Result</th>' +
