@@ -170,6 +170,10 @@
       id: c.id || id('crs'),
       title: c.title || 'Untitled',
       description: c.description || '',
+      coverImage: c.coverImage || '',
+      instructorName: c.instructorName || '',
+      instructorTitle: c.instructorTitle || '',
+      instructorBio: c.instructorBio || '',
       type: COURSE_TYPES[c.type] ? c.type : 'course',
       category: c.category || 'General',
       audience: AUDIENCES[c.audience] ? c.audience : 'employee',
@@ -671,8 +675,14 @@
           '<div class="form-group"><label>Duration (minutes)</label><input name="durationMinutes" type="number" min="0" value="' + escapeHtml(String(course.durationMinutes)) + '"></div>' +
           '<div class="form-group"><label>Price</label><input name="price" type="number" min="0" step="0.01" value="' + escapeHtml(String(course.price)) + '"></div>' +
           '<div class="form-group"><label>Currency</label><input name="currency" value="' + escapeHtml(course.currency) + '"></div>' +
+          '<div class="form-group full-width"><label>Cover image URL</label><input name="coverImage" value="' + escapeHtml(course.coverImage || '') + '" placeholder="https://…"></div>' +
           '<div class="form-group full-width"><label>Description</label><textarea name="description" rows="3">' + escapeHtml(course.description) + '</textarea></div>' +
           '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="published"' + (course.published ? ' checked' : '') + '> Published</label></div>' +
+        '</div></div>' +
+        '<div class="form-section"><h3>Instructor</h3><div class="form-row">' +
+          '<div class="form-group"><label>Instructor name</label><input name="instructorName" value="' + escapeHtml(course.instructorName || '') + '" placeholder="Shown on the course page"></div>' +
+          '<div class="form-group"><label>Instructor title</label><input name="instructorTitle" value="' + escapeHtml(course.instructorTitle || '') + '" placeholder="e.g. Senior Trainer"></div>' +
+          '<div class="form-group full-width"><label>Instructor bio</label><textarea name="instructorBio" rows="2" placeholder="Short intro for learners">' + escapeHtml(course.instructorBio || '') + '</textarea></div>' +
         '</div></div>' +
         '<div class="form-section"><h3>Lessons / content</h3>' +
           '<div id="lms-lessons-editor"></div>' +
@@ -799,6 +809,10 @@
       id: existingId || id('crs'),
       title: String(fd.get('title') || '').trim(),
       description: String(fd.get('description') || '').trim(),
+      coverImage: String(fd.get('coverImage') || '').trim(),
+      instructorName: String(fd.get('instructorName') || '').trim(),
+      instructorTitle: String(fd.get('instructorTitle') || '').trim(),
+      instructorBio: String(fd.get('instructorBio') || '').trim(),
       type: String(fd.get('type') || 'course'),
       audience: String(fd.get('audience') || 'employee'),
       category: String(fd.get('category') || 'General').trim() || 'General',
