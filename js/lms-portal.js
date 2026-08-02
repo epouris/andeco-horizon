@@ -1399,7 +1399,9 @@
             : '') +
           (course.exam && course.exam.enabled
             ? (examReady
-                ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="exam" style="margin-left:0.5rem">Go to exam</button>'
+                ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="exam" style="margin-left:0.5rem">' +
+                    (hasUsedExamAttempt(en) ? 'View exam result' : (en.examStartedAt ? 'Resume exam' : 'Go to exam')) +
+                  '</button>'
                 : '<p class="lp-muted-line">Exam unlocks after all lessons are completed.</p>')
             : '') +
         '</div>' +
