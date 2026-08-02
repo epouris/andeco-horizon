@@ -734,8 +734,10 @@
     var usernameInput = document.getElementById('login-username');
     var supabasePanel = document.getElementById('supabase-cloud-panel');
     var setupSupabasePanel = document.getElementById('setup-supabase-cloud-panel');
+    if (loginSubtitle) {
+      loginSubtitle.textContent = 'Chase the horizon with courage, for every step forward reveals a brighter, limitless tomorrow ahead.';
+    }
     if (cloudAuth) {
-      if (loginSubtitle) loginSubtitle.textContent = 'Sign in with your company email.';
       if (usernameLabel) usernameLabel.textContent = 'Email';
       if (usernameInput) {
         usernameInput.type = 'email';
@@ -745,7 +747,6 @@
       if (supabasePanel) supabasePanel.classList.add('hidden');
       if (setupSupabasePanel) setupSupabasePanel.classList.add('hidden');
     } else {
-      if (loginSubtitle) loginSubtitle.textContent = 'Log in to manage your company operations in one place.';
       if (usernameLabel) usernameLabel.textContent = 'Username';
       if (usernameInput) {
         usernameInput.type = 'text';
