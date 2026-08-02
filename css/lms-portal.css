@@ -1124,12 +1124,6 @@
 }
 
 @media (max-width: 560px) {
-  .lp-course-hero-stats {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 560px) {
   .lp-main {
     padding: 1rem 0.85rem 1.5rem;
   }
@@ -1147,5 +1141,9 @@
   .lp-item {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .lp-course-hero-stats {
+    grid-template-columns: 1fr;
   }
 }
