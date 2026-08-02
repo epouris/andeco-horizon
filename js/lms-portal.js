@@ -810,19 +810,24 @@
 
   function openCourseEditor(courseId) {
     if (!isInstructor()) return;
-    courseEditor.open = true;
-    courseEditor.coverCleared = false;
-    courseEditor.courseId = courseId || null;
     if (courseId) {
       var existing = findCourse(courseId);
-      courseEditor.draft = existing
-        ? JSON.parse(JSON.stringify(existing))
-        : blankCourseDraft();
-      if (!existing) courseEditor.courseId = courseEditor.draft.id;
+      if (!existing) {
+        alert('Course not found.');
+        return;
+      }
+      if (!canManageCourse(existing)) {
+        alert('You can only edit courses you created.');
+        return;
+      }
+      courseEditor.draft = JSON.parse(JSON.stringify(existing));
+      courseEditor.courseId = existing.id;
     } else {
       courseEditor.draft = blankCourseDraft();
       courseEditor.courseId = courseEditor.draft.id;
     }
+    courseEditor.open = true;
+    courseEditor.coverCleared = false;
     view = 'courses';
     playerState.mode = 'list';
     render();
