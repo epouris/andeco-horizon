@@ -43,7 +43,8 @@
     careersIntro: 'Apply for a role by completing the required assessment. Enter the access code provided by HR to begin.',
     certificateTitle: 'Certificate of Completion',
     certificateSigner: 'Training Manager',
-    autoIssueCertificates: true
+    autoIssueCertificates: true,
+    companyLogo: ''
   };
 
   var currentSection = 'dashboard';
@@ -2548,6 +2549,15 @@
       e.preventDefault();
       var fdS = new FormData(e.target);
       var dataS = getData();
+      var existingLogo = (dataS.settings && dataS.settings.companyLogo) || '';
+      var typedLogo = String(fdS.get('companyLogo') || '').trim();
+      var uploadedLogo = e.target.getAttribute('data-logo-upload') || '';
+      var clearedLogo = e.target.getAttribute('data-logo-cleared') === '1';
+      var nextLogo = '';
+      if (uploadedLogo) nextLogo = uploadedLogo;
+      else if (clearedLogo) nextLogo = '';
+      else if (typedLogo) nextLogo = typedLogo;
+      else nextLogo = existingLogo;
       dataS.settings = Object.assign({}, dataS.settings, {
         companyLmsName: String(fdS.get('companyLmsName') || '').trim() || defaultSettings.companyLmsName,
         currency: String(fdS.get('currency') || 'EUR').trim() || 'EUR',
@@ -2556,6 +2566,7 @@
         autoIssueCertificates: !!e.target.querySelector('[name="autoIssueCertificates"]').checked,
         certificateTitle: String(fdS.get('certificateTitle') || '').trim() || defaultSettings.certificateTitle,
         certificateSigner: String(fdS.get('certificateSigner') || '').trim() || defaultSettings.certificateSigner,
+        companyLogo: nextLogo,
         purchaseInstructions: String(fdS.get('purchaseInstructions') || ''),
         careersIntro: String(fdS.get('careersIntro') || '')
       });

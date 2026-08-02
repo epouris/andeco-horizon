@@ -1047,7 +1047,22 @@ body.lms-cert-open {
   }
 
   .lms-certificate-name {
-    font-size: 44px !important;
+    font-size: 42px !important;
+  }
+
+  .lms-certificate-brand {
+    margin-bottom: 12px !important;
+  }
+
+  .lms-certificate-logo-wrap {
+    width: 64px !important;
+    height: 64px !important;
+    flex-basis: 64px !important;
+  }
+
+  .lms-certificate-logo {
+    max-width: 56px !important;
+    max-height: 56px !important;
   }
 
   .lms-certificate-signs {
