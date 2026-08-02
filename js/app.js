@@ -73,6 +73,21 @@
 
   var PUBLIC_PAGES = ['lms-public', 'lms-careers'];
 
+  function isLmsOnlySession(session) {
+    if (!session || session.isAdmin === true) return false;
+    var mods = (session.allowedModules || []).filter(Boolean);
+    if (!mods.length) return false;
+    return mods.every(function (m) { return m === 'lms'; });
+  }
+
+  function openLmsPortal() {
+    if (window.LmsPortal && typeof window.LmsPortal.open === 'function') {
+      window.LmsPortal.open();
+      return true;
+    }
+    return false;
+  }
+
   var MODULE_IDS = MODULES.map(function (m) { return m.id; });
 
   var MODULE_SECTIONS = {
@@ -578,13 +593,33 @@
 
     if (pageId === 'login' || pageId === 'setup') {
       clearSession();
+      document.body.classList.remove('lms-portal-active');
       var usersForAuth = getUsers();
       showScreen(usersForAuth.length === 0 ? 'setup-screen' : 'login-screen');
       return;
     }
 
+    if (pageId === 'lms-portal') {
+      var portalSession = getSession();
+      if (!portalSession) {
+        showScreen('login-screen');
+        return;
+      }
+      if (isLmsOnlySession(portalSession) || canAccessModule(portalSession, 'lms') || portalSession.isAdmin) {
+        openLmsPortal();
+        return;
+      }
+      navigateTo('home');
+      return;
+    }
+
     var session = getSession();
     if (!session) return;
+
+    if (isLmsOnlySession(session)) {
+      openLmsPortal();
+      return;
+    }
 
     if (pageId === 'admin' || pageId === 'settings') {
       if (!session.isAdmin) {
@@ -607,6 +642,14 @@
       if (pageId === 'crew' && typeof window.CrewManagement !== 'undefined' && window.CrewManagement.render) window.CrewManagement.render();
       if (pageId === 'shifts' && typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) window.ShiftsManagement.render();
       if (pageId === 'lms' && typeof window.LmsModule !== 'undefined' && window.LmsModule.render) window.LmsModule.render();
+      // Offer modern portal entry from CRM Learning module for admins / multi-module users.
+      var openPortalBtn = document.getElementById('lms-open-portal-btn');
+      if (pageId === 'lms' && openPortalBtn && openPortalBtn.getAttribute('data-bound') !== '1') {
+        openPortalBtn.setAttribute('data-bound', '1');
+        openPortalBtn.addEventListener('click', function () {
+          openLmsPortal();
+        });
+      }
     } else {
       showPage('home');
     }
@@ -973,6 +1016,16 @@
   function startApp() {
     var session = getSession();
     if (!session) return;
+
+    // LMS-only users never enter the CRM shell — go straight to Learning Portal.
+    var routeId = getRoutePageId();
+    if (isLmsOnlySession(session) || routeId === 'lms-portal') {
+      if (isLmsOnlySession(session) || canAccessModule(session, 'lms') || session.isAdmin) {
+        document.body.classList.remove('home-view');
+        if (openLmsPortal()) return;
+      }
+    }
+
     showScreen('app-screen');
     refreshHeaderUser(session);
     applyVisibility(session);
@@ -990,6 +1043,7 @@
         signOutPromise.finally(function () {
           clearSession();
           document.body.classList.remove('home-view');
+          document.body.classList.remove('lms-portal-active');
           if (usesCloudLogin()) {
             showScreen('login-screen');
             return;
@@ -1193,7 +1247,7 @@
     initFileProtocolLinkGuard();
 
     document.addEventListener('click', function (e) {
-      var publicLink = e.target.closest('a[href="#lms-public"], a[href="#lms-careers"], a[href="#login"]');
+      var publicLink = e.target.closest('a[href="#lms-public"], a[href="#lms-careers"], a[href="#login"], a[href="#lms-portal"]');
       if (!publicLink) return;
       e.preventDefault();
       var target = (publicLink.getAttribute('href') || '').slice(1).toLowerCase();

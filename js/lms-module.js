@@ -469,13 +469,14 @@
       '</div>' +
       (isAdmin() ? '<div class="module-table-panel"><h3>Admin shortcuts</h3>' +
         '<div class="lms-actions">' +
-          '<button type="button" class="btn btn-primary" data-lms-goto="library">Course management</button>' +
+          '<button type="button" class="btn btn-primary" id="lms-open-portal-btn-dash">Open modern Learning Portal</button>' +
+          '<button type="button" class="btn btn-secondary" data-lms-goto="library">Course management</button>' +
           '<button type="button" class="btn btn-secondary" data-lms-goto="reports">Reports</button>' +
           '<button type="button" class="btn btn-secondary" data-lms-goto="announcements">Announcements</button>' +
           '<button type="button" class="btn btn-secondary" data-lms-goto="hiring">Hiring exams</button>' +
           '<button type="button" class="btn btn-ghost" data-lms-goto="settings">LMS settings</button>' +
         '</div>' +
-        '<p class="lms-hint">Public catalog: <code>#lms-public</code> · Careers portal: <code>#lms-careers</code></p>' +
+        '<p class="lms-hint">LMS-only users are sent to the Learning Portal after login. Public catalog: <code>#lms-public</code> · Careers: <code>#lms-careers</code></p>' +
       '</div>' : '');
   }
 
@@ -1425,8 +1426,13 @@
   }
 
   function onPageClick(e) {
-    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back');
+    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-open-portal-btn-dash');
     if (!t) return;
+
+    if (t.id === 'lms-open-portal-btn-dash') {
+      if (window.LmsPortal && window.LmsPortal.open) window.LmsPortal.open();
+      return;
+    }
 
     if (t.id === 'lms-add-course') {
       viewState.mode = 'editor';

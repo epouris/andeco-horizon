@@ -176,8 +176,11 @@ window.AccountingData = (function () {
     }
     if (typeof window.LmsModule !== 'undefined' && window.LmsModule.render) {
       try {
-        if (!(window.LmsModule.isBusy && window.LmsModule.isBusy())) {
+        var portalOpen = window.LmsPortal && window.LmsPortal.isOpen && window.LmsPortal.isOpen();
+        if (!portalOpen && !(window.LmsModule.isBusy && window.LmsModule.isBusy())) {
           window.LmsModule.render();
+        } else if (portalOpen && window.LmsPortal.render) {
+          window.LmsPortal.render();
         }
       } catch (e) {}
     }
