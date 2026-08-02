@@ -777,6 +777,7 @@
     }
     return '<div class="lp-card">' +
       '<h3>New private discussion</h3>' +
+      '<p class="lp-muted-line">This stays in the Private subsection and is not shown in General.</p>' +
       '<form id="lp-private-new" class="lp-form">' +
         (isInstructor()
           ? '<label>Learner<select name="learnerId" required>' +
@@ -801,22 +802,34 @@
       '</form></div>';
   }
 
+  function renderDiscussionSubnav(tab) {
+    return '<div class="lp-discuss-subnav" role="tablist" aria-label="Discussion sections">' +
+      '<button type="button" class="lp-discuss-subnav-btn' + (tab === 'course' ? ' active' : '') + '" data-lp-discuss-tab="course" role="tab" aria-selected="' + (tab === 'course' ? 'true' : 'false') + '">' +
+        '<strong>General</strong>' +
+        '<span>Open course discussions for everyone enrolled</span>' +
+      '</button>' +
+      '<button type="button" class="lp-discuss-subnav-btn' + (tab === 'private' ? ' active' : '') + '" data-lp-discuss-tab="private" role="tab" aria-selected="' + (tab === 'private' ? 'true' : 'false') + '">' +
+        '<strong>Private</strong>' +
+        '<span>' + (isInstructor() ? 'One-to-one chats with learners' : 'One-to-one chats with tutors') + '</span>' +
+      '</button>' +
+    '</div>';
+  }
+
   function renderDiscussions(root) {
     var tab = discussionState.tab === 'private' ? 'private' : 'course';
-    setTitle('Discussions', tab === 'private'
-      ? (isInstructor() ? 'Private learner conversations' : 'Private chats with tutors')
-      : 'General discussion for each course');
+    setTitle('Discussions', 'General course chat and private tutor conversations');
 
-    var tabs =
-      '<div class="lp-discuss-tabs" role="tablist">' +
-        '<button type="button" class="lp-discuss-tab' + (tab === 'course' ? ' active' : '') + '" data-lp-discuss-tab="course">Course discussions</button>' +
-        '<button type="button" class="lp-discuss-tab' + (tab === 'private' ? ' active' : '') + '" data-lp-discuss-tab="private">' +
-          (isInstructor() ? 'Private with learners' : 'Private with tutors') +
-        '</button>' +
-      '</div>';
+    var subnav = renderDiscussionSubnav(tab);
+    var sectionIntro = tab === 'private'
+      ? '<div class="lp-discuss-section-head"><h3>Private</h3><p>' +
+          (isInstructor()
+            ? 'Private threads between tutors and individual learners. Only tutors and that learner can see them.'
+            : 'Private threads with tutors. Other learners cannot see these conversations.') +
+        '</p></div>'
+      : '<div class="lp-discuss-section-head"><h3>General</h3><p>Shared discussion for each course. Visible to tutors and enrolled learners.</p></div>';
 
     if (tab === 'private' && discussionState.composingPrivate) {
-      root.innerHTML = tabs + renderPrivateComposeForm();
+      root.innerHTML = subnav + sectionIntro + renderPrivateComposeForm();
       return;
     }
 
@@ -828,7 +841,7 @@
       }
       var activeCourse = courses.filter(function (c) { return c.id === discussionState.courseId; })[0] || null;
       var thread = activeCourse ? ensureCourseDiscussion(activeCourse.id) : null;
-      root.innerHTML = tabs +
+      root.innerHTML = subnav + sectionIntro +
         '<div class="lp-discuss-layout">' +
           '<aside class="lp-discuss-sidebar">' +
             '<h3>Courses</h3>' +
@@ -850,18 +863,18 @@
               ? '<div class="lp-card lp-discuss-thread">' +
                   '<div class="lp-discuss-thread-head">' +
                     '<h3>' + escapeHtml(activeCourse.title) + '</h3>' +
-                    '<p>General course discussion — visible to tutors and enrolled learners.</p>' +
+                    '<p>General discussion for this course.</p>' +
                   '</div>' +
                   renderDiscussionMessages(thread) +
                   renderMessageComposer(thread.id) +
                 '</div>'
-              : '<div class="lp-card"><p class="lp-empty">Select a course to open its discussion.</p></div>') +
+              : '<div class="lp-card"><p class="lp-empty">Select a course to open its general discussion.</p></div>') +
           '</section>' +
         '</div>';
       return;
     }
 
-    // Private tab
+    // Private subsection
     var threads = visiblePrivateThreads();
     if (discussionState.threadId && !threads.some(function (t) { return t.id === discussionState.threadId; })) {
       discussionState.threadId = null;
@@ -870,7 +883,7 @@
     var active = threads.filter(function (t) { return t.id === discussionState.threadId; })[0] || null;
     var data = getData();
 
-    root.innerHTML = tabs +
+    root.innerHTML = subnav + sectionIntro +
       '<div class="lp-discuss-layout">' +
         '<aside class="lp-discuss-sidebar">' +
           '<div class="lp-discuss-sidebar-head">' +
@@ -900,12 +913,12 @@
                   '<h3>' + escapeHtml(active.title) + '</h3>' +
                   '<p>Private discussion' +
                     (isInstructor() ? ' with ' + escapeHtml(active.learnerName || 'learner') : ' with tutors') +
-                    ' — only participants and tutors can see this.</p>' +
+                    ' — only you and tutors can see this.</p>' +
                 '</div>' +
                 renderDiscussionMessages(active) +
                 renderMessageComposer(active.id) +
               '</div>'
-            : '<div class="lp-card"><p class="lp-empty">Select a thread, or start a new private discussion.</p></div>') +
+            : '<div class="lp-card"><p class="lp-empty">Select a private thread, or start a new one.</p></div>') +
         '</section>' +
       '</div>';
   }
