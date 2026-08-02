@@ -1107,6 +1107,17 @@
   pointer-events: none;
 }
 
+.lp-course-nav-lesson.is-locked em {
+  font-style: normal;
+  font-size: 0.75rem;
+  margin-left: 0.35rem;
+  opacity: 0.85;
+}
+
+.lp-course-syllabus li.is-locked {
+  opacity: 0.8;
+}
+
 .lp-course-syllabus-locked {
   display: grid;
   gap: 0.15rem;

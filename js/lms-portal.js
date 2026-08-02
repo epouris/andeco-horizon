@@ -3143,6 +3143,15 @@
       render();
       return;
     }
+    if (!isLessonUnlocked(course, en, lessonId)) {
+      alert('Lessons must be completed in order. Finish the previous lesson first.');
+      var openLesson = firstAvailableLesson(course, en);
+      playerState.lessonId = openLesson ? openLesson.id : null;
+      playerState.panel = openLesson ? 'lesson' : 'overview';
+      playerState.mode = 'course';
+      render();
+      return;
+    }
     var done = (en.completedLessonIds || []).slice();
     if (done.indexOf(lessonId) === -1) done.push(lessonId);
     en.completedLessonIds = done;

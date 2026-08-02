@@ -3028,6 +3028,14 @@
         renderMyLearning();
         return;
       }
+      if (!isLessonUnlocked(course2, en2, lessonId)) {
+        alert('Lessons must be completed in order. Finish the previous lesson first.');
+        var openComplete = firstAvailableLesson(course2, en2);
+        viewState.lessonId = openComplete ? openComplete.id : null;
+        viewState.mode = 'player';
+        renderMyLearning();
+        return;
+      }
       var done = (en2.completedLessonIds || []).slice();
       if (done.indexOf(lessonId) === -1) done.push(lessonId);
       updateEnrollmentProgress(en2.id, done, course2);
