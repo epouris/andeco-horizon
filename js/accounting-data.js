@@ -92,6 +92,9 @@ window.AccountingData = (function () {
         attempts: [],
         purchases: [],
         applicants: [],
+        announcements: [],
+        certificates: [],
+        learnerProfiles: [],
         settings: {}
       },
       crm: { users: [] }
@@ -146,6 +149,9 @@ window.AccountingData = (function () {
           attempts: [],
           purchases: [],
           applicants: [],
+          announcements: [],
+          certificates: [],
+          learnerProfiles: [],
           settings: {}
         };
       })(),

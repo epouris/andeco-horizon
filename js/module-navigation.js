@@ -151,7 +151,16 @@
         { id: 'all', label: 'All training' }
       ],
       learners: [
-        { id: 'enrollments', label: 'Enrollments' }
+        { id: 'directory', label: 'People & enrollments' }
+      ],
+      announcements: [
+        { id: 'board', label: 'Announcements' }
+      ],
+      reports: [
+        { id: 'overview', label: 'Overview' }
+      ],
+      certificates: [
+        { id: 'issued', label: 'Certificates' }
       ],
       purchases: [
         { id: 'requests', label: 'Purchase requests' }

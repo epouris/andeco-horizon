@@ -122,8 +122,11 @@
     lms: [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'my-learning', label: 'My learning' },
-      { id: 'library', label: 'Training library' },
-      { id: 'learners', label: 'Learners' },
+      { id: 'library', label: 'Course management' },
+      { id: 'learners', label: 'User management' },
+      { id: 'announcements', label: 'Communication' },
+      { id: 'reports', label: 'Tracking & reports' },
+      { id: 'certificates', label: 'Certification' },
       { id: 'purchases', label: 'Purchases' },
       { id: 'hiring', label: 'Hiring exams' },
       { id: 'settings', label: 'LMS settings' }
