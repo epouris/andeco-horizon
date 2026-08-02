@@ -2382,7 +2382,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-content-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
