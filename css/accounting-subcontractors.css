@@ -1,0 +1,62 @@
+/* Accounting — Subcontractors & payment orders */
+.accounting-subcontractors-content {
+  padding: 8px 4px 24px;
+}
+.sc-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.sc-toolbar h2 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+}
+.sc-form {
+  margin-bottom: 18px;
+}
+.sc-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.95rem;
+  resize: vertical;
+}
+.sc-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+.sc-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.sc-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 18px 8px;
+}
+.sc-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: #e5e7eb;
+  color: #374151;
+}
+.sc-status--draft { background: #f3f4f6; color: #4b5563; }
+.sc-status--issued { background: #dbeafe; color: #1d4ed8; }
+.sc-status--paid { background: #d1fae5; color: #047857; }
+
+@media (max-width: 720px) {
+  .sc-toolbar {
+    flex-direction: column;
+  }
+}

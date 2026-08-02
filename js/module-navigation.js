@@ -28,6 +28,10 @@
         { id: 'payslip', label: 'Generate payslip' },
         { id: 'payslips', label: 'Payslip management' }
       ],
+      subcontractors: [
+        { id: 'directory', label: 'Subcontractor directory' },
+        { id: 'orders', label: 'Payment orders' }
+      ],
       'social-insurance': [
         { id: 'overview', label: 'Overview' },
         { id: 'monthly', label: 'Monthly return' }
@@ -334,6 +338,9 @@
     if (moduleId === 'accounting' && sectionId === 'payroll') {
       if (typeof window.setPayrollSubsection === 'function') window.setPayrollSubsection(subsectionId);
     }
+    if (moduleId === 'accounting' && sectionId === 'subcontractors') {
+      if (typeof window.setSubcontractorsSubsection === 'function') window.setSubcontractorsSubsection(subsectionId);
+    }
     if (moduleId === 'accounting' && sectionId === 'social-insurance') {
       if (typeof window.setSocialInsuranceSubsection === 'function') window.setSocialInsuranceSubsection(subsectionId);
     }
@@ -361,6 +368,7 @@
   function setAccountingSubsectionOverlay(moduleId, sectionId, subsectionId) {
     if (moduleId !== 'accounting') return false;
     if (sectionId === 'payroll') return false;
+    if (sectionId === 'subcontractors') return false;
     if (sectionId === 'social-insurance') return false;
     var subs = getSubsections('accounting', sectionId);
     if (!subs.length) return false;
@@ -384,11 +392,13 @@
     var placeholder = document.querySelector('#page-accounting .accounting-placeholder');
     var reportsContent = document.getElementById('accounting-reports-content');
     var payrollContent = document.getElementById('accounting-payroll-content');
+    var scContent = document.getElementById('accounting-subcontractors-content');
     var siContent = document.getElementById('accounting-social-insurance-content');
     if (appEl) appEl.style.display = 'none';
     if (placeholder) placeholder.style.display = 'none';
     if (reportsContent) reportsContent.style.display = 'none';
     if (payrollContent) payrollContent.style.display = 'none';
+    if (scContent) scContent.style.display = 'none';
     if (siContent) siContent.style.display = 'none';
   }
 

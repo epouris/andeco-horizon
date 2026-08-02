@@ -140,6 +140,7 @@
       { id: 'invoices', label: 'Invoices' },
       { id: 'receipts', label: 'Receipts' },
       { id: 'payroll', label: 'Payroll' },
+      { id: 'subcontractors', label: 'Subcontractors' },
       { id: 'social-insurance', label: 'Social Insurance' },
       { id: 'reports', label: 'Reports' }
     ],
@@ -298,43 +299,41 @@
     var appEl = document.getElementById('accounting-invoice-app');
     var placeholder = document.querySelector('#page-accounting .accounting-placeholder');
     var reportsContent = document.getElementById('accounting-reports-content');
-    if (currentModulePageId !== 'accounting' || !appEl || !placeholder) return;
-    if (reportsContent) reportsContent.style.display = 'none';
+    var payrollContent = document.getElementById('accounting-payroll-content');
+    var scContent = document.getElementById('accounting-subcontractors-content');
     var siPanel = document.getElementById('accounting-social-insurance-content');
-    if (sectionId === 'reports') {
+    if (currentModulePageId !== 'accounting' || !appEl || !placeholder) return;
+
+    function hideAllAccountingHosts() {
       appEl.style.display = 'none';
       placeholder.style.display = 'none';
-      if (reportsContent) reportsContent.style.display = 'block';
-      if (document.getElementById('accounting-payroll-content')) document.getElementById('accounting-payroll-content').style.display = 'none';
+      if (reportsContent) reportsContent.style.display = 'none';
+      if (payrollContent) payrollContent.style.display = 'none';
+      if (scContent) scContent.style.display = 'none';
       if (siPanel) siPanel.style.display = 'none';
+    }
+
+    hideAllAccountingHosts();
+
+    if (sectionId === 'reports') {
+      if (reportsContent) reportsContent.style.display = 'block';
       try { if (window.app && window.app.setupStatementForm) window.app.setupStatementForm(); } catch (err) {}
     } else if (sectionId === 'dashboard' || sectionId === 'invoices' || sectionId === 'receipts') {
       appEl.style.display = 'block';
-      placeholder.style.display = 'none';
-      if (document.getElementById('accounting-payroll-content')) document.getElementById('accounting-payroll-content').style.display = 'none';
-      if (siPanel) siPanel.style.display = 'none';
       try { if (window.app && window.app.showPage) window.app.showPage(sectionId); } catch (err) {}
     } else if (sectionId === 'payroll') {
-      appEl.style.display = 'none';
-      placeholder.style.display = 'none';
-      if (reportsContent) reportsContent.style.display = 'none';
-      var payrollContent = document.getElementById('accounting-payroll-content');
       if (payrollContent) payrollContent.style.display = 'block';
-      var siContentHide = document.getElementById('accounting-social-insurance-content');
-      if (siContentHide) siContentHide.style.display = 'none';
+    } else if (sectionId === 'subcontractors') {
+      if (scContent) scContent.style.display = 'block';
+      try {
+        if (window.AccountingSubcontractors && window.AccountingSubcontractors.render) {
+          window.AccountingSubcontractors.render();
+        }
+      } catch (err) {}
     } else if (sectionId === 'social-insurance') {
-      appEl.style.display = 'none';
-      placeholder.style.display = 'none';
-      if (reportsContent) reportsContent.style.display = 'none';
-      if (document.getElementById('accounting-payroll-content')) document.getElementById('accounting-payroll-content').style.display = 'none';
-      var siContent = document.getElementById('accounting-social-insurance-content');
-      if (siContent) siContent.style.display = 'block';
+      if (siPanel) siPanel.style.display = 'block';
     } else {
-      appEl.style.display = 'none';
       placeholder.style.display = 'block';
-      if (document.getElementById('accounting-payroll-content')) document.getElementById('accounting-payroll-content').style.display = 'none';
-      var siContentOff = document.getElementById('accounting-social-insurance-content');
-      if (siContentOff) siContentOff.style.display = 'none';
     }
     var overlay = document.getElementById('accounting-subsection-overlay');
     if (overlay) overlay.style.display = 'none';
@@ -365,6 +364,10 @@
       var siSub = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('andeco_si_sub')) || 'overview';
       if (siSub === 'submissions') siSub = 'monthly';
       if (typeof window.setSocialInsuranceSubsection === 'function') window.setSocialInsuranceSubsection(siSub);
+    }
+    if (sectionId === 'subcontractors') {
+      var scSub = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('andeco_sc_sub')) || 'directory';
+      if (typeof window.setSubcontractorsSubsection === 'function') window.setSubcontractorsSubsection(scSub);
     }
     if (window.AndecoModuleNav) {
       window.AndecoModuleNav.setActiveSectionOnSubtabs('accounting', sectionId);

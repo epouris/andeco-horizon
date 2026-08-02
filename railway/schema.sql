@@ -31,12 +31,41 @@ CREATE TABLE IF NOT EXISTS company_settings (
   currency TEXT NOT NULL DEFAULT 'EUR',
   invoice_sequence_number INTEGER NOT NULL DEFAULT 1000,
   receipt_sequence_number INTEGER NOT NULL DEFAULT 1000,
+  payment_order_sequence_number INTEGER NOT NULL DEFAULT 1000,
   default_tax_rate NUMERIC NOT NULL DEFAULT 0,
   default_payment_terms INTEGER NOT NULL DEFAULT 30,
   default_invoice_notes TEXT NOT NULL DEFAULT '',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO company_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS payment_order_sequence_number INTEGER NOT NULL DEFAULT 1000;
+
+CREATE TABLE IF NOT EXISTS subcontractors (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  tax_id TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  bank_iban TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS payment_orders (
+  id TEXT PRIMARY KEY,
+  order_number TEXT NOT NULL DEFAULT '',
+  date TEXT NOT NULL DEFAULT '',
+  subcontractor_id TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  amount NUMERIC NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'EUR',
+  status TEXT NOT NULL DEFAULT 'draft',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS payment_orders_subcontractor_id_idx ON payment_orders (subcontractor_id);
 
 CREATE TABLE IF NOT EXISTS company_banks (
   id TEXT PRIMARY KEY,

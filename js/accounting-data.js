@@ -31,7 +31,9 @@ window.AccountingData = (function () {
     receipts: [],
     clients: [],
     companySettings: null,
-    products: []
+    products: [],
+    subcontractors: [],
+    paymentOrders: []
   };
 
   var defaultSettings = {
@@ -47,6 +49,7 @@ window.AccountingData = (function () {
     currency: 'EUR',
     invoiceSequenceNumber: 1000,
     receiptSequenceNumber: 1000,
+    paymentOrderSequenceNumber: 1000,
     defaultTaxRate: 0,
     defaultPaymentTerms: 30,
     defaultInvoiceNotes: ''
@@ -69,6 +72,8 @@ window.AccountingData = (function () {
       clients: [],
       companySettings: Object.assign({}, defaultSettings),
       products: [],
+      subcontractors: [],
+      paymentOrders: [],
       fleet: {
         vessels: [],
         vesselPhotos: [],
@@ -111,6 +116,8 @@ window.AccountingData = (function () {
       clients: memory.clients,
       companySettings: memory.companySettings || defaultSettings,
       products: memory.products,
+      subcontractors: memory.subcontractors,
+      paymentOrders: memory.paymentOrders,
       fleet: {
         vessels: getLocalStorage('andeco_fleet_vessels', []),
         vesselPhotos: getLocalStorage('andeco_fleet_vessel_photos', []),
@@ -185,6 +192,9 @@ window.AccountingData = (function () {
           window.LmsPortal.render();
         }
       } catch (e) {}
+    }
+    if (typeof window.AccountingSubcontractors !== 'undefined' && window.AccountingSubcontractors.render) {
+      try { window.AccountingSubcontractors.render(); } catch (e) {}
     }
     if (typeof window.hrEmployeesRefreshOverview === 'function') {
       try { window.hrEmployeesRefreshOverview(); } catch (e) {}
@@ -389,12 +399,54 @@ window.AccountingData = (function () {
     } catch (e) {}
   }
 
+  function getSubcontractors() {
+    if (useFileStorage) return Array.isArray(memory.subcontractors) ? memory.subcontractors : [];
+    try {
+      var raw = localStorage.getItem(PREFIX + 'subcontractors');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {}
+    return [];
+  }
+
+  function saveSubcontractors(list) {
+    if (useFileStorage) {
+      memory.subcontractors = Array.isArray(list) ? list : [];
+      persistToFile();
+      return;
+    }
+    try {
+      localStorage.setItem(PREFIX + 'subcontractors', JSON.stringify(list || []));
+    } catch (e) {}
+  }
+
+  function getPaymentOrders() {
+    if (useFileStorage) return Array.isArray(memory.paymentOrders) ? memory.paymentOrders : [];
+    try {
+      var raw = localStorage.getItem(PREFIX + 'paymentOrders');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {}
+    return [];
+  }
+
+  function savePaymentOrders(list) {
+    if (useFileStorage) {
+      memory.paymentOrders = Array.isArray(list) ? list : [];
+      persistToFile();
+      return;
+    }
+    try {
+      localStorage.setItem(PREFIX + 'paymentOrders', JSON.stringify(list || []));
+    } catch (e) {}
+  }
+
   function initLocalStorage() {
     if (!localStorage.getItem(PREFIX + 'invoices')) saveInvoices([]);
     if (!localStorage.getItem(PREFIX + 'receipts')) saveReceipts([]);
     if (!localStorage.getItem(PREFIX + 'clients')) saveClients([]);
     if (!localStorage.getItem(PREFIX + 'companySettings')) saveCompanySettings(defaultSettings);
     if (!localStorage.getItem(PREFIX + 'products')) saveProducts([]);
+    if (!localStorage.getItem(PREFIX + 'subcontractors')) saveSubcontractors([]);
+    if (!localStorage.getItem(PREFIX + 'paymentOrders')) savePaymentOrders([]);
   }
 
   function isServerPayloadAccountingEmpty(data) {
@@ -420,6 +472,8 @@ window.AccountingData = (function () {
     memory.clients = getLocalStorage(PREFIX + 'clients', []);
     memory.companySettings = getLocalStorage(PREFIX + 'companySettings', null) || defaultSettings;
     memory.products = getLocalStorage(PREFIX + 'products', []);
+    memory.subcontractors = getLocalStorage(PREFIX + 'subcontractors', []);
+    memory.paymentOrders = getLocalStorage(PREFIX + 'paymentOrders', []);
   }
 
   /** When shared file is empty but this browser still has old localStorage (e.g. after switching file:// → localhost). */
@@ -431,7 +485,9 @@ window.AccountingData = (function () {
         receipts: memory.receipts,
         clients: memory.clients,
         companySettings: memory.companySettings,
-        products: memory.products
+        products: memory.products,
+        subcontractors: memory.subcontractors,
+        paymentOrders: memory.paymentOrders
       };
       applyLoadedData(data);
       memory.invoices = saved.invoices;
@@ -439,6 +495,8 @@ window.AccountingData = (function () {
       memory.clients = saved.clients;
       memory.companySettings = saved.companySettings;
       memory.products = saved.products;
+      memory.subcontractors = saved.subcontractors;
+      memory.paymentOrders = saved.paymentOrders;
       useFileStorage = true;
       useSupabase = !!useSupabaseBackend;
       persistToFile();
@@ -464,6 +522,8 @@ window.AccountingData = (function () {
           ? data.companySettings
           : defaultSettings;
         memory.products = Array.isArray(data.products) ? data.products : [];
+        memory.subcontractors = Array.isArray(data.subcontractors) ? data.subcontractors : [];
+        memory.paymentOrders = Array.isArray(data.paymentOrders) ? data.paymentOrders : [];
         if (memory.invoices.length === 0 && memory.receipts.length === 0 && memory.clients.length === 0) {
           memory.companySettings = Object.assign({}, defaultSettings, memory.companySettings);
         }
@@ -617,6 +677,23 @@ window.AccountingData = (function () {
     return (max + 1).toString().padStart(4, '0');
   }
 
+  function getNextPaymentOrderNumber() {
+    var settings = getCompanySettings();
+    var start = settings.paymentOrderSequenceNumber || 1000;
+    var orders = getPaymentOrders();
+    var max = start - 1;
+    orders.forEach(function (o) {
+      if (o.orderNumber) {
+        var m = String(o.orderNumber).match(/\d+/);
+        if (m) {
+          var n = parseInt(m[0], 10);
+          if (n > max) max = n;
+        }
+      }
+    });
+    return 'PO-' + (max + 1).toString().padStart(4, '0');
+  }
+
   function loadFromData(data) {
     if (!data) return;
     if (useFileStorage) {
@@ -629,12 +706,16 @@ window.AccountingData = (function () {
       }
       if (data.companySettings && typeof data.companySettings === 'object') memory.companySettings = data.companySettings;
       memory.products = Array.isArray(data.products) ? data.products : memory.products;
+      memory.subcontractors = Array.isArray(data.subcontractors) ? data.subcontractors : memory.subcontractors;
+      memory.paymentOrders = Array.isArray(data.paymentOrders) ? data.paymentOrders : memory.paymentOrders;
     } else {
       if (Array.isArray(data.invoices)) saveInvoices(data.invoices);
       if (Array.isArray(data.receipts)) saveReceipts(data.receipts);
       if (Array.isArray(data.clients)) saveClients(data.clients);
       if (data.companySettings && typeof data.companySettings === 'object') saveCompanySettings(data.companySettings);
       if (Array.isArray(data.products)) saveProducts(data.products);
+      if (Array.isArray(data.subcontractors)) saveSubcontractors(data.subcontractors);
+      if (Array.isArray(data.paymentOrders)) savePaymentOrders(data.paymentOrders);
     }
   }
 
@@ -842,6 +923,37 @@ window.AccountingData = (function () {
     formatCurrency: formatCurrency,
     getNextInvoiceNumber: getNextInvoiceNumber,
     getNextReceiptNumber: getNextReceiptNumber,
+    getNextPaymentOrderNumber: getNextPaymentOrderNumber,
+    getSubcontractors: getSubcontractors,
+    saveSubcontractors: saveSubcontractors,
+    getPaymentOrders: getPaymentOrders,
+    savePaymentOrders: savePaymentOrders,
+    getSubcontractor: function (id) {
+      return getSubcontractors().filter(function (s) { return s.id === id; })[0];
+    },
+    saveSubcontractor: function (row) {
+      var list = getSubcontractors();
+      var idx = list.map(function (s) { return s.id; }).indexOf(row.id);
+      if (idx >= 0) list[idx] = row; else list.push(row);
+      saveSubcontractors(list);
+      return row;
+    },
+    deleteSubcontractor: function (id) {
+      saveSubcontractors(getSubcontractors().filter(function (s) { return s.id !== id; }));
+    },
+    getPaymentOrder: function (id) {
+      return getPaymentOrders().filter(function (o) { return o.id === id; })[0];
+    },
+    savePaymentOrder: function (row) {
+      var list = getPaymentOrders();
+      var idx = list.map(function (o) { return o.id; }).indexOf(row.id);
+      if (idx >= 0) list[idx] = row; else list.push(row);
+      savePaymentOrders(list);
+      return row;
+    },
+    deletePaymentOrder: function (id) {
+      savePaymentOrders(getPaymentOrders().filter(function (o) { return o.id !== id; }));
+    },
     getInvoice: function (id) {
       return getInvoices().filter(function (inv) { return inv.id === id; })[0];
     },

@@ -12,6 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/accounting-invoices.css">
+  <link rel="stylesheet" href="css/accounting-subcontractors.css">
   <link rel="stylesheet" href="css/fleet-management.css">
   <link rel="stylesheet" href="css/crew-management.css">
   <link rel="stylesheet" href="css/shifts-management.css">
@@ -577,6 +578,141 @@
                 </div>
               </div>
             </div>
+            <!-- Subcontractors: directory + payment orders -->
+            <div id="accounting-subcontractors-content" class="accounting-subcontractors-content" style="display: none;">
+              <div class="sc-sub-panel" data-sc-sub="directory" style="display: block;">
+                <div class="sc-toolbar">
+                  <div>
+                    <h2>Subcontractor directory</h2>
+                    <p class="module-meta">Companies or people who provide services you pay via payment orders.</p>
+                  </div>
+                  <button type="button" class="btn btn-primary" id="sc-add-sub-btn">Add subcontractor</button>
+                </div>
+                <div id="sc-sub-form-wrap" class="admin-form-wrap hidden">
+                  <h3 id="sc-sub-form-title">Add subcontractor</h3>
+                  <form id="sc-sub-form" class="sc-form">
+                    <input type="hidden" id="sc-sub-id" value="">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="sc-sub-name">Name *</label>
+                        <input type="text" id="sc-sub-name" required placeholder="Company or person name">
+                      </div>
+                      <div class="form-group">
+                        <label for="sc-sub-taxid">Tax ID</label>
+                        <input type="text" id="sc-sub-taxid" placeholder="VAT / tax number">
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="sc-sub-address">Address</label>
+                      <input type="text" id="sc-sub-address" placeholder="Address">
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="sc-sub-email">Email</label>
+                        <input type="email" id="sc-sub-email" placeholder="email@example.com">
+                      </div>
+                      <div class="form-group">
+                        <label for="sc-sub-phone">Phone</label>
+                        <input type="text" id="sc-sub-phone" placeholder="Phone">
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="sc-sub-iban">Bank IBAN</label>
+                      <input type="text" id="sc-sub-iban" placeholder="IBAN for payments">
+                    </div>
+                    <div class="form-group">
+                      <label for="sc-sub-notes">Notes</label>
+                      <textarea id="sc-sub-notes" rows="2" placeholder="Optional notes"></textarea>
+                    </div>
+                    <div class="sc-form-actions">
+                      <button type="button" class="btn btn-secondary" id="sc-sub-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table" id="sc-sub-table">
+                    <thead>
+                      <tr><th>Name</th><th>Tax ID</th><th>Email</th><th>Phone</th><th></th></tr>
+                    </thead>
+                    <tbody id="sc-sub-table-body"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="sc-sub-panel" data-sc-sub="orders" style="display: none;">
+                <div class="sc-toolbar">
+                  <div>
+                    <h2>Payment orders</h2>
+                    <p class="module-meta">Create and print payment orders when a subcontractor provides a service.</p>
+                  </div>
+                  <button type="button" class="btn btn-primary" id="sc-add-order-btn">New payment order</button>
+                </div>
+                <div id="sc-order-form-wrap" class="admin-form-wrap hidden">
+                  <h3 id="sc-order-form-title">New payment order</h3>
+                  <form id="sc-order-form" class="sc-form">
+                    <input type="hidden" id="sc-order-id" value="">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="sc-order-number">Order number</label>
+                        <input type="text" id="sc-order-number" readonly>
+                      </div>
+                      <div class="form-group">
+                        <label for="sc-order-date">Date *</label>
+                        <input type="date" id="sc-order-date" required>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="sc-order-subcontractor">Subcontractor *</label>
+                      <select id="sc-order-subcontractor" required></select>
+                    </div>
+                    <div class="form-group">
+                      <label for="sc-order-description">Service / description *</label>
+                      <textarea id="sc-order-description" rows="2" required placeholder="Describe the service provided"></textarea>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="sc-order-amount">Amount *</label>
+                        <input type="number" id="sc-order-amount" min="0.01" step="0.01" required>
+                      </div>
+                      <div class="form-group">
+                        <label for="sc-order-currency">Currency</label>
+                        <select id="sc-order-currency">
+                          <option value="EUR">EUR</option>
+                          <option value="USD">USD</option>
+                          <option value="GBP">GBP</option>
+                          <option value="CHF">CHF</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label for="sc-order-status">Status</label>
+                        <select id="sc-order-status">
+                          <option value="draft">Draft</option>
+                          <option value="issued">Issued</option>
+                          <option value="paid">Paid</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="sc-order-notes">Notes</label>
+                      <textarea id="sc-order-notes" rows="2" placeholder="Optional notes"></textarea>
+                    </div>
+                    <div class="sc-form-actions">
+                      <button type="button" class="btn btn-secondary" id="sc-order-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save payment order</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table" id="sc-order-table">
+                    <thead>
+                      <tr><th>Number</th><th>Date</th><th>Subcontractor</th><th>Amount</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody id="sc-order-table-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
             <!-- Social Insurance: YTD overview & submissions -->
             <div id="accounting-social-insurance-content" class="accounting-social-insurance-content" style="display: none;">
               <div class="si-sub-panel" data-si-sub="overview" style="display: block;">
@@ -1000,6 +1136,10 @@
                       <div class="form-group">
                         <label>Receipt Sequence Number</label>
                         <input type="number" id="receipt-sequence-number" min="1" placeholder="1000">
+                      </div>
+                      <div class="form-group">
+                        <label>Payment Order Sequence Number</label>
+                        <input type="number" id="payment-order-sequence-number" min="1" placeholder="1000">
                       </div>
                     </div>
                     <div class="form-row">
@@ -1979,6 +2119,7 @@
   </script>
   <script src="js/accounting-data.js" defer></script>
   <script src="js/accounting-invoices.js" defer></script>
+  <script src="js/accounting-subcontractors.js" defer></script>
   <script src="js/clients-module.js" defer></script>
   <script src="js/hr-employees.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>

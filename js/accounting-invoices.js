@@ -2910,6 +2910,8 @@ const app = {
         this.renderProductsList();
         document.getElementById('invoice-sequence-number').value = settings.invoiceSequenceNumber || 1000;
         document.getElementById('receipt-sequence-number').value = settings.receiptSequenceNumber || 1000;
+        var poSeq = document.getElementById('payment-order-sequence-number');
+        if (poSeq) poSeq.value = settings.paymentOrderSequenceNumber || 1000;
         document.getElementById('default-tax-rate').value = settings.defaultTaxRate || 0;
         document.getElementById('default-payment-terms').value = settings.defaultPaymentTerms || 30;
         document.getElementById('default-invoice-notes').value = settings.defaultInvoiceNotes || '';
@@ -2978,6 +2980,7 @@ const app = {
             currency: document.getElementById('company-currency').value || 'EUR',
             invoiceSequenceNumber: parseInt(document.getElementById('invoice-sequence-number').value) || 1000,
             receiptSequenceNumber: parseInt(document.getElementById('receipt-sequence-number').value) || 1000,
+            paymentOrderSequenceNumber: parseInt((document.getElementById('payment-order-sequence-number') || {}).value) || 1000,
             defaultTaxRate: parseFloat(document.getElementById('default-tax-rate').value) || 0,
             defaultPaymentTerms: parseInt(document.getElementById('default-payment-terms').value) || 30,
             defaultInvoiceNotes: document.getElementById('default-invoice-notes').value
