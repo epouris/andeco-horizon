@@ -271,10 +271,26 @@
   font-weight: 700;
 }
 
-.lms-public-header a {
+.lms-public-header a,
+.lms-public-login-btn {
   color: #fff;
   text-decoration: none;
   font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.lms-public-login-btn:hover,
+.lms-public-header a:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.lms-public-screen.hidden {
+  display: none !important;
 }
 
 .lms-public-hero-copy {

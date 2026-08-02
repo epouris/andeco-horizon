@@ -1274,7 +1274,8 @@
       return a.audience === 'public' || a.audience === 'all';
     }).slice(0, 3);
     root.innerHTML =
-      '<div class="lms-public-hero-copy"><p>Browse training courses available to visitors and partners.</p></div>' +
+      '<div class="lms-public-hero-copy"><p>Browse training courses available to visitors and partners.</p>' +
+      '<p><button type="button" class="btn btn-secondary btn-sm" data-go-login>← Back to login</button></p></div>' +
       (publicAnnouncements.length ? '<div class="lms-announce-list" style="margin-bottom:1rem">' +
         publicAnnouncements.map(function (a) {
           return '<article class="lms-announce-card"><strong>' + escapeHtml(a.title) + '</strong><p>' + escapeHtml(a.body) + '</p></article>';
@@ -1391,6 +1392,16 @@
     else renderPublicCatalog();
   }
 
+  function resetPublicViews() {
+    viewState.publicCourseId = null;
+    viewState.applicantId = null;
+    if (viewState.mode === 'exam' && !viewState.enrollmentId) viewState.mode = 'list';
+    var pub = document.getElementById('lms-public-screen');
+    var car = document.getElementById('lms-careers-screen');
+    if (pub) pub.classList.add('hidden');
+    if (car) car.classList.add('hidden');
+  }
+
   /* ---------- Events ---------- */
 
   function bindEvents() {
@@ -1423,6 +1434,14 @@
       car.addEventListener('click', onCareersClick);
       car.addEventListener('submit', onCareersSubmit);
     }
+  }
+
+  function goLoginFromPublic(e) {
+    if (!e.target.closest('[data-go-login]')) return;
+    e.preventDefault();
+    resetPublicViews();
+    if (typeof window.navigateTo === 'function') window.navigateTo('login');
+    else window.location.hash = 'login';
   }
 
   function onPageClick(e) {
@@ -1845,7 +1864,7 @@
       if (root) {
         root.innerHTML = '<div class="lms-public-card"><h2>Exam submitted</h2><p>' + escapeHtml(msg) +
           '</p><p>Our HR team will review your result.</p>' +
-          '<a class="btn btn-secondary" href="#login">Back to login</a></div>';
+          '<button type="button" class="btn btn-secondary" data-go-login>Back to login</button></div>';
       }
       return;
     }
@@ -1856,6 +1875,14 @@
   }
 
   function onPublicClick(e) {
+    var goLogin = e.target.closest('[data-go-login]');
+    if (goLogin) {
+      e.preventDefault();
+      resetPublicViews();
+      if (typeof window.navigateTo === 'function') window.navigateTo('login');
+      else window.location.hash = 'login';
+      return;
+    }
     var buy = e.target.closest('[data-lms-public-buy]');
     if (buy) {
       viewState.publicCourseId = buy.getAttribute('data-lms-public-buy');
@@ -1901,7 +1928,7 @@
   }
 
   function onCareersClick(e) {
-    // exam back unused in careers
+    goLoginFromPublic(e);
   }
 
   function onCareersSubmit(e) {
@@ -1945,6 +1972,7 @@
     render: render,
     isBusy: isInteractiveLmsFormOpen,
     showPublicScreen: showPublicScreen,
+    resetPublicViews: resetPublicViews,
     renderPublicCatalog: renderPublicCatalog,
     renderCareersPortal: renderCareersPortal,
     getData: getData,
