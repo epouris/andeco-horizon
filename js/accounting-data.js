@@ -86,6 +86,14 @@ window.AccountingData = (function () {
       },
       shifts: { staff: [], shifts: [], requests: [], settings: {} },
       payroll: { employees: [], payrollData: {}, companySettings: {} },
+      lms: {
+        courses: [],
+        enrollments: [],
+        attempts: [],
+        purchases: [],
+        applicants: [],
+        settings: {}
+      },
       crm: { users: [] }
     };
   }
@@ -127,6 +135,20 @@ window.AccountingData = (function () {
         payrollData: getLocalStorage('payrollData', {}),
         companySettings: getLocalStorage('companySettings', {})
       },
+      lms: (function () {
+        try {
+          var r = localStorage.getItem('andeco_lms_data');
+          if (r) return JSON.parse(r);
+        } catch (e) {}
+        return {
+          courses: [],
+          enrollments: [],
+          attempts: [],
+          purchases: [],
+          applicants: [],
+          settings: {}
+        };
+      })(),
       crm: {
         users: getLocalStorage('andeco_crm_users', [])
       }
@@ -145,6 +167,9 @@ window.AccountingData = (function () {
     }
     if (typeof window.CrewManagement !== 'undefined' && window.CrewManagement.render) {
       try { window.CrewManagement.render(); } catch (e) {}
+    }
+    if (typeof window.LmsModule !== 'undefined' && window.LmsModule.render) {
+      try { window.LmsModule.render(); } catch (e) {}
     }
     if (typeof window.hrEmployeesRefreshOverview === 'function') {
       try { window.hrEmployeesRefreshOverview(); } catch (e) {}
@@ -444,6 +469,9 @@ window.AccountingData = (function () {
         }
         if (data.shifts && typeof data.shifts === 'object') {
           setLocalStorage('andeco_shifts_data', data.shifts);
+        }
+        if (data.lms && typeof data.lms === 'object') {
+          setLocalStorage('andeco_lms_data', data.lms);
         }
         if (data.payroll && typeof data.payroll === 'object') {
           if (Array.isArray(data.payroll.employees)) setLocalStorage('employees', data.payroll.employees);

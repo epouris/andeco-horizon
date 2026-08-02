@@ -320,6 +320,16 @@ CREATE TABLE IF NOT EXISTS payroll_company_settings (
 INSERT INTO payroll_company_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
+-- LMS (courses, enrollments, exams, purchases, applicants) as JSON document
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS lms_data (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO lms_data (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
 -- Legacy JSON blob (migration source + optional snapshot)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS app_data (

@@ -16,6 +16,7 @@ No Node.js is required for Option 1.
 - **Home:** Module icons only (no sidebar). Click a module to open it; the sidebar then shows that module’s sections.
 - **Accounting module:** **Invoices** and **Receipts** — create/edit invoices, link to clients, receipts, view/print. All logic is embedded in the CRM (no external app).
 - **Clients module:** Manage clients used by Accounting (invoices, receipts). Same data as the client list inside Accounting.
+- **Learning (LMS):** Employee courses, inductions, procedure training, and exams. Public course catalog (`#lms-public`) for visitors to request/buy training. Careers portal (`#lms-careers`) for hiring applicants to take a pre-hire exam with an access code.
 - **Settings module (admin only):** Company information, bank accounts, logo, invoice/receipt sequence numbers, default tax, currency, payment terms. Data backup & restore (export/import JSON).
 
 Data is stored in localStorage under keys prefixed with `andeco_inv_` (invoices, receipts, clients, company settings).

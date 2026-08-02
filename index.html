@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/crew-management.css">
   <link rel="stylesheet" href="css/shifts-management.css">
   <link rel="stylesheet" href="css/payroll.css">
+  <link rel="stylesheet" href="css/lms.css">
   <script>
     (function () {
       if (location.protocol !== 'file:') return;
@@ -122,6 +123,10 @@
           </div>
           <p id="login-error" class="login-error hidden">Invalid username or password.</p>
           <button type="submit" class="btn btn-auth">Sign in</button>
+          <div class="auth-public-links">
+            <a href="#lms-public">Browse public courses</a>
+            <a href="#lms-careers">Hiring assessment</a>
+          </div>
         </form>
       </div>
       <aside class="auth-panel auth-panel--visual" aria-hidden="true">
@@ -130,6 +135,28 @@
           <img class="auth-company-logo" src="/assets/login_logo.png" alt="AMS Marine Services" width="220" height="220">
         </div>
       </aside>
+    </div>
+  </div>
+
+  <!-- Public LMS course catalog (no login) -->
+  <div id="lms-public-screen" class="screen lms-public-screen hidden">
+    <div class="lms-public-shell">
+      <header class="lms-public-header">
+        <h1 id="lms-public-brand">Andeco Learning</h1>
+        <a href="#login">Employee login</a>
+      </header>
+      <div id="lms-public-root"></div>
+    </div>
+  </div>
+
+  <!-- Public careers / hiring exam portal (no login) -->
+  <div id="lms-careers-screen" class="screen lms-public-screen hidden">
+    <div class="lms-public-shell">
+      <header class="lms-public-header">
+        <h1 id="lms-careers-brand">Andeco Learning · Careers</h1>
+        <a href="#login">Employee login</a>
+      </header>
+      <div id="lms-careers-root"></div>
     </div>
   </div>
 
@@ -223,6 +250,12 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.2"/><path d="M22 21v-2a3.5 3.5 0 0 0-2.5-3.3"/><path d="M16.5 4.2a3.2 3.2 0 0 1 0 5.6"/></svg>
             </span>
             <span class="module-title">Contacts</span>
+          </a>
+          <a href="#lms" class="module-card module-card--tile" data-module="lms">
+            <span class="module-icon-tile module-icon--blue" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v15H6.5A2.5 2.5 0 0 0 4 19.5z"/><path d="M8 7h8M8 11h6"/></svg>
+            </span>
+            <span class="module-title">Learning (LMS)</span>
           </a>
           <a href="#admin" class="module-card module-card--tile module-card--admin" data-module="admin">
             <span class="module-icon-tile module-icon--purple" aria-hidden="true">
@@ -1150,6 +1183,60 @@
         </div>
       </section>
 
+      <section id="page-lms" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail lms-module">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Learning Management</h1>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-lms" aria-label="Subsections" hidden></nav>
+
+            <div class="lms-section-panel" data-section="dashboard" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="overview">
+                <div id="lms-dashboard"></div>
+              </div>
+            </div>
+
+            <div class="lms-section-panel" data-section="my-learning" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="enrolled">
+                <div id="lms-my-learning"></div>
+              </div>
+            </div>
+
+            <div class="lms-section-panel" data-section="library" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="all">
+                <div id="lms-library"></div>
+              </div>
+            </div>
+
+            <div class="lms-section-panel" data-section="learners" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="enrollments">
+                <div id="lms-learners"></div>
+              </div>
+            </div>
+
+            <div class="lms-section-panel" data-section="purchases" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="requests">
+                <div id="lms-purchases"></div>
+              </div>
+            </div>
+
+            <div class="lms-section-panel" data-section="hiring" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="applicants">
+                <div id="lms-hiring"></div>
+              </div>
+            </div>
+
+            <div class="lms-section-panel" data-section="settings" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="portal">
+                <div id="lms-settings"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="page-hr" class="page module-detail-page">
         <div class="module-detail-wrap">
           <div class="module-detail">
@@ -1793,6 +1880,7 @@
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="shifts"> Shifts</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="documents"> Document ISO</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="contacts"> Contacts</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="lms"> Learning (LMS)</label>
               </div>
               <div class="admin-form-buttons">
                 <button type="submit" class="btn btn-primary">Save user</button>
@@ -1872,6 +1960,7 @@
   <script src="js/fleet-management.js" defer></script>
   <script src="js/crew-management.js" defer></script>
   <script src="js/shifts-management.js" defer></script>
+  <script src="js/lms-module.js" defer></script>
   <script src="js/module-navigation.js" defer></script>
   <script src="js/app.js" defer></script>
   <script>

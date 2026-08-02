@@ -26,7 +26,7 @@ const ADMIN_USERNAME = (process.env.ANDECO_ADMIN_USERNAME || 'admin').trim().toL
 const ADMIN_PASSWORD = process.env.ANDECO_ADMIN_PASSWORD || 'AndecoAdmin1!';
 const ADMIN_DISPLAY_NAME = process.env.ANDECO_ADMIN_DISPLAY_NAME || 'Administrator';
 const ALL_MODULES = [
-  'accounting', 'clients', 'fleet', 'hr', 'crew', 'shifts', 'documents', 'contacts', 'settings'
+  'accounting', 'clients', 'fleet', 'hr', 'crew', 'shifts', 'documents', 'contacts', 'lms', 'settings'
 ];
 
 function sha256Hex(text) {

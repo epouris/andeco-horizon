@@ -1,0 +1,343 @@
+/* Learning Management System */
+
+.lms-section-panel {
+  display: none;
+}
+
+.lms-section-panel.active {
+  display: block;
+}
+
+.lms-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.lms-metric {
+  min-width: 140px;
+  padding: 0.85rem 1rem;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm, 0.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.lms-metric-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+}
+
+.lms-metric-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.lms-metric--ok {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.lms-metric--warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.lms-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.lms-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.lms-toolbar .search-input,
+.lms-toolbar select {
+  min-width: 200px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm, 0.5rem);
+  font-family: inherit;
+}
+
+.lms-course-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lms-course-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg-app, #f8fafc);
+  border-radius: var(--radius-sm, 0.5rem);
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.lms-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+  margin-top: 0.2rem;
+}
+
+.lms-progress {
+  margin-top: 0.45rem;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.lms-progress span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #0b1f33, #2563eb);
+}
+
+.lms-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.lms-badge--published,
+.lms-badge--completed,
+.lms-badge--paid,
+.lms-badge--passed,
+.lms-badge--hired {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.lms-badge--pending,
+.lms-badge--invited,
+.lms-badge--started,
+.lms-badge--in_progress,
+.lms-badge--enrolled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.lms-badge--draft,
+.lms-badge--cancelled,
+.lms-badge--failed,
+.lms-badge--rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.lms-empty,
+.lms-hint {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.lms-hint code {
+  font-size: 0.85em;
+  background: #f3f4f6;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+}
+
+.lms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.lms-row-actions {
+  white-space: nowrap;
+}
+
+.lms-editor-block {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm, 0.5rem);
+  padding: 1rem;
+  margin-bottom: 0.85rem;
+  background: var(--bg-app, #f8fafc);
+}
+
+.lms-options-editor {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.lms-option-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.9rem;
+}
+
+.lms-option-row input[type="text"] {
+  flex: 1;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 0.4rem;
+  font-family: inherit;
+}
+
+.lms-player {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.lms-player-nav {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm, 0.5rem);
+  padding: 1rem;
+}
+
+.lms-player-nav ol {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.lms-player-nav li {
+  margin: 0.35rem 0;
+}
+
+.lms-lesson-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-primary, #111827);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.lms-lesson-link.active {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.lms-lesson-body {
+  line-height: 1.6;
+  margin: 1rem 0 1.25rem;
+  white-space: normal;
+}
+
+/* Public portals */
+.lms-public-screen {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(37, 99, 235, 0.18), transparent 55%),
+    linear-gradient(180deg, #0b1f33 0%, #102a43 40%, #f3f6f9 40%, #f3f6f9 100%);
+  color: #111827;
+}
+
+.lms-public-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.lms-public-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+  color: #fff;
+}
+
+.lms-public-header h1 {
+  margin: 0;
+  font-family: Outfit, Plus Jakarta Sans, sans-serif;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+}
+
+.lms-public-header a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.lms-public-hero-copy {
+  color: #e5eef8;
+  margin-bottom: 1.25rem;
+}
+
+.lms-public-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.lms-public-card {
+  background: #fff;
+  border-radius: 0.85rem;
+  padding: 1.25rem 1.35rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.lms-public-card h2,
+.lms-public-card h3 {
+  margin-top: 0;
+  font-family: Outfit, Plus Jakarta Sans, sans-serif;
+}
+
+.lms-public-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.lms-public-links {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.auth-public-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.auth-public-links a {
+  color: var(--accent, #2563eb);
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.auth-public-links a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 860px) {
+  .lms-dashboard-grid,
+  .lms-player {
+    grid-template-columns: 1fr;
+  }
+}
