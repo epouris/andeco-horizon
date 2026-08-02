@@ -294,10 +294,17 @@
     return m ? (h + 'h ' + m + 'm') : (h + 'h');
   }
 
+  function escapeAttr(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+  }
+
   function courseCoverHtml(course) {
     var title = escapeHtml((course && course.title) || 'Course');
     if (course && course.coverImage) {
-      return '<div class="lp-course-cover"><img src="' + escapeHtml(course.coverImage) + '" alt="' + title + '" loading="lazy"></div>';
+      return '<div class="lp-course-cover"><img src="' + escapeAttr(course.coverImage) + '" alt="' + title + '" loading="lazy"></div>';
     }
     var letter = escapeHtml(String((course && course.title) || 'C').charAt(0).toUpperCase());
     return '<div class="lp-course-cover lp-course-cover--placeholder" aria-hidden="true"><span>' + letter + '</span></div>';
@@ -1116,7 +1123,7 @@
 
   function renderCourseHeader(course, instructor, progress, en) {
     var cover = course.coverImage
-      ? '<div class="lp-course-hero-media"><img src="' + escapeHtml(course.coverImage) + '" alt=""></div>'
+      ? '<div class="lp-course-hero-media"><img src="' + escapeAttr(course.coverImage) + '" alt=""></div>'
       : '<div class="lp-course-hero-media lp-course-hero-media--plain" aria-hidden="true"></div>';
     return '<header class="lp-course-hero">' +
       cover +
