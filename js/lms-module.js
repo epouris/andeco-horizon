@@ -79,7 +79,7 @@
     if (viewState.mode === 'exam' && document.getElementById('lms-exam-form')) return true;
     if (currentSection === 'settings' && document.getElementById('lms-settings-form')) return true;
     if (currentSection === 'hiring' && document.getElementById('lms-applicant-form')) return true;
-    if (currentSection === 'learners' && (document.getElementById('lms-assign-form') || document.getElementById('lms-profile-form'))) return true;
+    if (currentSection === 'learners' && (document.getElementById('lms-assign-form') || document.getElementById('lms-user-edit-form') || document.getElementById('lms-profile-form'))) return true;
     if (currentSection === 'announcements' && document.getElementById('lms-announce-form')) return true;
     return false;
   }
@@ -1513,42 +1513,69 @@
     }
     var data = getData();
     var users = getUsers();
+    var modules = (window.AndecoUsers && window.AndecoUsers.modules) || [
+      { id: 'accounting', name: 'Accounting' },
+      { id: 'clients', name: 'Clients' },
+      { id: 'fleet', name: 'Fleet Management' },
+      { id: 'hr', name: 'HR' },
+      { id: 'crew', name: 'Crew Management' },
+      { id: 'shifts', name: 'Shifts' },
+      { id: 'documents', name: 'Document ISO' },
+      { id: 'contacts', name: 'Contacts' },
+      { id: 'lms', name: 'Learning (LMS)' }
+    ];
     el.innerHTML =
       '<div class="page-header"><h2>User management</h2>' +
-      '<p class="lms-hint">Manage learner/instructor roles and assign training. App login accounts are still created under Admin.</p></div>' +
-      '<div class="invoice-form-container" style="margin-bottom:1.5rem"><form id="lms-profile-form" class="invoice-form">' +
-        '<div class="form-section"><h3>Learner / instructor profile</h3><div class="form-row">' +
-          '<div class="form-group"><label>User</label><select name="userId" required>' +
-            '<option value="">Select user…</option>' +
-            users.map(function (u) {
-              return '<option value="' + escapeHtml(u.id) + '">' + escapeHtml(u.displayName || u.username) + '</option>';
-            }).join('') +
-          '</select></div>' +
-          '<div class="form-group"><label>LMS role</label><select name="role">' +
-            Object.keys(LEARNER_ROLES).map(function (k) {
-              return '<option value="' + k + '">' + escapeHtml(LEARNER_ROLES[k]) + '</option>';
-            }).join('') +
-          '</select></div>' +
-          '<div class="form-group"><label>Department</label><input name="department" placeholder="e.g. Deck, Office"></div>' +
-          '<div class="form-group"><label>Title</label><input name="title" placeholder="e.g. Course Instructor"></div>' +
-          '<div class="form-group full-width"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>' +
-          '<div class="form-group full-width"><label>Instructor signature image</label>' +
-            '<input type="file" id="lms-profile-signature-file" accept="image/*">' +
-            '<input type="hidden" name="signatureImage" id="lms-profile-signature-value" value="">' +
-            '<div class="lms-signature-preview" id="lms-profile-signature-preview"><span>No signature uploaded</span></div>' +
-            '<button type="button" class="btn btn-ghost btn-sm" id="lms-profile-signature-clear" style="margin-top:0.5rem">Remove signature</button>' +
-            '<p class="lms-hint">Used on course certificates for instructors who create courses.</p>' +
+      '<p class="lms-hint">Edit login accounts, LMS roles, and assign training. New accounts can also be created under Admin.</p></div>' +
+      '<div class="invoice-form-container" style="margin-bottom:1.5rem"><form id="lms-user-edit-form" class="invoice-form">' +
+        '<div class="form-section"><h3 id="lms-user-edit-title">Edit user</h3>' +
+          '<input type="hidden" name="userId" id="lms-edit-user-id" value="">' +
+          '<div class="form-row">' +
+            '<div class="form-group"><label>Username</label><input name="username" id="lms-edit-username" readonly></div>' +
+            '<div class="form-group"><label>Display name</label><input name="displayName" id="lms-edit-displayname" required placeholder="Full name"></div>' +
+            '<div class="form-group"><label>Password <span class="label-optional">(leave blank to keep)</span></label><input type="password" name="password" id="lms-edit-password" placeholder="New password" autocomplete="new-password"></div>' +
+            '<div class="form-group"><label class="admin-check-label" style="margin-top:1.5rem"><input type="checkbox" name="isAdmin" id="lms-edit-is-admin"> Administrator</label></div>' +
           '</div>' +
-        '</div><div class="form-actions"><button type="submit" class="btn btn-primary">Save profile</button></div></div>' +
+          '<p class="panel-title" style="margin:0.75rem 0 0.35rem">Modules this user can access</p>' +
+          '<p class="lms-hint" style="margin-bottom:0.5rem">If only Learning (LMS) is selected, login opens the Learning Portal.</p>' +
+          '<div class="form-row" id="lms-edit-modules">' +
+            modules.map(function (m) {
+              return '<div class="form-group"><label class="admin-check-label"><input type="checkbox" name="lms-user-module" value="' +
+                escapeHtml(m.id) + '"> ' + escapeHtml(m.name) + '</label></div>';
+            }).join('') +
+          '</div>' +
+          '<div class="form-row" style="margin-top:0.75rem">' +
+            '<div class="form-group"><label>LMS role</label><select name="role">' +
+              Object.keys(LEARNER_ROLES).map(function (k) {
+                return '<option value="' + k + '">' + escapeHtml(LEARNER_ROLES[k]) + '</option>';
+              }).join('') +
+            '</select></div>' +
+            '<div class="form-group"><label>Department</label><input name="department" placeholder="e.g. Deck, Office"></div>' +
+            '<div class="form-group"><label>Title</label><input name="title" placeholder="e.g. Course Instructor"></div>' +
+            '<div class="form-group full-width"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>' +
+            '<div class="form-group full-width"><label>Instructor signature image</label>' +
+              '<input type="file" id="lms-profile-signature-file" accept="image/*">' +
+              '<input type="hidden" name="signatureImage" id="lms-profile-signature-value" value="">' +
+              '<div class="lms-signature-preview" id="lms-profile-signature-preview"><span>No signature uploaded</span></div>' +
+              '<button type="button" class="btn btn-ghost btn-sm" id="lms-profile-signature-clear" style="margin-top:0.5rem">Remove signature</button>' +
+              '<p class="lms-hint">Used on course certificates for instructors who create courses.</p>' +
+            '</div>' +
+          '</div>' +
+          '<div class="form-actions">' +
+            '<button type="submit" class="btn btn-primary">Save user</button> ' +
+            '<button type="button" class="btn btn-ghost" id="lms-user-edit-cancel">Cancel</button>' +
+          '</div>' +
+        '</div>' +
       '</form></div>' +
       '<div class="table-wrap" style="margin-bottom:1.5rem"><table class="data-table"><thead><tr>' +
-        '<th>User</th><th>LMS role</th><th>Department</th><th>Enrollments</th><th>Completed</th><th>Certificates</th>' +
+        '<th>User</th><th>LMS role</th><th>Department</th><th>Modules</th><th>Enrollments</th><th>Completed</th><th>Certificates</th><th></th>' +
       '</tr></thead><tbody>' +
       (users.length ? users.map(function (u) {
         var profile = getLearnerProfile(u.id) || { role: 'learner', department: '' };
         var ens = data.enrollments.filter(function (e) { return e.userId === u.id; });
         var done = ens.filter(function (e) { return e.status === 'completed' || e.passed === true; }).length;
         var certs = (data.certificates || []).filter(function (c) { return c.userId === u.id; }).length;
+        var modulesStr = u.isAdmin ? 'All (admin)' : ((u.allowedModules || []).join(', ') || 'None');
         return '<tr><td><strong>' + escapeHtml(u.displayName || u.username) + '</strong>' +
           (u.isAdmin ? ' <span class="lms-badge">admin</span>' : '') +
           '<div class="lms-meta">' + escapeHtml(u.username) + '</div></td>' +
@@ -1556,8 +1583,11 @@
             (profile.signatureImage ? ' · <span class="lms-meta">Signature on file</span>' : '') +
           '</td>' +
           '<td>' + escapeHtml(profile.department || '—') + '</td>' +
-          '<td>' + ens.length + '</td><td>' + done + '</td><td>' + certs + '</td></tr>';
-      }).join('') : '<tr><td colspan="6">No users found.</td></tr>') +
+          '<td class="lms-meta">' + escapeHtml(modulesStr) + '</td>' +
+          '<td>' + ens.length + '</td><td>' + done + '</td><td>' + certs + '</td>' +
+          '<td class="lms-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-lms-edit-user="' +
+            escapeHtml(u.id) + '">Edit</button></td></tr>';
+      }).join('') : '<tr><td colspan="8">No users found.</td></tr>') +
       '</tbody></table></div>' +
       '<div class="invoice-form-container" style="margin-bottom:1.5rem"><form id="lms-assign-form" class="invoice-form">' +
         '<div class="form-section"><h3>Assign training</h3><div class="form-row">' +
@@ -1589,15 +1619,108 @@
       }).join('') : '<tr><td colspan="7">No enrollments yet.</td></tr>') +
       '</tbody></table></div>';
     bindProfileSignatureControls();
+    bindUserEditFormControls();
+    clearUserEditForm();
+  }
+
+  function clearUserEditForm() {
+    var form = document.getElementById('lms-user-edit-form');
+    if (!form) return;
+    form.reset();
+    var idEl = document.getElementById('lms-edit-user-id');
+    var userEl = document.getElementById('lms-edit-username');
+    var titleEl = document.getElementById('lms-user-edit-title');
+    var hidden = document.getElementById('lms-profile-signature-value');
+    var preview = document.getElementById('lms-profile-signature-preview');
+    if (idEl) idEl.value = '';
+    if (userEl) userEl.value = '';
+    if (titleEl) titleEl.textContent = 'Edit user';
+    if (hidden) hidden.value = '';
+    form.removeAttribute('data-signature-cleared');
+    if (preview) {
+      preview.classList.remove('has-image');
+      preview.innerHTML = '<span>Select a user below to edit, or click Edit on a row.</span>';
+    }
+    toggleLmsUserModuleCheckboxes();
+  }
+
+  function fillUserEditForm(userId) {
+    var form = document.getElementById('lms-user-edit-form');
+    if (!form || !userId) return;
+    var users = getUsers();
+    var user = users.filter(function (u) { return u.id === userId; })[0];
+    if (!user) return;
+    var profile = getLearnerProfile(userId) || {};
+    var titleEl = document.getElementById('lms-user-edit-title');
+    var idEl = document.getElementById('lms-edit-user-id');
+    var userEl = document.getElementById('lms-edit-username');
+    var nameEl = document.getElementById('lms-edit-displayname');
+    var passEl = document.getElementById('lms-edit-password');
+    var adminEl = document.getElementById('lms-edit-is-admin');
+    var roleEl = form.querySelector('[name="role"]');
+    var deptEl = form.querySelector('[name="department"]');
+    var titleField = form.querySelector('[name="title"]');
+    var notesEl = form.querySelector('[name="notes"]');
+    var hidden = document.getElementById('lms-profile-signature-value');
+    var preview = document.getElementById('lms-profile-signature-preview');
+    var file = document.getElementById('lms-profile-signature-file');
+    if (titleEl) titleEl.textContent = 'Edit user — ' + (user.displayName || user.username);
+    if (idEl) idEl.value = user.id;
+    if (userEl) userEl.value = user.username || '';
+    if (nameEl) nameEl.value = user.displayName || '';
+    if (passEl) passEl.value = '';
+    if (adminEl) adminEl.checked = user.isAdmin === true;
+    form.querySelectorAll('input[name="lms-user-module"]').forEach(function (cb) {
+      cb.checked = user.isAdmin || (user.allowedModules || []).indexOf(cb.value) !== -1;
+    });
+    if (roleEl) roleEl.value = profile.role || 'learner';
+    if (deptEl) deptEl.value = profile.department || '';
+    if (titleField) titleField.value = profile.title || '';
+    if (notesEl) notesEl.value = profile.notes || '';
+    if (hidden) hidden.value = '';
+    if (file) file.value = '';
+    form.removeAttribute('data-signature-cleared');
+    if (preview) {
+      if (profile.signatureImage) {
+        preview.classList.add('has-image');
+        preview.innerHTML = '<img src="' + profile.signatureImage + '" alt="Signature preview">';
+      } else {
+        preview.classList.remove('has-image');
+        preview.innerHTML = '<span>No signature uploaded</span>';
+      }
+    }
+    toggleLmsUserModuleCheckboxes();
+    try { form.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  }
+
+  function toggleLmsUserModuleCheckboxes() {
+    var isAdminCb = document.getElementById('lms-edit-is-admin');
+    var list = document.querySelectorAll('#lms-edit-modules input[name="lms-user-module"]');
+    if (!isAdminCb || !list.length) return;
+    var disabled = isAdminCb.checked;
+    list.forEach(function (cb) {
+      cb.disabled = disabled;
+      if (disabled) cb.checked = true;
+    });
+  }
+
+  function bindUserEditFormControls() {
+    var form = document.getElementById('lms-user-edit-form');
+    var adminCb = document.getElementById('lms-edit-is-admin');
+    var cancelBtn = document.getElementById('lms-user-edit-cancel');
+    if (adminCb) adminCb.onchange = toggleLmsUserModuleCheckboxes;
+    if (cancelBtn) cancelBtn.onclick = function () { clearUserEditForm(); };
+    if (form) {
+      // Keep signature controls wired; profile form id changed
+    }
   }
 
   function bindProfileSignatureControls() {
-    var form = document.getElementById('lms-profile-form');
+    var form = document.getElementById('lms-user-edit-form') || document.getElementById('lms-profile-form');
     var file = document.getElementById('lms-profile-signature-file');
     var hidden = document.getElementById('lms-profile-signature-value');
     var preview = document.getElementById('lms-profile-signature-preview');
     var clearBtn = document.getElementById('lms-profile-signature-clear');
-    var userSelect = form ? form.querySelector('[name="userId"]') : null;
     if (!form || !file || !hidden || !preview) return;
 
     function setPreview(src) {
@@ -1608,22 +1731,6 @@
         preview.classList.remove('has-image');
         preview.innerHTML = '<span>No signature uploaded</span>';
       }
-    }
-
-    function loadSelectedProfile() {
-      var id = userSelect ? userSelect.value : '';
-      var p = id ? getLearnerProfile(id) : null;
-      var roleEl = form.querySelector('[name="role"]');
-      var deptEl = form.querySelector('[name="department"]');
-      var titleEl = form.querySelector('[name="title"]');
-      var notesEl = form.querySelector('[name="notes"]');
-      if (roleEl) roleEl.value = (p && p.role) || 'learner';
-      if (deptEl) deptEl.value = (p && p.department) || '';
-      if (titleEl) titleEl.value = (p && p.title) || '';
-      if (notesEl) notesEl.value = (p && p.notes) || '';
-      hidden.value = '';
-      form.removeAttribute('data-signature-cleared');
-      setPreview((p && p.signatureImage) || '');
     }
 
     file.onchange = function () {
@@ -1652,7 +1759,6 @@
         setPreview('');
       };
     }
-    if (userSelect) userSelect.onchange = loadSelectedProfile;
   }
 
   function renderAnnouncements() {
@@ -2773,7 +2879,7 @@
   }
 
   function onPageClick(e) {
-    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-unenroll],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-remove-reference],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-reference,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
+    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-edit-user],[data-lms-duplicate],[data-lms-delete],[data-lms-unenroll],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-remove-reference],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-reference,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
     if (!t) return;
 
     if (t.id === 'lms-open-portal-btn-dash') {
@@ -3149,6 +3255,11 @@
       renderLearners();
       return;
     }
+    if (t.hasAttribute('data-lms-edit-user')) {
+      if (!isAdmin()) return;
+      fillUserEditForm(t.getAttribute('data-lms-edit-user'));
+      return;
+    }
     if (t.hasAttribute('data-lms-cert-print')) {
       printCertificate(t.getAttribute('data-lms-cert-print'));
     }
@@ -3173,25 +3284,78 @@
       renderLibrary({ force: true });
       return;
     }
-    if (e.target && e.target.id === 'lms-profile-form') {
+    if (e.target && e.target.id === 'lms-user-edit-form') {
       e.preventDefault();
+      if (!isAdmin()) return;
       var fdP = new FormData(e.target);
-      var profileUserId = String(fdP.get('userId') || '');
-      if (!profileUserId) return;
-      var existingProfile = getLearnerProfile(profileUserId) || {};
-      var sigVal = String(fdP.get('signatureImage') || '').trim();
-      var sigCleared = e.target.getAttribute('data-signature-cleared') === '1';
-      var patch = {
-        role: String(fdP.get('role') || 'learner'),
-        department: String(fdP.get('department') || '').trim(),
-        title: String(fdP.get('title') || '').trim(),
-        notes: String(fdP.get('notes') || '').trim()
-      };
-      if (sigVal) patch.signatureImage = sigVal;
-      else if (sigCleared) patch.signatureImage = '';
-      else if (existingProfile.signatureImage) patch.signatureImage = existingProfile.signatureImage;
-      upsertLearnerProfile(profileUserId, patch);
-      renderLearners();
+      var profileUserId = String(fdP.get('userId') || '').trim();
+      var displayName = String(fdP.get('displayName') || '').trim();
+      var password = String(fdP.get('password') || '');
+      var makeAdmin = !!(e.target.querySelector('[name="isAdmin"]') && e.target.querySelector('[name="isAdmin"]').checked);
+      if (!profileUserId || !displayName) {
+        alert('Select a user and enter a display name.');
+        return;
+      }
+      if (!window.AndecoUsers || !window.AndecoUsers.saveUsers || !window.AndecoUsers.hashPassword) {
+        alert('User account helpers are unavailable. Refresh the page and try again.');
+        return;
+      }
+      var usersList = window.AndecoUsers.getUsers();
+      var targetUser = usersList.filter(function (u) { return u.id === profileUserId; })[0];
+      if (!targetUser) {
+        alert('User not found.');
+        return;
+      }
+      if (targetUser.isAdmin && !makeAdmin) {
+        var otherAdmins = usersList.filter(function (u) { return u.isAdmin && u.id !== profileUserId; });
+        if (otherAdmins.length === 0) {
+          alert('You cannot remove the last administrator. At least one admin is required.');
+          return;
+        }
+      }
+      var allowedModules = [];
+      e.target.querySelectorAll('input[name="lms-user-module"]:checked').forEach(function (cb) {
+        if (!cb.disabled) allowedModules.push(cb.value);
+      });
+      targetUser.displayName = displayName;
+      targetUser.isAdmin = makeAdmin;
+      targetUser.allowedModules = makeAdmin
+        ? (window.AndecoUsers.allModuleIds || []).slice()
+        : allowedModules;
+
+      function finishUserSave() {
+        window.AndecoUsers.saveUsers(usersList);
+        if (window.AndecoUsers.syncSessionIfCurrent) window.AndecoUsers.syncSessionIfCurrent(targetUser);
+        // Keep enrollment display names in sync
+        var lmsData = getData();
+        (lmsData.enrollments || []).forEach(function (en) {
+          if (en.userId === profileUserId) en.userName = displayName;
+        });
+        saveData(lmsData);
+        var existingProfile = getLearnerProfile(profileUserId) || {};
+        var sigVal = String(fdP.get('signatureImage') || '').trim();
+        var sigCleared = e.target.getAttribute('data-signature-cleared') === '1';
+        var patch = {
+          role: String(fdP.get('role') || 'learner'),
+          department: String(fdP.get('department') || '').trim(),
+          title: String(fdP.get('title') || '').trim(),
+          notes: String(fdP.get('notes') || '').trim()
+        };
+        if (sigVal) patch.signatureImage = sigVal;
+        else if (sigCleared) patch.signatureImage = '';
+        else if (existingProfile.signatureImage) patch.signatureImage = existingProfile.signatureImage;
+        upsertLearnerProfile(profileUserId, patch);
+        renderLearners();
+      }
+
+      if (password) {
+        window.AndecoUsers.hashPassword(password).then(function (passwordHash) {
+          targetUser.passwordHash = passwordHash;
+          finishUserSave();
+        });
+      } else {
+        finishUserSave();
+      }
       return;
     }
     if (e.target && e.target.id === 'lms-assign-form') {

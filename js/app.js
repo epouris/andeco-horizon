@@ -1461,4 +1461,23 @@
   } else {
     init();
   }
+
+  window.AndecoUsers = {
+    getUsers: getUsers,
+    saveUsers: saveUsers,
+    hashPassword: hashPassword,
+    modules: MODULES.filter(function (m) { return m.id !== 'settings'; }),
+    allModuleIds: MODULE_IDS.slice(),
+    syncSessionIfCurrent: function (user) {
+      var session = getSession();
+      if (!session || !user || session.userId !== user.id) return;
+      session.displayName = user.displayName;
+      session.username = user.username;
+      session.isAdmin = user.isAdmin === true;
+      session.allowedModules = user.isAdmin ? MODULE_IDS.slice() : (user.allowedModules || []).slice();
+      setSession(session);
+      refreshHeaderUser(session);
+      applyVisibility(session);
+    }
+  };
 })();
