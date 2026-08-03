@@ -1563,6 +1563,18 @@ body.home-view {
 }
 .data-table tbody tr:hover { background: var(--bg-app); }
 
+.clients-directory-table .clients-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.clients-directory-table .clients-row-actions .btn {
+  margin-left: 0.25rem;
+}
+.clients-directory-table td,
+.clients-directory-table th {
+  vertical-align: middle;
+}
+
 /* Copilot sidebar */
 .module-copilot {
   width: 320px;

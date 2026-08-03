@@ -581,7 +581,7 @@ const app = {
             cols.persons ? '<th class="text-center">Persons</th>' : '',
             cols.hours ? '<th class="text-center">Hours</th>' : '',
             '<th class="text-center">Rate</th>',
-            '<th class="text-right">Amount</th>'
+            '<th class="text-center">Amount</th>'
         ].join('');
         const colSpan = 2 + (cols.qty ? 1 : 0) + (cols.persons ? 1 : 0) + (cols.hours ? 1 : 0) + 1;
         const rows = (invoice.items || []).map((item) => {
@@ -596,7 +596,7 @@ const app = {
                 ${cols.persons ? `<td class="text-center">${item.persons != null && item.persons !== '' ? item.persons : ''}</td>` : ''}
                 ${cols.hours ? `<td class="text-center">${item.hours != null && item.hours !== '' ? item.hours : ''}</td>` : ''}
                 <td class="text-center">${this.formatCurrency(item.price || 0)}</td>
-                <td class="text-right">${this.formatCurrency(this.lineItemAmount(item, cols))}</td>
+                <td class="text-center">${this.formatCurrency(this.lineItemAmount(item, cols))}</td>
             </tr>`;
         }).join('');
         return `
@@ -1429,7 +1429,8 @@ const app = {
                         border-bottom: 1px solid #ddd;
                     }
                     
-                    .invoice-items-table-print th.text-center {
+                    .invoice-items-table-print th.text-center,
+                    .invoice-items-table-print td.text-center {
                         text-align: center;
                     }
                     
@@ -2805,6 +2806,8 @@ const app = {
             // New client
             form.reset();
             document.getElementById('client-form-title').textContent = 'Add New Client';
+            const nextId = DataStore.getNextCustomerId ? DataStore.getNextCustomerId() : 'CUST001';
+            document.getElementById('client-form-customer-id').value = nextId;
         }
     },
 
@@ -2831,9 +2834,13 @@ const app = {
             return;
         }
         const existing = this.currentClientId ? DataStore.getClient(this.currentClientId) : null;
+        let customerId = (document.getElementById('client-form-customer-id').value || '').trim();
+        if (!customerId && DataStore.getNextCustomerId) {
+            customerId = DataStore.getNextCustomerId();
+        }
         const client = {
             id: this.currentClientId || this.generateId(),
-            customerId: document.getElementById('client-form-customer-id').value,
+            customerId: customerId,
             name: companyName,
             contactPerson: contactPerson,
             company: '',
@@ -2850,68 +2857,97 @@ const app = {
         DataStore.saveClient(client);
         if (typeof this.populateClientDropdown === 'function') this.populateClientDropdown();
         if (typeof this.populateReceiptClientDropdown === 'function') this.populateReceiptClientDropdown();
+        if (typeof window.ClientsModule !== 'undefined' && window.ClientsModule.render) {
+            window.ClientsModule.render();
+        }
         alert('Client saved successfully!');
         this.showClientsList();
     },
 
     renderClients(searchTerm = '') {
         let clients = DataStore.getClients();
+        if (!Array.isArray(clients)) clients = [];
         
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            clients = clients.filter(client => 
-                client.name.toLowerCase().includes(term) ||
-                (client.contactPerson && client.contactPerson.toLowerCase().includes(term)) ||
-                (client.company && client.company.toLowerCase().includes(term)) ||
-                (client.email && client.email.toLowerCase().includes(term))
-            );
+            clients = clients.filter(client => {
+                const company = (DataStore.getClientCompanyName
+                    ? DataStore.getClientCompanyName(client)
+                    : (client.name || client.company || '')).toString().toLowerCase();
+                const contact = (client.contactPerson || '').toString().toLowerCase();
+                const email = (client.email || '').toString().toLowerCase();
+                const customerId = (client.customerId || '').toString().toLowerCase();
+                return company.includes(term) || contact.includes(term) ||
+                    email.includes(term) || customerId.includes(term);
+            });
         }
 
-        clients = clients.sort((a, b) => a.name.localeCompare(b.name));
+        clients = clients.slice().sort((a, b) => {
+            const idA = String(a.customerId || '');
+            const idB = String(b.customerId || '');
+            const numA = parseInt((idA.match(/\d+$/) || [])[0], 10);
+            const numB = parseInt((idB.match(/\d+$/) || [])[0], 10);
+            if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
+            if (idA && idB && idA !== idB) return idA.localeCompare(idB);
+            const nameA = (DataStore.getClientCompanyName ? DataStore.getClientCompanyName(a) : (a.name || '')).toString();
+            const nameB = (DataStore.getClientCompanyName ? DataStore.getClientCompanyName(b) : (b.name || '')).toString();
+            return nameA.localeCompare(nameB);
+        });
         
         const container = document.getElementById('clients-list');
         if (!container) return;
         
-        // Use document fragment for batch DOM operations
-        const fragment = document.createDocumentFragment();
-        const tempDiv = document.createElement('div');
-        
-        if (clients.length > 0) {
-            tempDiv.innerHTML = clients.map(client => this.createClientCardHTML(client)).join('');
-            while (tempDiv.firstChild) {
-                fragment.appendChild(tempDiv.firstChild);
-            }
-            container.innerHTML = '';
-            container.appendChild(fragment);
-        } else {
+        if (clients.length === 0) {
             container.innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No clients found. Add your first client!</p>';
+            return;
         }
+
+        container.innerHTML = `
+            <div class="table-wrap">
+              <table class="data-table clients-directory-table">
+                <thead>
+                  <tr>
+                    <th>Customer ID</th>
+                    <th>Company</th>
+                    <th>Contact</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${clients.map(client => this.createClientRowHTML(client)).join('')}
+                </tbody>
+              </table>
+            </div>`;
     },
 
     searchClients(term) {
         this.renderClients(term);
     },
 
-    createClientCardHTML(client) {
+    createClientRowHTML(client) {
         const companyName = DataStore.getClientCompanyName ? DataStore.getClientCompanyName(client) : (client.name || client.company || '');
         const contactPerson = DataStore.getClientContactPerson ? DataStore.getClientContactPerson(client) : (client.contactPerson || '');
+        const esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const id = esc(client.id);
         return `
-            <div class="invoice-card">
-                <div class="invoice-info" style="flex: 1;">
-                    <h3>${companyName}</h3>
-                    ${contactPerson ? `<p><strong>Contact:</strong> ${contactPerson}</p>` : ''}
-                    ${client.email ? `<p><strong>Email:</strong> ${client.email}</p>` : ''}
-                    ${client.phone ? `<p><strong>Phone:</strong> ${client.phone}</p>` : ''}
-                    ${client.address ? `<p><strong>Address:</strong> ${client.address.split('\n')[0]}</p>` : ''}
-                </div>
-                <div class="invoice-meta">
-                    <div class="invoice-actions" style="margin-top: 0;">
-                        <button class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="app.showClientForm('${client.id}')">Edit</button>
-                        <button class="btn btn-danger" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="if(confirm('Delete this client?')) { DataStore.deleteClient('${client.id}'); app.renderClients(document.getElementById('client-search')?.value || ''); }">Delete</button>
-                    </div>
-                </div>
-            </div>
-        `;
+            <tr>
+                <td><strong>${esc(client.customerId || '—')}</strong></td>
+                <td>${esc(companyName || '—')}</td>
+                <td>${esc(contactPerson || '—')}</td>
+                <td>${esc(client.email || '—')}</td>
+                <td>${esc(client.phone || '—')}</td>
+                <td class="clients-row-actions">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="app.showClientForm('${id}')">Edit</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="if(confirm('Delete this client?')) { DataStore.deleteClient('${id}'); app.renderClients(document.getElementById('client-search')?.value || ''); if (window.ClientsModule && ClientsModule.render) ClientsModule.render(); }">Delete</button>
+                </td>
+            </tr>`;
+    },
+
+    createClientCardHTML(client) {
+        return this.createClientRowHTML(client);
     },
 
     populateClientDropdown() {

@@ -43,9 +43,7 @@
     },
     clients: {
       list: [
-        { id: 'directory', label: 'Client directory' },
-        { id: 'segments', label: 'Segments' },
-        { id: 'import', label: 'Import / export' }
+        { id: 'directory', label: 'Client directory' }
       ]
     },
     fleet: {

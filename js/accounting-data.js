@@ -650,6 +650,27 @@ window.AccountingData = (function () {
     });
   }
 
+  function getNextCustomerId() {
+    var clients = getClients();
+    var max = 0;
+    var prefix = 'CUST';
+    var width = 3;
+    clients.forEach(function (c) {
+      var id = String((c && c.customerId) || '').trim();
+      if (!id) return;
+      var m = id.match(/^(.*?)(\d+)$/);
+      if (!m) return;
+      var n = parseInt(m[2], 10);
+      if (isNaN(n) || n < max) return;
+      max = n;
+      prefix = m[1];
+      width = Math.max(m[2].length, String(n + 1).length, 3);
+    });
+    var next = max + 1;
+    width = Math.max(width, String(next).length);
+    return prefix + String(next).padStart(width, '0');
+  }
+
   function getNextInvoiceNumber() {
     var settings = getCompanySettings();
     var start = settings.invoiceSequenceNumber || 1000;
@@ -950,6 +971,7 @@ window.AccountingData = (function () {
     getNextInvoiceNumber: getNextInvoiceNumber,
     getNextReceiptNumber: getNextReceiptNumber,
     getNextPaymentOrderNumber: getNextPaymentOrderNumber,
+    getNextCustomerId: getNextCustomerId,
     getDocumentLogo: getDocumentLogo,
     getDocumentLogoHtml: getDocumentLogoHtml,
     getSubcontractors: getSubcontractors,
