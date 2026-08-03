@@ -99,6 +99,19 @@ const app = {
             if (clientSelect) clientSelect.value = '';
             if (customerIdInput) customerIdInput.value = '';
         }
+
+        // Proforma: no payment due date
+        const dueDateGroup = document.getElementById('invoice-due-date-group');
+        const dueDateInput = document.getElementById('invoice-due-date');
+        if (dueDateGroup) dueDateGroup.style.display = isProforma ? 'none' : '';
+        if (dueDateInput) {
+            if (isProforma) {
+                dueDateInput.removeAttribute('required');
+                dueDateInput.value = '';
+            } else {
+                dueDateInput.setAttribute('required', 'required');
+            }
+        }
     },
 
     init() {
@@ -1213,7 +1226,7 @@ const app = {
             convertedToInvoiceId: existing && existing.convertedToInvoiceId ? existing.convertedToInvoiceId : '',
             sourceProformaId: existing && existing.sourceProformaId ? existing.sourceProformaId : '',
             date: document.getElementById('invoice-date').value,
-            dueDate: document.getElementById('invoice-due-date').value,
+            dueDate: documentType === 'proforma' ? '' : document.getElementById('invoice-due-date').value,
             clientCustomerId: documentType === 'proforma'
                 ? ''
                 : document.getElementById('client-customer-id').value,
@@ -1329,7 +1342,7 @@ const app = {
                     <p><strong>${label}</strong></p>
                     <p><strong>Client:</strong> ${invoice.clientName}</p>
                     <p><strong>Date:</strong> ${this.formatDate(invoice.date)}</p>
-                    <p><strong>Due Date:</strong> ${this.formatDate(invoice.dueDate)}</p>
+                    ${this.isProformaDoc(invoice) ? '' : `<p><strong>Due Date:</strong> ${this.formatDate(invoice.dueDate)}</p>`}
                     ${converted}
                 </div>
                 <div class="invoice-meta">
@@ -1360,11 +1373,15 @@ const app = {
         if (!confirm('Convert this proforma into a real invoice? A new invoice number will be assigned.')) return;
         const invoiceId = this.generateId();
         const invoiceNumber = DataStore.getNextInvoiceNumber();
+        const settings = DataStore.getCompanySettings();
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + (settings.defaultPaymentTerms || 30));
         const invoice = Object.assign({}, proforma, {
             id: invoiceId,
             documentType: 'invoice',
             invoiceNumber: invoiceNumber,
             status: 'pending',
+            dueDate: dueDate.toISOString().split('T')[0],
             sourceProformaId: proforma.id,
             convertedToInvoiceId: '',
             createdAt: new Date().toISOString(),
@@ -1453,10 +1470,12 @@ const app = {
                                 <td class="value-cell">${invoice.clientCustomerId}</td>
                             </tr>
                             ` : ''}
+                            ${this.isProformaDoc(invoice) ? '' : `
                             <tr>
                                 <td class="label-cell">Payment Due by:</td>
                                 <td class="value-cell">${formattedDueDate}</td>
                             </tr>
+                            `}
                             ${settings.companyTaxId ? `
                             <tr>
                                 <td class="label-cell">V.A.T Registration No:</td>
@@ -1501,6 +1520,7 @@ const app = {
                     </table>
                 </div>
 
+                ${this.isProformaDoc(invoice) ? '' : `
                 <div class="signatures-section">
                     <table class="signatures-table">
                         <tr>
@@ -1519,6 +1539,7 @@ const app = {
                         </tr>
                     </table>
                 </div>
+                `}
 
                 <div class="payment-instructions payment-instructions-small">
                     <p><strong>Make all checks payable to ${settings.companyName || 'Your Company'}</strong></p>
@@ -2076,10 +2097,12 @@ const app = {
                                     <td class="value-cell">${invoice.clientCustomerId}</td>
                                 </tr>
                                 ` : ''}
+                                ${this.isProformaDoc(invoice) ? '' : `
                                 <tr>
                                     <td class="label-cell">Payment Due by:</td>
                                     <td class="value-cell">${formattedDueDate}</td>
                                 </tr>
+                                `}
                                 ${settings.companyTaxId ? `
                                 <tr>
                                     <td class="label-cell">V.A.T Registration No:</td>
@@ -2124,6 +2147,7 @@ const app = {
                         </table>
                     </div>
 
+                ${this.isProformaDoc(invoice) ? '' : `
                 <div class="signatures-section">
                         <table class="signatures-table">
                             <tr>
@@ -2142,6 +2166,7 @@ const app = {
                             </tr>
                         </table>
                     </div>
+                `}
 
                     <div class="payment-instructions payment-instructions-small">
                         <p><strong>Make all checks payable to ${settings.companyName || 'Your Company'}</strong></p>
