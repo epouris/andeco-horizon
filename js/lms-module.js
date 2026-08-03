@@ -1576,14 +1576,17 @@
         '</div><div class="form-actions"><button type="submit" class="btn btn-primary">Assign</button></div></div>' +
       '</form></div>' +
       '<div class="table-wrap"><table class="data-table"><thead><tr>' +
-        '<th>Learner</th><th>Training</th><th>Source</th><th>Progress</th><th>Status</th><th>Score</th>' +
+        '<th>Learner</th><th>Training</th><th>Source</th><th>Progress</th><th>Status</th><th>Score</th><th></th>' +
       '</tr></thead><tbody>' +
       (data.enrollments.length ? data.enrollments.slice().reverse().map(function (en) {
         var course = data.courses.filter(function (c) { return c.id === en.courseId; })[0];
         return '<tr><td>' + escapeHtml(en.userName) + '</td><td>' + escapeHtml(course ? course.title : '—') +
           '</td><td>' + escapeHtml(en.source) + '</td><td>' + escapeHtml(String(en.progressPercent || 0)) + '%</td><td>' +
-          statusBadge(en.status) + '</td><td>' + (en.score != null ? escapeHtml(String(en.score)) + '%' : '—') + '</td></tr>';
-      }).join('') : '<tr><td colspan="6">No enrollments yet.</td></tr>') +
+          statusBadge(en.status) + '</td><td>' + (en.score != null ? escapeHtml(String(en.score)) + '%' : '—') +
+          '</td><td class="lms-row-actions">' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-lms-unenroll="' + escapeHtml(en.id) + '">Remove</button>' +
+          '</td></tr>';
+      }).join('') : '<tr><td colspan="7">No enrollments yet.</td></tr>') +
       '</tbody></table></div>';
     bindProfileSignatureControls();
   }
@@ -2770,7 +2773,7 @@
   }
 
   function onPageClick(e) {
-    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-remove-reference],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-reference,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
+    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-duplicate],[data-lms-delete],[data-lms-unenroll],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-remove-reference],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-reference,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
     if (!t) return;
 
     if (t.id === 'lms-open-portal-btn-dash') {
@@ -3128,6 +3131,22 @@
       dataAn.announcements = (dataAn.announcements || []).filter(function (a) { return a.id !== aid; });
       saveData(dataAn);
       renderAnnouncements();
+      return;
+    }
+    if (t.hasAttribute('data-lms-unenroll')) {
+      if (!isAdmin()) return;
+      if (!confirm('Remove this training assignment? Progress, exam attempts, and certificates for this enrollment will also be deleted.')) return;
+      var unenrollId = t.getAttribute('data-lms-unenroll');
+      var dataUn = getData();
+      dataUn.enrollments = (dataUn.enrollments || []).filter(function (en) { return en.id !== unenrollId; });
+      dataUn.attempts = (dataUn.attempts || []).filter(function (a) { return a.enrollmentId !== unenrollId; });
+      dataUn.certificates = (dataUn.certificates || []).filter(function (c) { return c.enrollmentId !== unenrollId; });
+      saveData(dataUn);
+      if (viewState.enrollmentId === unenrollId) {
+        viewState.enrollmentId = null;
+        viewState.mode = 'list';
+      }
+      renderLearners();
       return;
     }
     if (t.hasAttribute('data-lms-cert-print')) {
