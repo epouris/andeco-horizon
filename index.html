@@ -836,9 +836,9 @@
                         </div>
                         <div class="form-section form-section-half">
                           <h3>Bill To</h3>
-                          <div class="form-row"><div class="form-group full-width"><label>Select Client</label><select id="client-select" onchange="typeof app!=='undefined'&&app.selectClient(this.value)"><option value="">-- Select a client or enter new --</option></select></div></div>
-                          <div class="form-row"><div class="form-group"><label>Customer ID</label><input type="text" id="client-customer-id" placeholder="Auto-filled from client"></div><div class="form-group"><label>Company name</label><input type="text" id="client-name" required></div></div>
-                          <div class="form-row"><div class="form-group full-width"><label>Client Address</label><textarea id="client-address" rows="2"></textarea></div></div>
+                          <div class="form-row invoice-client-select-row"><div class="form-group full-width"><label>Select Client</label><select id="client-select" onchange="typeof app!=='undefined'&&app.selectClient(this.value)"><option value="">-- Select a client or enter new --</option></select></div></div>
+                          <div class="form-row"><div class="form-group invoice-customer-id-group"><label>Customer ID</label><input type="text" id="client-customer-id" placeholder="Auto-filled from client"></div><div class="form-group" id="invoice-client-name-group"><label id="invoice-client-name-label">Company name</label><input type="text" id="client-name" required placeholder="Company or recipient name"></div></div>
+                          <div class="form-row"><div class="form-group full-width"><label id="invoice-client-address-label">Client Address</label><textarea id="client-address" rows="2" placeholder="Address"></textarea></div></div>
                           <div class="form-row"><div class="form-group"><label>Email</label><input type="email" id="client-email"></div><div class="form-group"><label>Phone</label><input type="tel" id="client-phone"></div></div>
                         </div>
                       </div>

@@ -78,6 +78,27 @@ const app = {
                 statusEl.value = 'pending';
             }
         }
+
+        // Proforma: free-text recipient only (no client list / customer ID)
+        const clientSelectRow = document.querySelector('.invoice-client-select-row');
+        const customerIdGroup = document.querySelector('.invoice-customer-id-group');
+        const nameGroup = document.getElementById('invoice-client-name-group');
+        const nameLabel = document.getElementById('invoice-client-name-label');
+        const addressLabel = document.getElementById('invoice-client-address-label');
+        const customerIdInput = document.getElementById('client-customer-id');
+        const clientSelect = document.getElementById('client-select');
+        if (clientSelectRow) clientSelectRow.style.display = isProforma ? 'none' : '';
+        if (customerIdGroup) customerIdGroup.style.display = isProforma ? 'none' : '';
+        if (nameGroup) {
+            if (isProforma) nameGroup.classList.add('full-width');
+            else nameGroup.classList.remove('full-width');
+        }
+        if (nameLabel) nameLabel.textContent = isProforma ? 'Recipient / Company name' : 'Company name';
+        if (addressLabel) addressLabel.textContent = isProforma ? 'Address' : 'Client Address';
+        if (isProforma) {
+            if (clientSelect) clientSelect.value = '';
+            if (customerIdInput) customerIdInput.value = '';
+        }
     },
 
     init() {
@@ -838,8 +859,9 @@ const app = {
             this.calculateTotals();
         }
         
-        // Populate client dropdown for both new and edit modes
-        this.populateClientDropdown();
+        // Populate client dropdown for invoice mode only
+        if (!this.isProformaMode()) this.populateClientDropdown();
+        else this.applyInvoiceModeUi();
     },
 
     populateInvoiceForm(invoice) {
@@ -853,6 +875,15 @@ const app = {
         document.getElementById('tax-rate').value = invoice.taxRate || 0;
         this.setItemColumnsOnForm(invoice.itemColumns || this.defaultItemColumns());
 
+        const isProforma = this.isProformaDoc(invoice) || this.isProformaMode();
+        if (isProforma) {
+            document.getElementById('client-select').value = '';
+            document.getElementById('client-customer-id').value = '';
+            document.getElementById('client-name').value = invoice.clientName || '';
+            document.getElementById('client-address').value = invoice.clientAddress || '';
+            document.getElementById('client-email').value = invoice.clientEmail || '';
+            document.getElementById('client-phone').value = invoice.clientPhone || '';
+        } else {
         // Try to match client from dropdown
         const clients = DataStore.getClients();
         const matchedClient = clients.find(c => 
@@ -874,6 +905,7 @@ const app = {
             document.getElementById('client-address').value = invoice.clientAddress || '';
             document.getElementById('client-email').value = invoice.clientEmail || '';
             document.getElementById('client-phone').value = invoice.clientPhone || '';
+        }
         }
 
         // Populate items
@@ -1182,7 +1214,9 @@ const app = {
             sourceProformaId: existing && existing.sourceProformaId ? existing.sourceProformaId : '',
             date: document.getElementById('invoice-date').value,
             dueDate: document.getElementById('invoice-due-date').value,
-            clientCustomerId: document.getElementById('client-customer-id').value,
+            clientCustomerId: documentType === 'proforma'
+                ? ''
+                : document.getElementById('client-customer-id').value,
             clientName: document.getElementById('client-name').value,
             clientAddress: document.getElementById('client-address').value,
             clientEmail: document.getElementById('client-email').value,
