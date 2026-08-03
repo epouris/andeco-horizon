@@ -2267,6 +2267,7 @@
       return;
     }
     var s = getData().settings;
+    var data = getData();
     el.innerHTML =
       '<div class="page-header"><h2>LMS settings</h2></div>' +
       '<div class="invoice-form-container"><form id="lms-settings-form" class="invoice-form">' +
@@ -2298,6 +2299,16 @@
         '</div></div>' +
         '<div class="form-actions"><button type="submit" class="btn btn-primary">Save settings</button></div>' +
       '</form>' +
+      '<div class="module-table-panel" style="margin-top:1.5rem">' +
+        '<h3>Reset learning progress</h3>' +
+        '<p class="lms-hint">Clears all course enrollments, exam attempts, certificates, and hiring exam applicants. Training courses and LMS settings are kept.</p>' +
+        '<p class="lms-meta">Current: ' +
+          (data.enrollments || []).length + ' enrollments · ' +
+          (data.attempts || []).length + ' exam attempts · ' +
+          (data.certificates || []).length + ' certificates · ' +
+          (data.applicants || []).length + ' hiring applicants</p>' +
+        '<button type="button" class="btn btn-danger" id="lms-clear-progress-btn">Clear enrollments, exams &amp; certificates</button>' +
+      '</div>' +
       '<div class="lms-hint" style="margin-top:1rem">' +
         '<p><strong>Public links</strong></p>' +
         '<p>Course catalog: add <code>#lms-public</code> to your app URL</p>' +
@@ -2305,6 +2316,48 @@
         '<p><strong>Mobile access:</strong> the LMS layout adapts to phones and tablets.</p>' +
       '</div></div>';
     bindSettingsLogoControls();
+    bindClearProgressControl();
+  }
+
+  function clearLearningProgress() {
+    if (!isAdmin()) return false;
+    var data = getData();
+    var counts = {
+      enrollments: (data.enrollments || []).length,
+      attempts: (data.attempts || []).length,
+      certificates: (data.certificates || []).length,
+      applicants: (data.applicants || []).length
+    };
+    var total = counts.enrollments + counts.attempts + counts.certificates + counts.applicants;
+    if (!total) {
+      alert('Learning progress is already empty.');
+      return false;
+    }
+    if (!confirm(
+      'Clear all learning progress?\n\n' +
+      'This will permanently delete:\n' +
+      '• ' + counts.enrollments + ' enrollments\n' +
+      '• ' + counts.attempts + ' exam attempts\n' +
+      '• ' + counts.certificates + ' certificates\n' +
+      '• ' + counts.applicants + ' hiring applicants\n\n' +
+      'Courses and LMS settings will be kept.'
+    )) return false;
+    data.enrollments = [];
+    data.attempts = [];
+    data.certificates = [];
+    data.applicants = [];
+    saveData(data);
+    return true;
+  }
+
+  function bindClearProgressControl() {
+    var btn = document.getElementById('lms-clear-progress-btn');
+    if (!btn) return;
+    btn.onclick = function () {
+      if (!clearLearningProgress()) return;
+      alert('Learning progress cleared. You have a clean start for enrollments, exams, and certificates.');
+      renderSettings();
+    };
   }
 
   function bindSettingsLogoControls() {
