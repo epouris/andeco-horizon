@@ -50,6 +50,7 @@ window.AccountingData = (function () {
     invoiceSequenceNumber: 1000,
     receiptSequenceNumber: 1000,
     paymentOrderSequenceNumber: 1000,
+    proformaSequenceNumber: 1000,
     defaultTaxRate: 0,
     defaultPaymentTerms: 30,
     defaultInvoiceNotes: '',
@@ -59,7 +60,8 @@ window.AccountingData = (function () {
       paymentOrder: '',
       payslip: '',
       socialInsurance: '',
-      statement: ''
+      statement: '',
+      proforma: ''
     }
   };
 
@@ -678,6 +680,7 @@ window.AccountingData = (function () {
     var max = start - 1;
     invoices.forEach(function (inv) {
       if (inv.status === 'draft') return;
+      if (inv.documentType === 'proforma') return;
       if (inv.invoiceNumber) {
         var m = inv.invoiceNumber.match(/\d+/);
         if (m) {
@@ -687,6 +690,25 @@ window.AccountingData = (function () {
       }
     });
     return (max + 1).toString().padStart(4, '0');
+  }
+
+  function getNextProformaNumber() {
+    var settings = getCompanySettings();
+    var start = settings.proformaSequenceNumber || 1000;
+    var invoices = getInvoices();
+    var max = start - 1;
+    invoices.forEach(function (inv) {
+      if (inv.documentType !== 'proforma') return;
+      if (inv.status === 'draft') return;
+      if (inv.invoiceNumber) {
+        var m = String(inv.invoiceNumber).match(/\d+/);
+        if (m) {
+          var n = parseInt(m[0], 10);
+          if (n > max) max = n;
+        }
+      }
+    });
+    return 'PF-' + (max + 1).toString().padStart(4, '0');
   }
 
   function getNextReceiptNumber() {
@@ -712,6 +734,9 @@ window.AccountingData = (function () {
       ? settings.documentLogos
       : {};
     var specific = logos[kind];
+    if ((!specific || String(specific).indexOf('data:') !== 0) && kind === 'proforma' && logos.invoice) {
+      specific = logos.invoice;
+    }
     if (specific && String(specific).indexOf('data:') === 0) return specific;
     if (settings.logo && String(settings.logo).indexOf('data:') === 0) return settings.logo;
     return settings.logo || '';
@@ -971,6 +996,7 @@ window.AccountingData = (function () {
     getNextInvoiceNumber: getNextInvoiceNumber,
     getNextReceiptNumber: getNextReceiptNumber,
     getNextPaymentOrderNumber: getNextPaymentOrderNumber,
+    getNextProformaNumber: getNextProformaNumber,
     getNextCustomerId: getNextCustomerId,
     getDocumentLogo: getDocumentLogo,
     getDocumentLogoHtml: getDocumentLogoHtml,

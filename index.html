@@ -821,7 +821,7 @@
                   <div class="recent-section"><h3>Recent Invoices</h3><div id="recent-invoices-list"></div></div>
                 </div>
                 <div id="invoices" class="page active">
-                  <div class="page-header"><h2>Invoices</h2><div class="header-actions"><input type="text" id="invoice-search" placeholder="Search invoices..." class="search-input"><button type="button" class="btn btn-primary" data-action="show-create-invoice">➕ New Invoice</button></div></div>
+                  <div class="page-header"><h2 id="invoices-page-title">Invoices</h2><div class="header-actions"><input type="text" id="invoice-search" placeholder="Search invoices..." class="search-input"><button type="button" class="btn btn-primary" id="btn-new-invoice-doc" data-action="show-create-invoice">➕ New Invoice</button></div></div>
                   <div id="invoices-list" class="invoices-grid"></div>
                 </div>
                 <div id="create-invoice" class="page">
@@ -1218,6 +1218,18 @@
                           <button type="button" class="btn btn-danger btn-sm doc-logo-remove-btn" style="display:none;">Remove</button>
                         </div>
                       </div>
+                      <div class="doc-logo-card" data-doc-logo="proforma">
+                        <h4>Proforma invoices</h4>
+                        <div class="logo-preview doc-logo-preview">
+                          <img class="doc-logo-image" alt="Proforma logo" style="display:none;">
+                          <span class="doc-logo-placeholder">Uses invoice / company logo</span>
+                        </div>
+                        <input type="file" class="doc-logo-file" accept="image/*" style="display:none;">
+                        <div class="logo-upload-controls">
+                          <button type="button" class="btn btn-secondary btn-sm doc-logo-upload-btn">Upload</button>
+                          <button type="button" class="btn btn-danger btn-sm doc-logo-remove-btn" style="display:none;">Remove</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1245,6 +1257,10 @@
                       <div class="form-group">
                         <label>Payment Order Sequence Number</label>
                         <input type="number" id="payment-order-sequence-number" min="1" placeholder="1000">
+                      </div>
+                      <div class="form-group">
+                        <label>Proforma Sequence Number</label>
+                        <input type="number" id="proforma-sequence-number" min="1" placeholder="1000">
                       </div>
                     </div>
                     <div class="form-row">

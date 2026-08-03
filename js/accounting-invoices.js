@@ -19,7 +19,66 @@ const app = {
     currentInvoiceId: null,
     currentClientId: null,
     currentReceiptId: null,
+    invoiceListMode: 'invoice', // 'invoice' | 'proforma'
     _sharedDataPollTimer: null,
+
+    isProformaMode() {
+        return this.invoiceListMode === 'proforma';
+    },
+
+    isProformaDoc(doc) {
+        return !!(doc && doc.documentType === 'proforma');
+    },
+
+    getActiveDocumentType() {
+        return this.isProformaMode() ? 'proforma' : 'invoice';
+    },
+
+    getDocumentTypeLabel(docOrType) {
+        const type = typeof docOrType === 'string'
+            ? docOrType
+            : (this.isProformaDoc(docOrType) ? 'proforma' : 'invoice');
+        return type === 'proforma' ? 'Proforma Invoice' : 'Invoice';
+    },
+
+    setInvoicesSubsection(subsectionId) {
+        this.invoiceListMode = subsectionId === 'proforma' ? 'proforma' : 'invoice';
+        this.applyInvoiceModeUi();
+        if (typeof this.showPage === 'function') {
+            const createPage = document.getElementById('create-invoice');
+            const onCreate = createPage && createPage.classList.contains('active');
+            if (!onCreate) this.showPage('invoices');
+            else this.applyInvoiceModeUi();
+        }
+    },
+
+    applyInvoiceModeUi() {
+        const isProforma = this.isProformaMode();
+        const title = document.getElementById('invoices-page-title');
+        if (title) title.textContent = isProforma ? 'Proforma Invoices' : 'Invoices';
+        const search = document.getElementById('invoice-search');
+        if (search) search.placeholder = isProforma ? 'Search proforma invoices...' : 'Search invoices...';
+        const newBtn = document.getElementById('btn-new-invoice-doc');
+        if (newBtn) newBtn.textContent = isProforma ? '➕ New Proforma' : '➕ New Invoice';
+        const formTitle = document.getElementById('invoice-form-title');
+        if (formTitle && !this.currentInvoiceId) {
+            formTitle.textContent = isProforma ? 'Create Proforma Invoice' : 'Create New Invoice';
+        }
+        const saveBtn = document.querySelector('#invoice-form button[type="submit"]');
+        if (saveBtn) saveBtn.textContent = isProforma ? 'Save Proforma' : 'Save Invoice';
+        const statusEl = document.getElementById('invoice-status');
+        if (statusEl) {
+            Array.from(statusEl.options).forEach((opt) => {
+                if (opt.value === 'paid' || opt.value === 'overdue') {
+                    opt.hidden = isProforma;
+                    opt.disabled = isProforma;
+                }
+            });
+            if (isProforma && (statusEl.value === 'paid' || statusEl.value === 'overdue')) {
+                statusEl.value = 'pending';
+            }
+        }
+    },
 
     init() {
         var self = this;
@@ -477,7 +536,7 @@ const app = {
 
     // Dashboard
     renderDashboard() {
-        const invoices = DataStore.getInvoices();
+        const invoices = DataStore.getInvoices().filter(inv => !this.isProformaDoc(inv));
         const stats = this.calculateStats(invoices);
         
         const totalInvoicesEl = document.getElementById('total-invoices');
@@ -733,10 +792,13 @@ const app = {
             // Edit mode
             const invoice = DataStore.getInvoice(invoiceId);
             if (invoice) {
+                this.invoiceListMode = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
                 this.populateInvoiceForm(invoice);
-                document.getElementById('invoice-form-title').textContent = 'Edit Invoice';
+                document.getElementById('invoice-form-title').textContent =
+                    this.isProformaDoc(invoice) ? 'Edit Proforma Invoice' : 'Edit Invoice';
                 const deleteDraftBtn = document.getElementById('btn-delete-draft-invoice');
                 if (deleteDraftBtn) deleteDraftBtn.style.display = invoice.status === 'draft' ? '' : 'none';
+                this.applyInvoiceModeUi();
             }
         } else {
             // New invoice: do not assign invoice number until status is pending
@@ -753,7 +815,8 @@ const app = {
             document.getElementById('tax-rate').value = settings.defaultTaxRate || 0;
             document.getElementById('invoice-notes').value = settings.defaultInvoiceNotes || '';
             
-            document.getElementById('invoice-form-title').textContent = 'Create New Invoice';
+            document.getElementById('invoice-form-title').textContent =
+                this.isProformaMode() ? 'Create Proforma Invoice' : 'Create New Invoice';
             const deleteDraftBtn = document.getElementById('btn-delete-draft-invoice');
             if (deleteDraftBtn) deleteDraftBtn.style.display = 'none';
 
@@ -771,6 +834,7 @@ const app = {
             document.getElementById('client-email').value = '';
             document.getElementById('client-phone').value = '';
             
+            this.applyInvoiceModeUi();
             this.calculateTotals();
         }
         
@@ -1096,17 +1160,26 @@ const app = {
 
         let invoiceNumber = (document.getElementById('invoice-number').value || '').trim();
         const status = document.getElementById('invoice-status').value;
+        const existing = this.currentInvoiceId ? DataStore.getInvoice(this.currentInvoiceId) : null;
+        const documentType = (existing && existing.documentType === 'proforma') || this.isProformaMode()
+            ? 'proforma'
+            : 'invoice';
         if (status === 'draft') {
             invoiceNumber = invoiceNumber || '';
         } else {
             if (!invoiceNumber || invoiceNumber === 'Draft' || invoiceNumber === '—') {
-                invoiceNumber = DataStore.getNextInvoiceNumber();
+                invoiceNumber = documentType === 'proforma'
+                    ? (DataStore.getNextProformaNumber ? DataStore.getNextProformaNumber() : 'PF-1000')
+                    : DataStore.getNextInvoiceNumber();
             }
         }
 
         const invoice = {
             id: this.currentInvoiceId || this.generateId(),
             invoiceNumber: invoiceNumber,
+            documentType: documentType,
+            convertedToInvoiceId: existing && existing.convertedToInvoiceId ? existing.convertedToInvoiceId : '',
+            sourceProformaId: existing && existing.sourceProformaId ? existing.sourceProformaId : '',
             date: document.getElementById('invoice-date').value,
             dueDate: document.getElementById('invoice-due-date').value,
             clientCustomerId: document.getElementById('client-customer-id').value,
@@ -1127,13 +1200,19 @@ const app = {
         };
 
         DataStore.saveInvoice(invoice);
-        alert('Invoice saved successfully!');
+        alert((documentType === 'proforma' ? 'Proforma invoice' : 'Invoice') + ' saved successfully!');
+        this.invoiceListMode = documentType === 'proforma' ? 'proforma' : 'invoice';
         this.showPage('invoices');
     },
 
     // Invoice List (excludes drafts; drafts appear in Copilot section)
     renderInvoices(searchTerm = '') {
-        let invoices = DataStore.getInvoices().filter(inv => inv.status !== 'draft');
+        this.applyInvoiceModeUi();
+        const wantProforma = this.isProformaMode();
+        let invoices = DataStore.getInvoices().filter(inv => {
+            if (inv.status === 'draft') return false;
+            return wantProforma ? this.isProformaDoc(inv) : !this.isProformaDoc(inv);
+        });
         
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
@@ -1168,7 +1247,9 @@ const app = {
             container.innerHTML = '';
             container.appendChild(fragment);
         } else {
-            container.innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No invoices found.</p>';
+            container.innerHTML = wantProforma
+                ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No proforma invoices found.</p>'
+                : '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No invoices found.</p>';
         }
         this.renderCopilotDrafts();
     },
@@ -1180,7 +1261,7 @@ const app = {
     renderCopilotDrafts() {
         const listEl = document.getElementById('copilot-drafts-list');
         if (!listEl) return;
-        const drafts = DataStore.getInvoices().filter(inv => inv.status === 'draft');
+        const drafts = DataStore.getInvoices().filter(inv => inv.status === 'draft' && !this.isProformaDoc(inv));
         drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
         if (drafts.length === 0) {
             listEl.innerHTML = '<p class="copilot-drafts-empty">No draft invoices.</p>';
@@ -1200,13 +1281,22 @@ const app = {
 
     createInvoiceCardHTML(invoice) {
         const displayNumber = (invoice.status === 'draft' && !invoice.invoiceNumber) ? 'Draft' : (invoice.invoiceNumber || '—');
+        const label = this.getDocumentTypeLabel(invoice);
+        const converted = invoice.convertedToInvoiceId
+            ? `<p class="module-meta">Converted to invoice</p>`
+            : '';
+        const convertBtn = this.isProformaDoc(invoice) && !invoice.convertedToInvoiceId
+            ? `<button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.convertProformaToInvoice('${invoice.id}')">Convert to Invoice</button>`
+            : '';
         return `
             <div class="invoice-card">
                 <div class="invoice-info" onclick="app.viewInvoice('${invoice.id}')" style="flex: 1; cursor: pointer;">
                     <h3>${displayNumber}</h3>
+                    <p><strong>${label}</strong></p>
                     <p><strong>Client:</strong> ${invoice.clientName}</p>
                     <p><strong>Date:</strong> ${this.formatDate(invoice.date)}</p>
                     <p><strong>Due Date:</strong> ${this.formatDate(invoice.dueDate)}</p>
+                    ${converted}
                 </div>
                 <div class="invoice-meta">
                     <div class="invoice-amount">${this.formatCurrency(invoice.total)}</div>
@@ -1214,11 +1304,46 @@ const app = {
                     <div class="invoice-actions" style="margin-top: 0.5rem;">
                         <button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.viewInvoice('${invoice.id}')">View</button>
                         <button class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${invoice.id}')">Edit</button>
-                        <button class="btn btn-danger" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); if(confirm('Delete this invoice?')) { DataStore.deleteInvoice('${invoice.id}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
+                        ${convertBtn}
+                        <button class="btn btn-danger" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isProformaDoc(invoice) ? 'proforma' : 'invoice'}?')) { DataStore.deleteInvoice('${invoice.id}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
                     </div>
                 </div>
             </div>
         `;
+    },
+
+    convertProformaToInvoice(proformaId) {
+        const proforma = DataStore.getInvoice(proformaId);
+        if (!proforma || !this.isProformaDoc(proforma)) {
+            alert('Proforma invoice not found.');
+            return;
+        }
+        if (proforma.convertedToInvoiceId) {
+            alert('This proforma was already converted.');
+            this.viewInvoice(proforma.convertedToInvoiceId);
+            return;
+        }
+        if (!confirm('Convert this proforma into a real invoice? A new invoice number will be assigned.')) return;
+        const invoiceId = this.generateId();
+        const invoiceNumber = DataStore.getNextInvoiceNumber();
+        const invoice = Object.assign({}, proforma, {
+            id: invoiceId,
+            documentType: 'invoice',
+            invoiceNumber: invoiceNumber,
+            status: 'pending',
+            sourceProformaId: proforma.id,
+            convertedToInvoiceId: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+        proforma.convertedToInvoiceId = invoiceId;
+        proforma.updatedAt = new Date().toISOString();
+        DataStore.saveInvoice(proforma);
+        DataStore.saveInvoice(invoice);
+        alert('Proforma converted to invoice ' + invoiceNumber + '.');
+        this.invoiceListMode = 'invoice';
+        this.applyInvoiceModeUi();
+        this.viewInvoice(invoiceId);
     },
 
     viewInvoice(id) {
@@ -1228,10 +1353,11 @@ const app = {
         // Store current invoice ID immediately for quick response
         this.currentInvoiceId = id;
         this.currentReceiptId = null;
+        this.invoiceListMode = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
         
         // Update modal for invoice
         const modalTitleEl = document.getElementById('modal-title');
-        if (modalTitleEl) modalTitleEl.textContent = 'Invoice Preview';
+        if (modalTitleEl) modalTitleEl.textContent = this.getDocumentTypeLabel(invoice) + ' Preview';
         
         const editBtn = document.getElementById('modal-edit-btn');
         const printBtn = document.getElementById('modal-print-btn');
@@ -1261,8 +1387,10 @@ const app = {
             const formattedDueDate = dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
             const previewContent = document.getElementById('invoice-preview-content');
+            const docLabel = this.getDocumentTypeLabel(invoice);
+            const logoKind = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
             const invoiceLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
-                ? DataStore.getDocumentLogoHtml('invoice') : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
+                ? DataStore.getDocumentLogoHtml(logoKind) : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
             previewContent.innerHTML = `
             <div class="invoice-preview">
                 <div class="invoice-header-print">
@@ -1275,14 +1403,14 @@ const app = {
                         ${settings.companyWebsite ? `<p class="company-contact-info"><strong>Web:</strong> ${settings.companyWebsite}</p>` : ''}
                     </div>
                     <div class="invoice-title-section">
-                        <h2 class="invoice-title">Invoice</h2>
+                        <h2 class="invoice-title">${docLabel}</h2>
                         <table class="invoice-details-table">
                             <tr>
                                 <td class="label-cell">Date:</td>
                                 <td class="value-cell">${formattedInvoiceDate}</td>
                             </tr>
                             <tr>
-                                <td class="label-cell">Invoice #:</td>
+                                <td class="label-cell">${this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #'}:</td>
                                 <td class="value-cell">${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</td>
                             </tr>
                             ${invoice.clientCustomerId ? `
@@ -1443,8 +1571,10 @@ const app = {
         if (!invoice) return;
         
         const settings = DataStore.getCompanySettings();
+        const docLabel = this.getDocumentTypeLabel(invoice);
+        const logoKind = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
         const invoiceLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
-            ? DataStore.getDocumentLogoHtml('invoice')
+            ? DataStore.getDocumentLogoHtml(logoKind)
             : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         
         // Format dates
@@ -1461,7 +1591,7 @@ const app = {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Invoice ${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</title>
+                <title>${docLabel} ${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</title>
                 <style>
                     @page {
                         size: A4;
@@ -1896,14 +2026,14 @@ const app = {
                             ${settings.companyWebsite ? `<p class="company-contact-info"><strong>Web:</strong> ${settings.companyWebsite}</p>` : ''}
                         </div>
                         <div class="invoice-title-section">
-                            <h2 class="invoice-title">Invoice</h2>
+                            <h2 class="invoice-title">${docLabel}</h2>
                             <table class="invoice-details-table">
                                 <tr>
                                     <td class="label-cell">Date:</td>
                                     <td class="value-cell">${formattedInvoiceDate}</td>
                                 </tr>
                                 <tr>
-                                    <td class="label-cell">Invoice #:</td>
+                                    <td class="label-cell">${this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #'}:</td>
                                     <td class="value-cell">${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</td>
                                 </tr>
                                 ${invoice.clientCustomerId ? `
@@ -2169,6 +2299,7 @@ const app = {
         
         invoices = invoices.filter(inv => {
             if (inv.status === 'draft') return false;
+            if (inv.documentType === 'proforma') return false;
             const clientMatch = inv.clientName === client.name ||
                 (client.email && inv.clientEmail === client.email);
             if (!clientMatch) return false;
@@ -3221,6 +3352,8 @@ const app = {
         document.getElementById('receipt-sequence-number').value = settings.receiptSequenceNumber || 1000;
         var poSeq = document.getElementById('payment-order-sequence-number');
         if (poSeq) poSeq.value = settings.paymentOrderSequenceNumber || 1000;
+        var pfSeq = document.getElementById('proforma-sequence-number');
+        if (pfSeq) pfSeq.value = settings.proformaSequenceNumber || 1000;
         document.getElementById('default-tax-rate').value = settings.defaultTaxRate || 0;
         document.getElementById('default-payment-terms').value = settings.defaultPaymentTerms || 30;
         document.getElementById('default-invoice-notes').value = settings.defaultInvoiceNotes || '';
@@ -3246,7 +3379,8 @@ const app = {
             paymentOrder: '',
             payslip: '',
             socialInsurance: '',
-            statement: ''
+            statement: '',
+            proforma: ''
         };
         document.querySelectorAll('#doc-logos-grid .doc-logo-card').forEach(function (card) {
             const key = card.getAttribute('data-doc-logo');
@@ -3378,6 +3512,7 @@ const app = {
             invoiceSequenceNumber: parseInt(document.getElementById('invoice-sequence-number').value) || 1000,
             receiptSequenceNumber: parseInt(document.getElementById('receipt-sequence-number').value) || 1000,
             paymentOrderSequenceNumber: parseInt((document.getElementById('payment-order-sequence-number') || {}).value) || 1000,
+            proformaSequenceNumber: parseInt((document.getElementById('proforma-sequence-number') || {}).value) || 1000,
             defaultTaxRate: parseFloat(document.getElementById('default-tax-rate').value) || 0,
             defaultPaymentTerms: parseInt(document.getElementById('default-payment-terms').value) || 30,
             defaultInvoiceNotes: document.getElementById('default-invoice-notes').value,
@@ -3739,9 +3874,10 @@ const app = {
         
         // Get all invoices for this client
         const allInvoices = DataStore.getInvoices();
-        const clientInvoices = allInvoices.filter(inv => 
-            inv.clientName === client.name || 
-            (client.email && inv.clientEmail === client.email)
+        const clientInvoices = allInvoices.filter(inv =>
+            inv.documentType !== 'proforma' &&
+            (inv.clientName === client.name ||
+            (client.email && inv.clientEmail === client.email))
         );
         
         // Filter invoices by date range
@@ -4421,7 +4557,14 @@ const app = {
 };
 
 // Expose globally for inline handlers (e.g. when embedded in Andeco Horizon CRM)
-if (typeof window !== 'undefined') window.app = app;
+if (typeof window !== 'undefined') {
+    window.app = app;
+    window.setInvoicesSubsection = function (subsectionId) {
+        if (window.app && typeof window.app.setInvoicesSubsection === 'function') {
+            window.app.setInvoicesSubsection(subsectionId);
+        }
+    };
+}
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {

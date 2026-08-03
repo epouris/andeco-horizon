@@ -16,6 +16,7 @@
       ],
       invoices: [
         { id: 'list', label: 'Invoice list' },
+        { id: 'proforma', label: 'Proforma invoices' },
         { id: 'drafts', label: 'Drafts' },
         { id: 'recurring', label: 'Recurring' }
       ],
@@ -339,6 +340,9 @@
     if (moduleId === 'accounting' && sectionId === 'payroll') {
       if (typeof window.setPayrollSubsection === 'function') window.setPayrollSubsection(subsectionId);
     }
+    if (moduleId === 'accounting' && sectionId === 'invoices') {
+      if (typeof window.setInvoicesSubsection === 'function') window.setInvoicesSubsection(subsectionId);
+    }
     if (moduleId === 'accounting' && sectionId === 'subcontractors') {
       if (typeof window.setSubcontractorsSubsection === 'function') window.setSubcontractorsSubsection(subsectionId);
     }
@@ -371,6 +375,18 @@
     if (sectionId === 'payroll') return false;
     if (sectionId === 'subcontractors') return false;
     if (sectionId === 'social-insurance') return false;
+    // Invoices: list + proforma are real screens; other subtabs stay placeholders
+    if (sectionId === 'invoices' && (subsectionId === 'list' || subsectionId === 'proforma')) {
+      var invOverlay = document.getElementById('accounting-subsection-overlay');
+      if (invOverlay) invOverlay.style.display = 'none';
+      if (typeof window.andecoRefreshAccountingSection === 'function') {
+        window.andecoRefreshAccountingSection(sectionId);
+      }
+      if (typeof window.setInvoicesSubsection === 'function') {
+        window.setInvoicesSubsection(subsectionId);
+      }
+      return false;
+    }
     var subs = getSubsections('accounting', sectionId);
     if (!subs.length) return false;
     var primaryId = subs[0].id;

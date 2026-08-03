@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS company_settings (
   invoice_sequence_number INTEGER NOT NULL DEFAULT 1000,
   receipt_sequence_number INTEGER NOT NULL DEFAULT 1000,
   payment_order_sequence_number INTEGER NOT NULL DEFAULT 1000,
+  proforma_sequence_number INTEGER NOT NULL DEFAULT 1000,
   default_tax_rate NUMERIC NOT NULL DEFAULT 0,
   default_payment_terms INTEGER NOT NULL DEFAULT 30,
   default_invoice_notes TEXT NOT NULL DEFAULT '',
@@ -41,6 +42,8 @@ CREATE TABLE IF NOT EXISTS company_settings (
 INSERT INTO company_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS payment_order_sequence_number INTEGER NOT NULL DEFAULT 1000;
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS proforma_sequence_number INTEGER NOT NULL DEFAULT 1000;
 ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS document_logos JSONB NOT NULL DEFAULT '{}'::jsonb;
 
@@ -120,6 +123,9 @@ CREATE TABLE IF NOT EXISTS invoices (
   total NUMERIC NOT NULL DEFAULT 0,
   notes TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'draft',
+  document_type TEXT NOT NULL DEFAULT 'invoice',
+  converted_to_invoice_id TEXT NOT NULL DEFAULT '',
+  source_proforma_id TEXT NOT NULL DEFAULT '',
   item_columns JSONB NOT NULL DEFAULT '{"qty":true,"persons":false,"hours":true}'::jsonb,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ
@@ -145,6 +151,12 @@ CREATE INDEX IF NOT EXISTS invoice_items_invoice_id_idx ON invoice_items (invoic
 
 ALTER TABLE invoices
   ADD COLUMN IF NOT EXISTS item_columns JSONB NOT NULL DEFAULT '{"qty":true,"persons":false,"hours":true}'::jsonb;
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'invoice';
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS converted_to_invoice_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS source_proforma_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE invoice_items
   ADD COLUMN IF NOT EXISTS persons NUMERIC;
 ALTER TABLE invoice_items
