@@ -8,6 +8,7 @@
   var view = 'home';
   var playerState = {
     enrollmentId: null,
+    previewCourseId: null,
     lessonId: null,
     slideIndex: 0,
     mode: 'list', // list | course | exam
@@ -379,6 +380,8 @@
     var data = getData();
     var existing = data.enrollments.filter(function (e) { return e.courseId === courseId && e.userId === u.id; })[0];
     if (existing) return existing;
+    // Instructors / admins may view courses without becoming enrolled learners.
+    if (isInstructor()) return null;
     var en = {
       id: 'enr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       courseId: courseId,
@@ -396,6 +399,47 @@
     data.enrollments.push(en);
     saveData(data);
     return en;
+  }
+
+  function isCoursePreview() {
+    return !!playerState.previewCourseId && !playerState.enrollmentId;
+  }
+
+  function previewEnrollmentStub(course) {
+    return {
+      id: 'preview',
+      courseId: course ? course.id : '',
+      userId: (currentUser() || {}).id || '',
+      userName: (currentUser() || {}).name || '',
+      source: 'preview',
+      status: 'preview',
+      progressPercent: 0,
+      completedLessonIds: [],
+      startedAt: '',
+      completedAt: '',
+      score: null,
+      passed: null
+    };
+  }
+
+  function openCoursePreview(courseId) {
+    if (!courseId || !findCourse(courseId)) return;
+    playerState.enrollmentId = null;
+    playerState.previewCourseId = courseId;
+    playerState.lessonId = null;
+    playerState.slideIndex = 0;
+    playerState.mode = 'course';
+    playerState.panel = 'overview';
+    render();
+  }
+
+  function clearCoursePlayerState() {
+    playerState.enrollmentId = null;
+    playerState.previewCourseId = null;
+    playerState.lessonId = null;
+    playerState.slideIndex = 0;
+    playerState.mode = 'list';
+    playerState.panel = 'overview';
   }
 
   function open() {
@@ -417,7 +461,7 @@
       try { window.location.hash = 'lms-portal'; } catch (e2) {}
     }
     view = 'home';
-    playerState = { enrollmentId: null, lessonId: null, mode: 'list', panel: 'overview' };
+    playerState = { enrollmentId: null, previewCourseId: null, lessonId: null, mode: 'list', panel: 'overview', slideIndex: 0 };
     renderShell();
     render();
   }
@@ -597,13 +641,19 @@
     var root = document.getElementById('lms-portal-root');
     if (!root) return;
     if (isCourseFocus()) {
-      var enTitle = findEnrollment(playerState.enrollmentId);
-      var courseTitle = enTitle ? findCourse(enTitle.courseId) : null;
+      var previewFocus = isCoursePreview();
+      var enTitle = previewFocus ? null : findEnrollment(playerState.enrollmentId);
+      var courseTitle = previewFocus
+        ? findCourse(playerState.previewCourseId)
+        : (enTitle ? findCourse(enTitle.courseId) : null);
       if (enTitle && courseTitle && isExamExpiredPending(courseTitle, enTitle)) {
         finishExamAttempt(courseTitle, enTitle, {}, true);
         return;
       }
-      setTitle(courseTitle ? courseTitle.title : 'Course', playerState.panel === 'exam' ? 'Assessment' : 'Course workspace');
+      setTitle(
+        courseTitle ? courseTitle.title : 'Course',
+        previewFocus ? 'Instructor preview' : (playerState.panel === 'exam' ? 'Assessment' : 'Course workspace')
+      );
       root.innerHTML = renderCoursePage();
       setupExamTimerIfNeeded();
       return;
@@ -1032,7 +1082,7 @@
               (canManageCourse(c)
                 ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-edit-course="' + escapeHtml(c.id) + '">Edit</button>'
                 : '') +
-              '<button type="button" class="lp-btn lp-btn-ghost" data-lp-enroll="' + escapeHtml(c.id) + '">Open</button>' +
+              '<button type="button" class="lp-btn lp-btn-ghost" data-lp-preview-course="' + escapeHtml(c.id) + '">View</button>' +
               (canManageCourse(c)
                 ? '<button type="button" class="lp-btn lp-btn-danger" data-lp-delete-course="' + escapeHtml(c.id) + '">Delete</button>'
                 : '') +
@@ -2006,33 +2056,38 @@
       in_progress: 'In progress',
       completed: 'Completed',
       failed: 'Not passed',
-      passed: 'Passed'
+      passed: 'Passed',
+      preview: 'Instructor preview'
     };
     return map[status] || status || 'Enrolled';
   }
 
   function renderCoursePage() {
-    var en = findEnrollment(playerState.enrollmentId);
-    var course = en ? findCourse(en.courseId) : null;
-    if (!en || !course) {
-      playerState.mode = 'list';
+    var preview = isCoursePreview();
+    var en = preview ? null : findEnrollment(playerState.enrollmentId);
+    var course = preview
+      ? findCourse(playerState.previewCourseId)
+      : (en ? findCourse(en.courseId) : null);
+    if (!course || (!preview && !en)) {
+      clearCoursePlayerState();
       syncCourseFocusShell();
       return '<div class="lp-card"><p class="lp-empty">Course unavailable.</p><button class="lp-btn lp-btn-secondary" data-lp-view="courses">Back</button></div>';
     }
+    if (preview) en = previewEnrollmentStub(course);
 
     if (playerState.mode === 'exam' || playerState.panel === 'exam') {
       playerState.panel = 'exam';
       playerState.mode = 'course';
     }
 
-    var contentLocked = isEnrollmentContentLocked(en);
+    var contentLocked = !preview && isEnrollmentContentLocked(en);
     var panel = playerState.panel || 'overview';
     if (contentLocked && (panel === 'exam' || panel === 'lesson')) {
       panel = 'overview';
       playerState.panel = 'overview';
       playerState.lessonId = null;
     }
-    if (panel === 'exam' && !canAccessExam(course, en)) {
+    if (panel === 'exam' && !preview && !canAccessExam(course, en)) {
       panel = 'overview';
       playerState.panel = 'overview';
     }
@@ -2044,17 +2099,19 @@
     }
 
     var instructor = courseInstructorInfo(course);
-    var progress = enrollmentProgress(en, course);
+    var progress = preview
+      ? { percent: 0, done: 0, total: (course.lessons || []).length, status: 'preview' }
+      : enrollmentProgress(en, course);
     var completed = en.completedLessonIds || [];
     var activeLesson = course.lessons.filter(function (l) { return l.id === playerState.lessonId; })[0] || null;
     var discussCount = ((getCourseDiscussion(course.id) || {}).messages || []).length;
     var privateCount = visiblePrivateThreads().filter(function (t) {
       return t.courseId === course.id || !t.courseId;
     }).length;
-    var examUnlocked = canAccessExam(course, en);
-    var examDone = hasUsedExamAttempt(en);
+    var examUnlocked = preview ? true : canAccessExam(course, en);
+    var examDone = preview ? false : hasUsedExamAttempt(en);
 
-    return '<div class="lp-course-page lp-course-page--focus' + (contentLocked ? ' is-content-locked' : '') + '">' +
+    return '<div class="lp-course-page lp-course-page--focus' + (contentLocked ? ' is-content-locked' : '') + (preview ? ' is-preview' : '') + '">' +
       renderCourseSideMenu(course, panel, activeLesson, completed, discussCount, privateCount, progress, instructor, examUnlocked, en, examDone) +
       '<div class="lp-course-focus-main">' +
         renderCourseHeader(course, instructor, progress, en) +
@@ -2086,13 +2143,17 @@
         '</div>' +
         '<div class="lp-course-hero-stats">' +
           '<div class="lp-course-stat">' +
-            '<span class="lp-course-stat-label">Overall progress</span>' +
-            '<div class="lp-course-stat-progress">' +
-              '<div class="lp-progress"><span style="width:' + progress.percent + '%"></span></div>' +
-              '<strong>' + progress.percent + '%</strong>' +
-            '</div>' +
+            '<span class="lp-course-stat-label">' + (isCoursePreview() ? 'Mode' : 'Overall progress') + '</span>' +
+            (isCoursePreview()
+              ? '<strong>Preview</strong>'
+              : ('<div class="lp-course-stat-progress">' +
+                  '<div class="lp-progress"><span style="width:' + progress.percent + '%"></span></div>' +
+                  '<strong>' + progress.percent + '%</strong>' +
+                '</div>')) +
           '</div>' +
-          '<div class="lp-course-stat"><span class="lp-course-stat-label">Lessons</span><strong>' + progress.done + ' / ' + progress.total + '</strong></div>' +
+          '<div class="lp-course-stat"><span class="lp-course-stat-label">Lessons</span><strong>' +
+            (isCoursePreview() ? progress.total : (progress.done + ' / ' + progress.total)) +
+          '</strong></div>' +
           '<div class="lp-course-stat"><span class="lp-course-stat-label">Duration</span><strong>' + escapeHtml(courseDurationLabel(course)) + '</strong></div>' +
           '<div class="lp-course-stat"><span class="lp-course-stat-label">Score</span><strong>' +
             (en.score != null ? escapeHtml(String(en.score)) + '%' : '—') +
@@ -2182,6 +2243,17 @@
   }
 
   function renderCoursePanel(course, en, panel, lesson, instructor, progress) {
+    if (isCoursePreview() && panel === 'exam') {
+      return '<div class="lp-card lp-course-panel">' +
+        '<h3>Exam (preview)</h3>' +
+        '<p class="lp-muted-line">You are viewing this course as an instructor. Exams are only taken by enrolled learners.</p>' +
+        '<p>' + (((course.exam && course.exam.questions) || []).length) + ' question(s) configured' +
+          (course.exam && course.exam.timeLimitMinutes ? ' · ' + course.exam.timeLimitMinutes + ' min time limit' : '') +
+          (course.exam && course.exam.passScore != null ? ' · Pass score ' + course.exam.passScore + '%' : '') +
+        '.</p>' +
+        '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="overview">Back to overview</button>' +
+      '</div>';
+    }
     if (isEnrollmentContentLocked(en) && (panel === 'exam' || panel === 'lesson')) {
       return renderOverviewPanel(course, en, instructor, progress);
     }
@@ -2275,6 +2347,9 @@
 
     return '<div class="lp-card lp-course-panel">' +
       '<h3>About this course</h3>' +
+      (isCoursePreview()
+        ? '<p class="lp-badge lp-badge-accent" style="margin-bottom:0.75rem">Instructor preview — not enrolled</p>'
+        : '') +
       '<p class="lp-course-desc">' + escapeHtml(course.description || 'No description provided yet.') + '</p>' +
       (contentLocked
         ? '<div class="lp-exam-result is-pass" style="margin:1rem 0">' +
@@ -2367,11 +2442,11 @@
     var idx = course.lessons.findIndex(function (l) { return l.id === lesson.id; });
     var prev = idx > 0 ? course.lessons[idx - 1] : null;
     var next = idx >= 0 && idx < course.lessons.length - 1 ? course.lessons[idx + 1] : null;
-    var nextUnlocked = !!(next && done && isLessonUnlocked(course, en, next.id));
+    var nextUnlocked = !!(next && (isCoursePreview() || done) && isLessonUnlocked(course, en, next.id));
     return '<div class="lp-card lp-course-panel">' +
       '<div class="lp-course-lesson-head">' +
-        '<p class="lp-muted-line">Lesson ' + (idx + 1) + ' of ' + course.lessons.length + (done ? ' · Completed' : '') +
-          ' · Complete in order</p>' +
+        '<p class="lp-muted-line">Lesson ' + (idx + 1) + ' of ' + course.lessons.length +
+          (isCoursePreview() ? ' · Instructor preview' : (done ? ' · Completed' : ' · Complete in order')) + '</p>' +
         '<h3>' + escapeHtml(lesson.title) + '</h3>' +
       '</div>' +
       mediaHtml(lesson) +
@@ -2382,17 +2457,21 @@
         (prev && isLessonUnlocked(course, en, prev.id)
           ? '<button type="button" class="lp-btn lp-btn-ghost" data-lp-lesson="' + escapeHtml(prev.id) + '">← Previous</button>'
           : '') +
-        '<button type="button" class="lp-btn lp-btn-primary" data-lp-complete-lesson="' + escapeHtml(lesson.id) + '">' +
-          (done ? 'Completed · Continue' : 'Mark complete &amp; continue') +
-        '</button>' +
-        (nextUnlocked
+        (isCoursePreview()
+          ? (next
+              ? '<button type="button" class="lp-btn lp-btn-primary" data-lp-lesson="' + escapeHtml(next.id) + '">Next lesson →</button>'
+              : '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="overview">Back to overview</button>')
+          : '<button type="button" class="lp-btn lp-btn-primary" data-lp-complete-lesson="' + escapeHtml(lesson.id) + '">' +
+              (done ? 'Completed · Continue' : 'Mark complete &amp; continue') +
+            '</button>') +
+        (!isCoursePreview() && nextUnlocked
           ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-lesson="' + escapeHtml(next.id) + '">Next →</button>'
-          : (next && !done
+          : (!isCoursePreview() && next && !done
               ? '<p class="lp-muted-line">Mark this lesson complete to unlock the next one.</p>'
               : '')) +
-        (!next && course.exam && course.exam.enabled && canAccessExam(course, en)
+        (!isCoursePreview() && !next && course.exam && course.exam.enabled && canAccessExam(course, en)
           ? '<button type="button" class="lp-btn lp-btn-secondary" data-lp-course-panel="exam">Take exam</button>'
-          : (!next && course.exam && course.exam.enabled
+          : (!isCoursePreview() && !next && course.exam && course.exam.enabled
               ? '<p class="lp-muted-line">Finish every lesson to unlock the exam.</p>'
               : '')) +
       '</div>' +
@@ -2558,6 +2637,10 @@
   }
 
   function beginExamAttempt() {
+    if (isCoursePreview()) {
+      alert('Exams are for enrolled learners. You are previewing as an instructor.');
+      return;
+    }
     var en = findEnrollment(playerState.enrollmentId);
     var course = en ? findCourse(en.courseId) : null;
     if (!course || !en) return;
@@ -2738,7 +2821,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-content-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-slide],[data-lp-remove-slide],[data-lp-add-reference],[data-lp-remove-reference],[data-lp-slide-prev],[data-lp-slide-next],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
+    var t = e.target.closest('[data-lp-view],[data-lp-open-enroll],[data-lp-enroll],[data-lp-preview-course],[data-lp-lesson],[data-lp-complete-lesson],[data-lp-start-exam],[data-lp-begin-exam],[data-lp-exit-player],[data-lp-back-player],[data-lp-cert],[data-lp-course-panel],[data-lp-exam-locked],[data-lp-content-locked],[data-lp-discuss-tab],[data-lp-discuss-course],[data-lp-discuss-thread],[data-lp-discuss-new-private],[data-lp-discuss-cancel-private],[data-lp-create-course],[data-lp-edit-course],[data-lp-delete-course],[data-lp-cancel-course-editor],[data-lp-add-lesson],[data-lp-remove-lesson],[data-lp-add-slide],[data-lp-remove-slide],[data-lp-add-reference],[data-lp-remove-reference],[data-lp-slide-prev],[data-lp-slide-next],[data-lp-add-question],[data-lp-remove-question],[data-lp-add-option],[data-lp-clear-cover],[data-lp-clear-signature]');
     if (!t) return;
     if (t.hasAttribute('data-lp-view')) {
       view = t.getAttribute('data-lp-view');
@@ -2938,6 +3021,10 @@
       return;
     }
     if (t.hasAttribute('data-lp-begin-exam')) {
+      if (isCoursePreview()) {
+        alert('Exams are for enrolled learners. You are previewing as an instructor.');
+        return;
+      }
       beginExamAttempt();
       return;
     }
@@ -2951,16 +3038,20 @@
     }
     if (t.hasAttribute('data-lp-course-panel')) {
       var panel = t.getAttribute('data-lp-course-panel');
-      var enPanel = findEnrollment(playerState.enrollmentId);
-      var coursePanel = enPanel ? findCourse(enPanel.courseId) : null;
-      if (enPanel && isEnrollmentContentLocked(enPanel) && (panel === 'exam' || panel === 'lesson')) {
+      var enPanel = isCoursePreview()
+        ? previewEnrollmentStub(findCourse(playerState.previewCourseId))
+        : findEnrollment(playerState.enrollmentId);
+      var coursePanel = isCoursePreview()
+        ? findCourse(playerState.previewCourseId)
+        : (enPanel ? findCourse(enPanel.courseId) : null);
+      if (enPanel && !isCoursePreview() && isEnrollmentContentLocked(enPanel) && (panel === 'exam' || panel === 'lesson')) {
         alert('This course is completed. Lessons and exams are no longer available.');
         playerState.mode = 'course';
         playerState.panel = 'overview';
         render();
         return;
       }
-      if (panel === 'exam' && coursePanel && enPanel && !canAccessExam(coursePanel, enPanel)) {
+      if (panel === 'exam' && !isCoursePreview() && coursePanel && enPanel && !canAccessExam(coursePanel, enPanel)) {
         alert('Finish all lessons before taking the exam.');
         playerState.mode = 'course';
         playerState.panel = 'overview';
@@ -3034,6 +3125,7 @@
       return;
     }
     if (t.hasAttribute('data-lp-open-enroll')) {
+      playerState.previewCourseId = null;
       playerState.enrollmentId = t.getAttribute('data-lp-open-enroll');
       playerState.lessonId = null;
       playerState.slideIndex = 0;
@@ -3042,9 +3134,19 @@
       render();
       return;
     }
+    if (t.hasAttribute('data-lp-preview-course')) {
+      openCoursePreview(t.getAttribute('data-lp-preview-course'));
+      return;
+    }
     if (t.hasAttribute('data-lp-enroll')) {
-      var en = ensureEnrollment(t.getAttribute('data-lp-enroll'));
+      var courseIdEnroll = t.getAttribute('data-lp-enroll');
+      if (isInstructor()) {
+        openCoursePreview(courseIdEnroll);
+        return;
+      }
+      var en = ensureEnrollment(courseIdEnroll);
       if (en) {
+        playerState.previewCourseId = null;
         playerState.enrollmentId = en.id;
         playerState.lessonId = null;
         playerState.slideIndex = 0;
@@ -3055,10 +3157,12 @@
       return;
     }
     if (t.hasAttribute('data-lp-lesson')) {
-      var enLesson = findEnrollment(playerState.enrollmentId);
-      var courseLesson = enLesson ? findCourse(enLesson.courseId) : null;
+      var enLesson = isCoursePreview() ? previewEnrollmentStub(findCourse(playerState.previewCourseId)) : findEnrollment(playerState.enrollmentId);
+      var courseLesson = isCoursePreview()
+        ? findCourse(playerState.previewCourseId)
+        : (enLesson ? findCourse(enLesson.courseId) : null);
       var targetLessonId = t.getAttribute('data-lp-lesson');
-      if (enLesson && isEnrollmentContentLocked(enLesson)) {
+      if (enLesson && !isCoursePreview() && isEnrollmentContentLocked(enLesson)) {
         alert('This course is completed. Lessons are no longer available.');
         playerState.mode = 'course';
         playerState.panel = 'overview';
@@ -3082,10 +3186,18 @@
       return;
     }
     if (t.hasAttribute('data-lp-complete-lesson')) {
+      if (isCoursePreview()) return;
       completeLesson(t.getAttribute('data-lp-complete-lesson'));
       return;
     }
     if (t.hasAttribute('data-lp-start-exam')) {
+      if (isCoursePreview()) {
+        alert('Exams are for enrolled learners. You are previewing as an instructor.');
+        playerState.mode = 'course';
+        playerState.panel = 'overview';
+        render();
+        return;
+      }
       var enExam = findEnrollment(playerState.enrollmentId);
       var courseExam = enExam ? findCourse(enExam.courseId) : null;
       if (enExam && isEnrollmentContentLocked(enExam)) {
@@ -3108,8 +3220,7 @@
       return;
     }
     if (t.hasAttribute('data-lp-exit-player')) {
-      playerState.mode = 'list';
-      playerState.panel = 'overview';
+      clearCoursePlayerState();
       view = 'courses';
       render();
       return;
@@ -3134,6 +3245,7 @@
   }
 
   function completeLesson(lessonId) {
+    if (isCoursePreview()) return;
     var data = getData();
     var en = data.enrollments.filter(function (e) { return e.id === playerState.enrollmentId; })[0];
     var course = en ? data.courses.filter(function (c) { return c.id === en.courseId; })[0] : null;

@@ -62,6 +62,7 @@
     lessonId: null,
     slideIndex: 0,
     enrollmentId: null,
+    previewCourseId: null,
     attemptId: null,
     publicCourseId: null,
     applicantId: null,
@@ -328,6 +329,8 @@
       return e.courseId === courseId && e.userId === u.id;
     })[0];
     if (existing) return existing;
+    // Instructors / admins may view courses without becoming enrolled learners.
+    if (isLmsInstructorUser()) return null;
     var en = {
       id: id('enr'),
       courseId: courseId,
@@ -864,7 +867,9 @@
       return '<div class="lms-course-card">' +
         '<div><strong>' + escapeHtml(c.title) + '</strong>' +
         '<div class="lms-meta">' + escapeHtml(typeLabel(c.type)) + ' · ' + escapeHtml(c.category) + '</div></div>' +
-        '<button type="button" class="btn btn-secondary btn-sm" data-lms-enroll="' + escapeHtml(c.id) + '">Open</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-lms-' +
+          (isLmsInstructorUser() ? 'preview' : 'enroll') + '="' + escapeHtml(c.id) + '">' +
+          (isLmsInstructorUser() ? 'View' : 'Open') + '</button>' +
         '</div>';
     }).join('') + '</div>';
   }
@@ -2417,15 +2422,52 @@
     }
   }
 
+  function isCoursePreview() {
+    return !!viewState.previewCourseId && !viewState.enrollmentId;
+  }
+
+  function previewEnrollmentStub(course) {
+    return {
+      id: 'preview',
+      courseId: course ? course.id : '',
+      userId: (currentUser() || {}).id || '',
+      userName: (currentUser() || {}).name || '',
+      source: 'preview',
+      status: 'preview',
+      progressPercent: 0,
+      completedLessonIds: [],
+      startedAt: '',
+      completedAt: '',
+      score: null,
+      passed: null
+    };
+  }
+
+  function openCoursePreview(courseId) {
+    if (!courseId || !findCourse(courseId)) return;
+    viewState.mode = 'player';
+    viewState.enrollmentId = null;
+    viewState.previewCourseId = courseId;
+    viewState.lessonId = null;
+    viewState.slideIndex = 0;
+    if (window.setLmsSection) window.setLmsSection('my-learning');
+    else { setSection('my-learning'); render(); }
+  }
+
   function renderPlayer(el) {
-    var en = findEnrollment(viewState.enrollmentId);
-    var course = en ? findCourse(en.courseId) : null;
-    if (!en || !course) {
+    var preview = isCoursePreview();
+    var en = preview ? null : findEnrollment(viewState.enrollmentId);
+    var course = preview
+      ? findCourse(viewState.previewCourseId)
+      : (en ? findCourse(en.courseId) : null);
+    if (!course || (!preview && !en)) {
       viewState.mode = 'list';
+      viewState.previewCourseId = null;
       renderMyLearning();
       return;
     }
-    if (isEnrollmentContentLocked(en)) {
+    if (preview) en = previewEnrollmentStub(course);
+    if (!preview && isEnrollmentContentLocked(en)) {
       viewState.mode = 'player';
       var cert = findEnrollmentCertificate(en);
       var completedLocked = en.completedLessonIds || [];
@@ -2456,7 +2498,8 @@
         '</div>';
       return;
     }
-    if (viewState.mode === 'exam') {
+    if (preview) viewState.mode = 'player';
+    if (!preview && viewState.mode === 'exam') {
       if (!canAccessCourseExam(course, en)) {
         viewState.mode = 'player';
       } else {
@@ -2465,20 +2508,21 @@
       }
     }
     if (!viewState.lessonId || !isLessonUnlocked(course, en, viewState.lessonId)) {
-      var availableLesson = firstAvailableLesson(course, en);
+      var availableLesson = firstAvailableLesson(course, en) || (course.lessons || [])[0] || null;
       viewState.lessonId = availableLesson ? availableLesson.id : null;
     }
-    var lesson = course.lessons.filter(function (l) { return l.id === viewState.lessonId; })[0] || firstAvailableLesson(course, en);
+    var lesson = course.lessons.filter(function (l) { return l.id === viewState.lessonId; })[0] || firstAvailableLesson(course, en) || course.lessons[0];
     var completed = en.completedLessonIds || [];
-    var examUnlocked = canAccessCourseExam(course, en);
+    var examUnlocked = !preview && canAccessCourseExam(course, en);
     var left = remainingLessonsCount(course, en);
     el.innerHTML =
-      '<div class="page-header"><h2>' + escapeHtml(course.title) + '</h2>' +
-      '<div class="header-actions"><button type="button" class="btn btn-ghost" id="lms-player-back">← My learning</button></div></div>' +
+      '<div class="page-header"><h2>' + escapeHtml(course.title) +
+        (preview ? ' <span class="lms-badge">Instructor preview</span>' : '') + '</h2>' +
+      '<div class="header-actions"><button type="button" class="btn btn-ghost" id="lms-player-back">← Back</button></div></div>' +
       '<div class="lms-player">' +
         '<aside class="lms-player-nav">' +
           '<h3>Contents</h3>' +
-          '<p class="lms-hint">Lessons unlock in order.</p>' +
+          '<p class="lms-hint">' + (preview ? 'Preview mode — not enrolled.' : 'Lessons unlock in order.') + '</p>' +
           '<ol>' + course.lessons.map(function (l, idx) {
             var done = completed.indexOf(l.id) !== -1;
             var unlocked = isLessonUnlocked(course, en, l.id);
@@ -2490,10 +2534,12 @@
               '" data-lms-lesson="' + escapeHtml(l.id) + '">' + (done ? '✓ ' : '') + escapeHtml(l.title) + '</button></li>';
           }).join('') + '</ol>' +
           (course.exam.enabled
-            ? (examUnlocked
-                ? '<button type="button" class="btn btn-primary" id="lms-start-exam" style="width:100%;margin-top:1rem">Take exam</button>'
-                : '<button type="button" class="btn btn-secondary" id="lms-exam-locked" style="width:100%;margin-top:1rem" disabled title="Finish all lessons to unlock the exam">Exam locked</button>' +
-                  '<p class="lms-hint">Finish ' + left + ' more lesson' + (left === 1 ? '' : 's') + ' to unlock the exam.</p>')
+            ? (preview
+                ? '<p class="lms-hint" style="margin-top:1rem">Exam is for enrolled learners only.</p>'
+                : (examUnlocked
+                    ? '<button type="button" class="btn btn-primary" id="lms-start-exam" style="width:100%;margin-top:1rem">Take exam</button>'
+                    : '<button type="button" class="btn btn-secondary" id="lms-exam-locked" style="width:100%;margin-top:1rem" disabled title="Finish all lessons to unlock the exam">Exam locked</button>' +
+                      '<p class="lms-hint">Finish ' + left + ' more lesson' + (left === 1 ? '' : 's') + ' to unlock the exam.</p>'))
             : '') +
         '</aside>' +
         '<div class="lms-player-content module-table-panel">' +
@@ -2501,15 +2547,17 @@
             ? '<h3>' + escapeHtml(lesson.title) + '</h3>' +
               '<p class="lms-meta">' + escapeHtml(CONTENT_TYPES[lesson.contentType] || 'Text / procedure') +
               (lesson.durationMinutes ? ' · ' + escapeHtml(String(lesson.durationMinutes)) + ' min' : '') +
-              ' · Complete in order</p>' +
+              (preview ? ' · Preview' : ' · Complete in order') + '</p>' +
               embedMediaHtml(lesson) +
               '<div class="lms-lesson-body is-protected" oncontextmenu="return false" oncopy="return false" oncut="return false">' +
                 formatContent(lesson.content) +
               '</div>' +
               '<div class="lms-actions">' +
-                '<button type="button" class="btn btn-primary" data-lms-complete-lesson="' + escapeHtml(lesson.id) + '">Mark complete &amp; continue</button>' +
+                (preview
+                  ? ''
+                  : '<button type="button" class="btn btn-primary" data-lms-complete-lesson="' + escapeHtml(lesson.id) + '">Mark complete &amp; continue</button>') +
               '</div>'
-            : emptyState('Complete previous lessons to unlock the next one.')) +
+            : emptyState(preview ? 'Select a lesson to preview.' : 'Complete previous lessons to unlock the next one.')) +
             referenceMaterialsHtml(course) +
         '</div>' +
       '</div>';
@@ -2941,7 +2989,7 @@
   }
 
   function onPageClick(e) {
-    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-play],[data-lms-edit],[data-lms-edit-user],[data-lms-duplicate],[data-lms-delete],[data-lms-unenroll],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-remove-reference],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-reference,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
+    var t = e.target.closest('[data-lms-goto],[data-lms-enroll],[data-lms-preview],[data-lms-play],[data-lms-edit],[data-lms-edit-user],[data-lms-duplicate],[data-lms-delete],[data-lms-unenroll],[data-lms-lesson],[data-lms-complete-lesson],[data-lms-purchase-paid],[data-lms-purchase-cancel],[data-lms-applicant-status],[data-lms-announce-delete],[data-lms-cert-print],[data-remove-lesson],[data-remove-question],[data-add-option],[data-add-slide],[data-remove-slide],[data-remove-reference],[data-lms-slide-prev],[data-lms-slide-next],#lms-add-course,#lms-editor-cancel,#lms-editor-cancel-2,#lms-add-lesson,#lms-add-reference,#lms-add-question,#lms-player-back,#lms-start-exam,#lms-exam-back,#lms-begin-exam,#lms-continue-study,#lms-continue-study-2,#lms-open-portal-btn-dash');
     if (!t) return;
 
     if (t.id === 'lms-open-portal-btn-dash') {
@@ -3087,12 +3135,21 @@
       }
       return;
     }
+    if (t.hasAttribute('data-lms-preview')) {
+      openCoursePreview(t.getAttribute('data-lms-preview'));
+      return;
+    }
     if (t.hasAttribute('data-lms-enroll')) {
       var cid = t.getAttribute('data-lms-enroll');
+      if (isLmsInstructorUser()) {
+        openCoursePreview(cid);
+        return;
+      }
       var en = ensureEnrollment(cid, 'self');
       if (en) {
         viewState.mode = 'player';
         viewState.enrollmentId = en.id;
+        viewState.previewCourseId = null;
         viewState.lessonId = null;
         if (window.setLmsSection) window.setLmsSection('my-learning');
         else { setSection('my-learning'); render(); }
@@ -3102,6 +3159,7 @@
     if (t.hasAttribute('data-lms-play')) {
       viewState.mode = 'player';
       viewState.enrollmentId = t.getAttribute('data-lms-play');
+      viewState.previewCourseId = null;
       viewState.lessonId = null;
       viewState.slideIndex = 0;
       renderMyLearning();
@@ -3150,8 +3208,12 @@
       return;
     }
     if (t.hasAttribute('data-lms-slide-prev') || t.hasAttribute('data-lms-slide-next')) {
-      var enSlide = findEnrollment(viewState.enrollmentId);
-      var courseSlide = enSlide ? findCourse(enSlide.courseId) : null;
+      var enSlide = isCoursePreview()
+        ? previewEnrollmentStub(findCourse(viewState.previewCourseId))
+        : findEnrollment(viewState.enrollmentId);
+      var courseSlide = isCoursePreview()
+        ? findCourse(viewState.previewCourseId)
+        : (enSlide ? findCourse(enSlide.courseId) : null);
       var lessonSlide = courseSlide
         ? courseSlide.lessons.filter(function (l) { return l.id === viewState.lessonId; })[0] || courseSlide.lessons[0]
         : null;
@@ -3166,10 +3228,14 @@
       return;
     }
     if (t.hasAttribute('data-lms-lesson')) {
-      var enLessonNav = findEnrollment(viewState.enrollmentId);
-      var courseLessonNav = enLessonNav ? findCourse(enLessonNav.courseId) : null;
+      var enLessonNav = isCoursePreview()
+        ? previewEnrollmentStub(findCourse(viewState.previewCourseId))
+        : findEnrollment(viewState.enrollmentId);
+      var courseLessonNav = isCoursePreview()
+        ? findCourse(viewState.previewCourseId)
+        : (enLessonNav ? findCourse(enLessonNav.courseId) : null);
       var targetLessonNav = t.getAttribute('data-lms-lesson');
-      if (enLessonNav && isEnrollmentContentLocked(enLessonNav)) {
+      if (enLessonNav && !isCoursePreview() && isEnrollmentContentLocked(enLessonNav)) {
         alert('This course is completed. Lessons are no longer available.');
         viewState.mode = 'player';
         renderMyLearning();
@@ -3189,6 +3255,7 @@
       return;
     }
     if (t.hasAttribute('data-lms-complete-lesson')) {
+      if (isCoursePreview()) return;
       var lessonId = t.getAttribute('data-lms-complete-lesson');
       var en2 = findEnrollment(viewState.enrollmentId);
       var course2 = en2 ? findCourse(en2.courseId) : null;
@@ -3228,6 +3295,7 @@
     if (t.id === 'lms-player-back') {
       viewState.mode = 'list';
       viewState.enrollmentId = null;
+      viewState.previewCourseId = null;
       renderMyLearning();
       return;
     }
