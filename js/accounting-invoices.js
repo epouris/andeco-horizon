@@ -266,12 +266,36 @@ const app = {
                 this.updateItemTotal(e.target.closest('.invoice-item'));
                 this.calculateTotals();
             }
+            if (e.target.classList.contains('item-service-date') ||
+                e.target.classList.contains('item-service-start') ||
+                e.target.classList.contains('item-service-end')) {
+                this.applyServiceScheduleToRow(e.target.closest('.invoice-item'));
+            }
+        });
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('item-service-date') ||
+                e.target.classList.contains('item-service-start') ||
+                e.target.classList.contains('item-service-end')) {
+                this.applyServiceScheduleToRow(e.target.closest('.invoice-item'));
+            }
         });
         document.addEventListener('input', (e) => {
             if (e.target.classList.contains('item-product-code')) {
                 this.updateItemTotal(e.target.closest('.invoice-item'));
                 this.calculateTotals();
             }
+        });
+        document.addEventListener('click', (e) => {
+            const toggle = e.target.closest('.item-schedule-toggle');
+            if (!toggle) return;
+            const row = toggle.closest('.invoice-item');
+            if (!row || row.classList.contains('invoice-item--header')) return;
+            row.classList.toggle('show-schedule');
+            if (row.classList.contains('show-schedule') && !row.querySelector('.item-service-date').value) {
+                const today = new Date().toISOString().slice(0, 10);
+                row.querySelector('.item-service-date').value = today;
+            }
+            toggle.textContent = row.classList.contains('show-schedule') ? 'Hide schedule' : 'Add schedule';
         });
         document.addEventListener('change', (e) => {
             if (e.target && (e.target.id === 'inv-col-qty' || e.target.id === 'inv-col-persons' || e.target.id === 'inv-col-hours')) {
@@ -546,6 +570,68 @@ const app = {
         return m * price;
     },
 
+    calcHoursFromSchedule(dateStr, startStr, endStr) {
+        if (!startStr || !endStr) return null;
+        const day = dateStr || new Date().toISOString().slice(0, 10);
+        const start = new Date(day + 'T' + startStr);
+        let end = new Date(day + 'T' + endStr);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+        if (end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+        const hours = (end - start) / (1000 * 60 * 60);
+        if (hours <= 0 || !isFinite(hours)) return null;
+        return Math.round(hours * 100) / 100;
+    },
+
+    formatServiceScheduleLabel(dateStr, startStr, endStr) {
+        if (!dateStr && !startStr && !endStr) return '';
+        let datePart = '';
+        if (dateStr) {
+            const d = new Date(dateStr + 'T00:00:00');
+            if (!isNaN(d.getTime())) {
+                datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            } else {
+                datePart = dateStr;
+            }
+        }
+        const timePart = [startStr, endStr].filter(Boolean).join(' – ');
+        return [datePart, timePart].filter(Boolean).join(' ').trim();
+    },
+
+    formatInvoiceItemDescription(item) {
+        const base = (item && item.description) || '';
+        const label = this.formatServiceScheduleLabel(item && item.serviceDate, item && item.serviceStart, item && item.serviceEnd);
+        if (!label) return base;
+        if (base && base.indexOf(label) !== -1) return base;
+        return base ? (base + ' (' + label + ')') : label;
+    },
+
+    applyServiceScheduleToRow(row) {
+        if (!row || row.classList.contains('invoice-item--header')) return;
+        const dateEl = row.querySelector('.item-service-date');
+        const startEl = row.querySelector('.item-service-start');
+        const endEl = row.querySelector('.item-service-end');
+        const hoursEl = row.querySelector('.item-hours');
+        if (!dateEl || !startEl || !endEl || !hoursEl) return;
+        const hasAny = !!(dateEl.value || startEl.value || endEl.value);
+        if (hasAny) row.classList.add('show-schedule');
+        const hours = this.calcHoursFromSchedule(dateEl.value, startEl.value, endEl.value);
+        if (hours != null) {
+            hoursEl.value = hours;
+            // Ensure Hours column participates in totals when schedule is used
+            const hoursToggle = document.getElementById('inv-col-hours');
+            if (hoursToggle && !hoursToggle.checked) {
+                hoursToggle.checked = true;
+                this.applyItemColumnVisibility();
+            }
+        }
+        const toggle = row.querySelector('.item-schedule-toggle');
+        if (toggle) {
+            toggle.textContent = row.classList.contains('show-schedule') ? 'Hide schedule' : 'Add schedule';
+        }
+        this.updateItemTotal(row);
+        this.calculateTotals();
+    },
+
     buildInvoiceItemRowHtml(item) {
         const it = item || {};
         const desc = String(it.description || '').replace(/"/g, '&quot;');
@@ -554,6 +640,11 @@ const app = {
         const persons = it.persons != null ? it.persons : 1;
         const hours = it.hours != null ? it.hours : 0;
         const price = it.price != null ? it.price : '';
+        const serviceDate = String(it.serviceDate || '').replace(/"/g, '&quot;');
+        const serviceStart = String(it.serviceStart || '').replace(/"/g, '&quot;');
+        const serviceEnd = String(it.serviceEnd || '').replace(/"/g, '&quot;');
+        const isService = !!it.isService;
+        const hasSchedule = !!(it.serviceDate || it.serviceStart || it.serviceEnd || isService);
         const cols = this.getItemColumnsFromForm();
         const amount = this.lineItemAmount({
             quantity: qty,
@@ -562,14 +653,34 @@ const app = {
             price: price === '' ? 0 : price
         }, cols);
         return `
-            <input type="text" placeholder="Code" class="item-product-code" value="${code}" title="Enter preset product code to fill description and price">
-            <input type="text" placeholder="Description" class="item-description" value="${desc}" required>
-            <input type="number" placeholder="Qty" class="item-quantity" min="0" step="0.01" value="${qty}">
-            <input type="number" placeholder="Persons" class="item-persons" min="0" step="1" value="${persons}">
-            <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="${hours}">
-            <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" value="${price}" required>
-            <div class="item-total">${this.formatCurrency(amount)}</div>
-            <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
+            <div class="invoice-item-main">
+                <input type="text" placeholder="Code" class="item-product-code" value="${code}" title="Enter preset product code to fill description and price">
+                <div class="item-desc-wrap">
+                    <input type="text" placeholder="Description" class="item-description" value="${desc}" required>
+                    <button type="button" class="item-schedule-toggle">${hasSchedule ? 'Hide schedule' : 'Add schedule'}</button>
+                </div>
+                <input type="number" placeholder="Qty" class="item-quantity" min="0" step="0.01" value="${qty}">
+                <input type="number" placeholder="Persons" class="item-persons" min="0" step="1" value="${persons}">
+                <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="${hours}">
+                <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" value="${price}" required>
+                <div class="item-total">${this.formatCurrency(amount)}</div>
+                <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
+            </div>
+            <div class="item-service-schedule">
+                <div class="svc-field">
+                    <label>Date</label>
+                    <input type="date" class="item-service-date" value="${serviceDate}">
+                </div>
+                <div class="svc-field">
+                    <label>Start</label>
+                    <input type="time" class="item-service-start" value="${serviceStart}">
+                </div>
+                <div class="svc-field">
+                    <label>Finish</label>
+                    <input type="time" class="item-service-end" value="${serviceEnd}">
+                </div>
+                <span class="item-service-hint">Hours are calculated from start → finish</span>
+            </div>
         `;
     },
 
@@ -589,7 +700,7 @@ const app = {
                 const text = (item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 return `<tr><td colspan="${colSpan}" class="item-header-cell">${text || '&nbsp;'}</td></tr>`;
             }
-            const desc = (item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const desc = this.formatInvoiceItemDescription(item).replace(/</g, '&lt;').replace(/>/g, '&gt;');
             return `<tr>
                 <td>${desc}</td>
                 ${cols.qty ? `<td class="text-center">${item.quantity != null && item.quantity !== '' ? item.quantity : ''}</td>` : ''}
@@ -711,7 +822,7 @@ const app = {
                         <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
                     </div>`;
                 }
-                return `<div class="invoice-item">${this.buildInvoiceItemRowHtml(item)}</div>`;
+                return `<div class="invoice-item${(item.isService || item.serviceDate || item.serviceStart || item.serviceEnd) ? ' show-schedule' : ''}">${this.buildInvoiceItemRowHtml(item)}</div>`;
             }).join('');
         }
         this.applyItemColumnVisibility();
@@ -752,7 +863,21 @@ const app = {
         const cols = this.getItemColumnsFromForm();
         if (descEl) descEl.value = product.description || '';
         if (priceEl) priceEl.value = product.price != null ? product.price : '';
-        if (hoursEl && cols.hours && (!hoursEl.value || hoursEl.value === '0')) hoursEl.value = '1';
+        if (product.isService) {
+            row.classList.add('show-schedule');
+            const dateEl = row.querySelector('.item-service-date');
+            if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+            const hoursToggle = document.getElementById('inv-col-hours');
+            if (hoursToggle && !hoursToggle.checked) {
+                hoursToggle.checked = true;
+                this.applyItemColumnVisibility();
+            }
+            const toggle = row.querySelector('.item-schedule-toggle');
+            if (toggle) toggle.textContent = 'Hide schedule';
+            if (hoursEl && (!hoursEl.value || hoursEl.value === '0')) hoursEl.value = '1';
+        } else if (hoursEl && cols.hours && (!hoursEl.value || hoursEl.value === '0')) {
+            hoursEl.value = '1';
+        }
         this.updateItemTotal(row);
         this.calculateTotals();
     },
@@ -767,12 +892,13 @@ const app = {
         }
         container.innerHTML = `
             <table>
-                <thead><tr><th>Code</th><th>Description</th><th class="product-price">Unit Price</th><th></th></tr></thead>
+                <thead><tr><th>Code</th><th>Description</th><th>Type</th><th class="product-price">Unit Price</th><th></th></tr></thead>
                 <tbody>
                     ${products.map(p => `
                         <tr>
                             <td><strong>${(p.code || '').replace(/</g, '&lt;')}</strong></td>
                             <td>${(p.description || '').replace(/</g, '&lt;')}</td>
+                            <td>${p.isService ? 'Service (hours)' : 'Product'}</td>
                             <td class="product-price">${this.formatCurrency(parseFloat(p.price) || 0)}</td>
                             <td><button type="button" class="btn btn-danger btn-delete-product" data-product-id="${p.id}">Delete</button></td>
                         </tr>
@@ -795,6 +921,7 @@ const app = {
         const codeEl = document.getElementById('product-code');
         const descEl = document.getElementById('product-description');
         const priceEl = document.getElementById('product-price');
+        const serviceEl = document.getElementById('product-is-service');
         if (!codeEl || !DataStore.saveProduct) return;
         const code = (codeEl.value || '').trim();
         if (!code) {
@@ -806,12 +933,14 @@ const app = {
             id: existing ? existing.id : 'p' + Date.now(),
             code: code,
             description: (descEl && descEl.value) ? descEl.value.trim() : '',
-            price: parseFloat(priceEl && priceEl.value) || 0
+            price: parseFloat(priceEl && priceEl.value) || 0,
+            isService: !!(serviceEl && serviceEl.checked)
         };
         DataStore.saveProduct(product);
         if (codeEl) codeEl.value = '';
         if (descEl) descEl.value = '';
         if (priceEl) priceEl.value = '';
+        if (serviceEl) serviceEl.checked = false;
         this.renderProductsList();
     },
 
@@ -875,13 +1004,23 @@ const app = {
                 return { isHeader: true, description: textEl ? (textEl.value || '').trim() : '' };
             }
             const codeEl = item.querySelector('.item-product-code');
+            const product = codeEl && DataStore.getProductByCode
+                ? DataStore.getProductByCode((codeEl.value || '').trim())
+                : null;
             return {
                 productCode: codeEl ? (codeEl.value || '').trim() : '',
                 description: (item.querySelector('.item-description') || {}).value || '',
                 quantity: parseFloat((item.querySelector('.item-quantity') || {}).value) || 0,
                 persons: parseFloat((item.querySelector('.item-persons') || {}).value) || 0,
                 hours: parseFloat((item.querySelector('.item-hours') || {}).value) || 0,
-                price: parseFloat((item.querySelector('.item-price') || {}).value) || 0
+                price: parseFloat((item.querySelector('.item-price') || {}).value) || 0,
+                serviceDate: (item.querySelector('.item-service-date') || {}).value || '',
+                serviceStart: (item.querySelector('.item-service-start') || {}).value || '',
+                serviceEnd: (item.querySelector('.item-service-end') || {}).value || '',
+                isService: !!(product && product.isService) ||
+                    !!((item.querySelector('.item-service-date') || {}).value) ||
+                    !!((item.querySelector('.item-service-start') || {}).value) ||
+                    !!((item.querySelector('.item-service-end') || {}).value)
             };
         });
 

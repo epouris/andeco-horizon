@@ -98,8 +98,11 @@ CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY,
   code TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
-  price NUMERIC NOT NULL DEFAULT 0
+  price NUMERIC NOT NULL DEFAULT 0,
+  is_service BOOLEAN NOT NULL DEFAULT false
 );
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS is_service BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY,
@@ -132,7 +135,11 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   quantity NUMERIC,
   persons NUMERIC,
   hours NUMERIC,
-  price NUMERIC
+  price NUMERIC,
+  service_date TEXT NOT NULL DEFAULT '',
+  service_start TEXT NOT NULL DEFAULT '',
+  service_end TEXT NOT NULL DEFAULT '',
+  is_service BOOLEAN NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS invoice_items_invoice_id_idx ON invoice_items (invoice_id);
 
@@ -140,6 +147,14 @@ ALTER TABLE invoices
   ADD COLUMN IF NOT EXISTS item_columns JSONB NOT NULL DEFAULT '{"qty":true,"persons":false,"hours":true}'::jsonb;
 ALTER TABLE invoice_items
   ADD COLUMN IF NOT EXISTS persons NUMERIC;
+ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS service_date TEXT NOT NULL DEFAULT '';
+ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS service_start TEXT NOT NULL DEFAULT '';
+ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS service_end TEXT NOT NULL DEFAULT '';
+ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS is_service BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS receipts (
   id TEXT PRIMARY KEY,

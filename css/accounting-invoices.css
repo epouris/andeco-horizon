@@ -176,14 +176,19 @@
 .invoice-items-header .item-col-action { width: 30px; }
 
 .invoice-item {
-  display: grid;
-  grid-template-columns: var(--item-grid, 0.5fr 3fr 0.35fr 0.35fr 0.7fr 1fr auto);
-  gap: 0.75rem;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
   margin-bottom: 1rem;
   padding: 1rem;
   background-color: var(--bg-color);
   border-radius: 0.5rem;
+}
+.invoice-item-main {
+  display: grid;
+  grid-template-columns: var(--item-grid, 0.5fr 3fr 0.35fr 0.35fr 0.7fr 1fr auto);
+  gap: 0.75rem;
+  align-items: center;
 }
 .invoice-items-wrap:not(.col-qty) .item-col-qty,
 .invoice-items-wrap:not(.col-qty) .item-quantity { display: none; }
@@ -191,6 +196,64 @@
 .invoice-items-wrap:not(.col-persons) .item-persons { display: none; }
 .invoice-items-wrap:not(.col-hours) .item-col-hours,
 .invoice-items-wrap:not(.col-hours) .item-hours { display: none; }
+
+.item-service-schedule {
+  display: none;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 1rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed var(--border-color);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.45);
+}
+.invoice-item.show-schedule .item-service-schedule {
+  display: flex;
+}
+.item-service-schedule .svc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 7.5rem;
+}
+.item-service-schedule label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.item-service-schedule input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  background: #fff;
+}
+.item-service-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  align-self: center;
+  margin-left: auto;
+}
+.item-schedule-toggle {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+.item-schedule-toggle:hover { text-decoration: underline; }
+.item-desc-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
 
 .item-product-code {
   padding: 0.4rem 0.5rem;
@@ -242,9 +305,12 @@
 
 /* Section header row: text only, no prices */
 .invoice-item--header {
-  grid-template-columns: 1fr auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
 }
 .invoice-item--header .item-header-text {
+  flex: 1;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
