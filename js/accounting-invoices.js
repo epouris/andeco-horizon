@@ -382,10 +382,14 @@ const app = {
             deleteDraftBtn.addEventListener('click', () => this.deleteCurrentInvoiceIfDraft());
         }
 
-        // Add product (Settings > Accounting)
+        // Add / update product (Settings > Accounting)
         const addProductBtn = document.getElementById('btn-add-product');
         if (addProductBtn) {
             addProductBtn.addEventListener('click', () => this.addProductFromForm());
+        }
+        const cancelProductEditBtn = document.getElementById('btn-cancel-product-edit');
+        if (cancelProductEditBtn) {
+            cancelProductEditBtn.addEventListener('click', () => this.clearProductForm());
         }
 
         // Product code lookup on invoice items (delegated)
@@ -890,26 +894,40 @@ const app = {
             container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem; padding: 1rem;">No preset products. Add a product above.</p>';
             return;
         }
+        const sorted = products.slice().sort((a, b) =>
+            String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' })
+        );
         container.innerHTML = `
             <table>
                 <thead><tr><th>Code</th><th>Description</th><th>Type</th><th class="product-price">Unit Price</th><th></th></tr></thead>
                 <tbody>
-                    ${products.map(p => `
+                    ${sorted.map(p => `
                         <tr>
                             <td><strong>${(p.code || '').replace(/</g, '&lt;')}</strong></td>
                             <td>${(p.description || '').replace(/</g, '&lt;')}</td>
                             <td>${p.isService ? 'Service (hours)' : 'Product'}</td>
                             <td class="product-price">${this.formatCurrency(parseFloat(p.price) || 0)}</td>
-                            <td><button type="button" class="btn btn-danger btn-delete-product" data-product-id="${p.id}">Delete</button></td>
+                            <td class="product-row-actions">
+                                <button type="button" class="btn btn-primary btn-edit-product" data-product-id="${p.id}">Edit</button>
+                                <button type="button" class="btn btn-danger btn-delete-product" data-product-id="${p.id}">Delete</button>
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
         `;
+        container.querySelectorAll('.btn-edit-product').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-product-id');
+                if (id) this.editProduct(id);
+            });
+        });
         container.querySelectorAll('.btn-delete-product').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-product-id');
                 if (id && confirm('Delete this product?')) {
+                    const editIdEl = document.getElementById('product-edit-id');
+                    if (editIdEl && editIdEl.value === id) this.clearProductForm();
                     DataStore.deleteProduct(id);
                     this.renderProductsList();
                 }
@@ -917,7 +935,49 @@ const app = {
         });
     },
 
+    clearProductForm() {
+        const editIdEl = document.getElementById('product-edit-id');
+        const codeEl = document.getElementById('product-code');
+        const descEl = document.getElementById('product-description');
+        const priceEl = document.getElementById('product-price');
+        const serviceEl = document.getElementById('product-is-service');
+        const addBtn = document.getElementById('btn-add-product');
+        const cancelBtn = document.getElementById('btn-cancel-product-edit');
+        if (editIdEl) editIdEl.value = '';
+        if (codeEl) codeEl.value = '';
+        if (descEl) descEl.value = '';
+        if (priceEl) priceEl.value = '';
+        if (serviceEl) serviceEl.checked = false;
+        if (addBtn) addBtn.textContent = 'Add Product';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    },
+
+    editProduct(productId) {
+        if (!productId || !DataStore.getProducts) return;
+        const product = (DataStore.getProducts() || []).find(p => p && p.id === productId);
+        if (!product) return;
+        const editIdEl = document.getElementById('product-edit-id');
+        const codeEl = document.getElementById('product-code');
+        const descEl = document.getElementById('product-description');
+        const priceEl = document.getElementById('product-price');
+        const serviceEl = document.getElementById('product-is-service');
+        const addBtn = document.getElementById('btn-add-product');
+        const cancelBtn = document.getElementById('btn-cancel-product-edit');
+        if (editIdEl) editIdEl.value = product.id;
+        if (codeEl) codeEl.value = product.code || '';
+        if (descEl) descEl.value = product.description || '';
+        if (priceEl) priceEl.value = product.price != null ? product.price : '';
+        if (serviceEl) serviceEl.checked = !!product.isService;
+        if (addBtn) addBtn.textContent = 'Update Product';
+        if (cancelBtn) cancelBtn.style.display = '';
+        if (codeEl) {
+            codeEl.focus();
+            codeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    },
+
     addProductFromForm() {
+        const editIdEl = document.getElementById('product-edit-id');
         const codeEl = document.getElementById('product-code');
         const descEl = document.getElementById('product-description');
         const priceEl = document.getElementById('product-price');
@@ -928,19 +988,21 @@ const app = {
             alert('Please enter a product code.');
             return;
         }
-        const existing = DataStore.getProductByCode && DataStore.getProductByCode(code);
+        const editingId = editIdEl ? (editIdEl.value || '').trim() : '';
+        const byCode = DataStore.getProductByCode ? DataStore.getProductByCode(code) : null;
+        if (byCode && byCode.id !== editingId) {
+            alert('A product with this code already exists. Choose a different code or edit that product.');
+            return;
+        }
         const product = {
-            id: existing ? existing.id : 'p' + Date.now(),
+            id: editingId || (byCode ? byCode.id : ('p' + Date.now())),
             code: code,
             description: (descEl && descEl.value) ? descEl.value.trim() : '',
             price: parseFloat(priceEl && priceEl.value) || 0,
             isService: !!(serviceEl && serviceEl.checked)
         };
         DataStore.saveProduct(product);
-        if (codeEl) codeEl.value = '';
-        if (descEl) descEl.value = '';
-        if (priceEl) priceEl.value = '';
-        if (serviceEl) serviceEl.checked = false;
+        this.clearProductForm();
         this.renderProductsList();
     },
 

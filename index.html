@@ -1296,6 +1296,7 @@
                     <h3>Preset Products</h3>
                     <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">Add products by code. When creating an invoice, entering a product code will fill description and unit price. Mark hour-based services to enable date/time scheduling on invoice lines.</p>
                     <div class="form-row" style="align-items: flex-end;">
+                      <input type="hidden" id="product-edit-id" value="">
                       <div class="form-group">
                         <label>Code</label>
                         <input type="text" id="product-code" placeholder="e.g. WIDGET-01">
@@ -1313,8 +1314,9 @@
                           <input type="checkbox" id="product-is-service"> Service (hours)
                         </label>
                       </div>
-                      <div class="form-group">
+                      <div class="form-group product-form-actions">
                         <button type="button" class="btn btn-primary" id="btn-add-product">Add Product</button>
+                        <button type="button" class="btn btn-secondary" id="btn-cancel-product-edit" style="display: none;">Cancel</button>
                       </div>
                     </div>
                     <div id="products-list" class="products-list"></div>

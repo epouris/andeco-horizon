@@ -599,7 +599,21 @@
 .products-list th { background: var(--bg-color); font-weight: 600; color: var(--text-primary); }
 .products-list tr:last-child td { border-bottom: none; }
 .products-list .product-price { text-align: right; }
-.products-list .btn-delete-product { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+.products-list .product-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.products-list .btn-edit-product,
+.products-list .btn-delete-product {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+.product-form-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
 
 @media (max-width: 768px) {
   .form-row { grid-template-columns: 1fr; }
