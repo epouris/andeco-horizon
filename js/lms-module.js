@@ -520,17 +520,20 @@
 
   function getLearnerProfile(userId) {
     var data = getData();
-    return (data.learnerProfiles || []).filter(function (p) { return p.userId === userId; })[0] || null;
+    var uid = String(userId || '');
+    return (data.learnerProfiles || []).filter(function (p) { return String(p.userId) === uid; })[0] || null;
   }
 
   function upsertLearnerProfile(userId, patch) {
     var data = getData();
-    var idx = (data.learnerProfiles || []).findIndex(function (p) { return p.userId === userId; });
+    var uid = String(userId || '');
+    var idx = (data.learnerProfiles || []).findIndex(function (p) { return String(p.userId) === uid; });
     var base = idx >= 0
       ? data.learnerProfiles[idx]
-      : { userId: userId, role: 'learner', department: '', notes: '', title: '', signatureImage: '' };
-    var next = Object.assign({}, base, patch || {}, { userId: userId });
-    if (!LEARNER_ROLES[next.role]) next.role = 'learner';
+      : { userId: uid, role: 'learner', department: '', notes: '', title: '', signatureImage: '' };
+    var next = Object.assign({}, base, patch || {}, { userId: uid });
+    var roleKey = String(next.role || '').trim().toLowerCase();
+    next.role = LEARNER_ROLES[roleKey] ? roleKey : 'learner';
     if (typeof next.signatureImage !== 'string') next.signatureImage = base.signatureImage || '';
     if (typeof next.title !== 'string') next.title = base.title || '';
     if (idx >= 0) data.learnerProfiles[idx] = next;
@@ -1620,7 +1623,13 @@
       '</tbody></table></div>';
     bindProfileSignatureControls();
     bindUserEditFormControls();
-    clearUserEditForm();
+    if (renderLearners._keepUserId) {
+      var keepId = renderLearners._keepUserId;
+      renderLearners._keepUserId = '';
+      fillUserEditForm(keepId);
+    } else {
+      clearUserEditForm();
+    }
   }
 
   function clearUserEditForm() {
@@ -3287,13 +3296,16 @@
     if (e.target && e.target.id === 'lms-user-edit-form') {
       e.preventDefault();
       if (!isAdmin()) return;
-      var fdP = new FormData(e.target);
-      var profileUserId = String(fdP.get('userId') || '').trim();
-      var displayName = String(fdP.get('displayName') || '').trim();
-      var password = String(fdP.get('password') || '');
-      var makeAdmin = !!(e.target.querySelector('[name="isAdmin"]') && e.target.querySelector('[name="isAdmin"]').checked);
+      var formEl = e.target;
+      var profileUserId = String((formEl.querySelector('[name="userId"]') || {}).value || '').trim();
+      var displayName = String((formEl.querySelector('[name="displayName"]') || {}).value || '').trim();
+      var password = String((formEl.querySelector('[name="password"]') || {}).value || '');
+      var makeAdmin = !!(formEl.querySelector('[name="isAdmin"]') && formEl.querySelector('[name="isAdmin"]').checked);
+      var roleSelect = formEl.querySelector('[name="role"]');
+      var roleVal = roleSelect ? String(roleSelect.value || '').trim().toLowerCase() : 'learner';
+      if (!LEARNER_ROLES[roleVal]) roleVal = 'learner';
       if (!profileUserId || !displayName) {
-        alert('Select a user and enter a display name.');
+        alert('Select a user (click Edit on a row) and enter a display name.');
         return;
       }
       if (!window.AndecoUsers || !window.AndecoUsers.saveUsers || !window.AndecoUsers.hashPassword) {
@@ -3301,20 +3313,20 @@
         return;
       }
       var usersList = window.AndecoUsers.getUsers();
-      var targetUser = usersList.filter(function (u) { return u.id === profileUserId; })[0];
+      var targetUser = usersList.filter(function (u) { return String(u.id) === profileUserId; })[0];
       if (!targetUser) {
         alert('User not found.');
         return;
       }
       if (targetUser.isAdmin && !makeAdmin) {
-        var otherAdmins = usersList.filter(function (u) { return u.isAdmin && u.id !== profileUserId; });
+        var otherAdmins = usersList.filter(function (u) { return u.isAdmin && String(u.id) !== profileUserId; });
         if (otherAdmins.length === 0) {
           alert('You cannot remove the last administrator. At least one admin is required.');
           return;
         }
       }
       var allowedModules = [];
-      e.target.querySelectorAll('input[name="lms-user-module"]:checked').forEach(function (cb) {
+      formEl.querySelectorAll('input[name="lms-user-module"]:checked').forEach(function (cb) {
         if (!cb.disabled) allowedModules.push(cb.value);
       });
       targetUser.displayName = displayName;
@@ -3324,27 +3336,39 @@
         : allowedModules;
 
       function finishUserSave() {
-        window.AndecoUsers.saveUsers(usersList);
-        if (window.AndecoUsers.syncSessionIfCurrent) window.AndecoUsers.syncSessionIfCurrent(targetUser);
-        // Keep enrollment display names in sync
-        var lmsData = getData();
-        (lmsData.enrollments || []).forEach(function (en) {
-          if (en.userId === profileUserId) en.userName = displayName;
-        });
-        saveData(lmsData);
+        // Save LMS profile BEFORE account persist so server payloads include the new role.
         var existingProfile = getLearnerProfile(profileUserId) || {};
-        var sigVal = String(fdP.get('signatureImage') || '').trim();
-        var sigCleared = e.target.getAttribute('data-signature-cleared') === '1';
+        var sigHidden = formEl.querySelector('[name="signatureImage"]');
+        var sigVal = String((sigHidden && sigHidden.value) || '').trim();
+        var sigCleared = formEl.getAttribute('data-signature-cleared') === '1';
         var patch = {
-          role: String(fdP.get('role') || 'learner'),
-          department: String(fdP.get('department') || '').trim(),
-          title: String(fdP.get('title') || '').trim(),
-          notes: String(fdP.get('notes') || '').trim()
+          role: roleVal,
+          department: String((formEl.querySelector('[name="department"]') || {}).value || '').trim(),
+          title: String((formEl.querySelector('[name="title"]') || {}).value || '').trim(),
+          notes: String((formEl.querySelector('[name="notes"]') || {}).value || '').trim()
         };
         if (sigVal) patch.signatureImage = sigVal;
         else if (sigCleared) patch.signatureImage = '';
         else if (existingProfile.signatureImage) patch.signatureImage = existingProfile.signatureImage;
-        upsertLearnerProfile(profileUserId, patch);
+
+        var lmsData = getData();
+        (lmsData.enrollments || []).forEach(function (en) {
+          if (String(en.userId) === profileUserId) en.userName = displayName;
+        });
+        var profiles = lmsData.learnerProfiles || [];
+        var pIdx = profiles.findIndex(function (p) { return String(p.userId) === profileUserId; });
+        var pBase = pIdx >= 0
+          ? profiles[pIdx]
+          : { userId: profileUserId, role: 'learner', department: '', notes: '', title: '', signatureImage: '' };
+        var nextProfile = Object.assign({}, pBase, patch, { userId: profileUserId, role: roleVal });
+        if (pIdx >= 0) profiles[pIdx] = nextProfile;
+        else profiles.push(nextProfile);
+        lmsData.learnerProfiles = profiles;
+        saveData(lmsData);
+
+        window.AndecoUsers.saveUsers(usersList);
+        if (window.AndecoUsers.syncSessionIfCurrent) window.AndecoUsers.syncSessionIfCurrent(targetUser);
+        renderLearners._keepUserId = profileUserId;
         renderLearners();
       }
 

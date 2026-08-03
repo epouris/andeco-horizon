@@ -273,7 +273,8 @@
 
   function getProfile(userId) {
     var data = getData();
-    return (data.learnerProfiles || []).filter(function (p) { return p.userId === userId; })[0] || null;
+    var uid = String(userId || '');
+    return (data.learnerProfiles || []).filter(function (p) { return String(p.userId) === uid; })[0] || null;
   }
 
   function portalRole() {
@@ -281,7 +282,8 @@
     if (!u) return 'learner';
     if (u.isAdmin) return 'instructor';
     var profile = getProfile(u.id);
-    if (profile && profile.role === 'instructor') return 'instructor';
+    var role = profile && String(profile.role || '').trim().toLowerCase();
+    if (role === 'instructor') return 'instructor';
     return 'learner';
   }
 
