@@ -613,59 +613,20 @@ body.dist-modal-open { overflow: hidden; }
 .dist-opt-check.is-selected {
   background: #e8f4f8;
   border-color: #7fb3c4;
+  box-shadow: inset 0 0 0 1px rgba(31, 111, 139, 0.15);
 }
 
 .dist-opt-check input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--dist-sea);
+  cursor: pointer;
 }
 
 .dist-opt-check-mark {
-  flex: 0 0 auto;
-  width: 1.15rem;
-  height: 1.15rem;
-  margin-top: 0.1rem;
-  border: 2px solid #94a3b8;
-  border-radius: 4px;
-  background: #fff;
-  box-sizing: border-box;
-  position: relative;
-}
-
-.dist-opt-check input[type="radio"] + .dist-opt-check-mark {
-  border-radius: 999px;
-}
-
-.dist-opt-check.is-selected .dist-opt-check-mark {
-  border-color: var(--dist-sea);
-  background: var(--dist-sea);
-}
-
-.dist-opt-check.is-selected .dist-opt-check-mark::after {
-  content: "";
-  position: absolute;
-  left: 0.28rem;
-  top: 0.05rem;
-  width: 0.28rem;
-  height: 0.55rem;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.dist-opt-check input[type="radio"]:checked + .dist-opt-check-mark::after,
-.dist-opt-check.is-selected input[type="radio"] + .dist-opt-check-mark::after {
-  left: 0.28rem;
-  top: 0.28rem;
-  width: 0.35rem;
-  height: 0.35rem;
-  border: 0;
-  border-radius: 999px;
-  background: #fff;
-  transform: none;
+  display: none;
 }
 
 .dist-opt-check-text {
