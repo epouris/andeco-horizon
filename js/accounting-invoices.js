@@ -268,6 +268,13 @@ const app = {
                         }
                     }
                 }
+                if (data.distribution && typeof data.distribution === 'object') {
+                    try { localStorage.setItem('andeco_distribution_data', JSON.stringify(data.distribution)); } catch (e) {}
+                    if (typeof window.DistributionModule !== 'undefined') {
+                        if (window.DistributionModule.applyRemote) window.DistributionModule.applyRemote(data.distribution);
+                        else if (window.DistributionModule.render) window.DistributionModule.render();
+                    }
+                }
                 if (data.payroll && typeof data.payroll === 'object') {
                     if (Array.isArray(data.payroll.employees)) setLocal('employees', data.payroll.employees);
                     if (data.payroll.payrollData && typeof data.payroll.payrollData === 'object') setLocal('payrollData', data.payroll.payrollData);
@@ -3777,6 +3784,15 @@ const app = {
                 purchases: [],
                 applicants: [],
                 settings: {}
+            }),
+            distribution: getLocal('andeco_distribution_data', {
+                brands: [],
+                models: [],
+                optionCategories: [],
+                options: [],
+                quotations: [],
+                soldVessels: [],
+                settings: {}
             })
         };
 
@@ -3791,7 +3807,7 @@ const app = {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        alert('Data exported successfully! (Accounting, Fleet, Crew, LMS)');
+        alert('Data exported successfully! (Accounting, Fleet, Crew, LMS, Distribution)');
     },
 
     importData(event) {
@@ -3843,6 +3859,9 @@ const app = {
                 }
                 if (importedData.lms && typeof importedData.lms === 'object') {
                     setLocal('andeco_lms_data', importedData.lms);
+                }
+                if (importedData.distribution && typeof importedData.distribution === 'object') {
+                    setLocal('andeco_distribution_data', importedData.distribution);
                 }
 
                 alert('Data imported successfully! The page will reload to apply changes.');

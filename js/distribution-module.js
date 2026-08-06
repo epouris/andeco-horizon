@@ -1,0 +1,1420 @@
+/**
+ * Distribution — boat brand catalog, quotations, sold vessels (OlympicRibs first).
+ * Persisted via Railway/Postgres JSON blob (distribution_data), same pattern as LMS.
+ */
+(function () {
+  'use strict';
+
+  const STORAGE_KEY = 'andeco_distribution_data';
+  const MODULE_ID = 'distribution';
+  const SECTIONS = ['dashboard', 'catalog', 'quotations', 'sold'];
+  const QUOTE_STATUSES = [
+    { value: 'draft', label: 'Draft' },
+    { value: 'sent', label: 'Sent' },
+    { value: 'accepted', label: 'Accepted' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'converted', label: 'Converted to proforma' }
+  ];
+
+  let state = null;
+  let section = 'dashboard';
+  let saveTimer = null;
+  let quoteEditorId = null;
+  let catalogBrandFilter = '';
+  let catalogModelFilter = '';
+
+  function uid(prefix) {
+    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function esc(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function money(n, currency) {
+    const v = Number(n) || 0;
+    const cur = currency || 'EUR';
+    try {
+      return new Intl.NumberFormat('el-GR', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(v);
+    } catch (_) {
+      return `${v.toFixed(2)} ${cur}`;
+    }
+  }
+
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function lineTotal(line) {
+    const qty = Number(line.qty) || 0;
+    const unit = Number(line.unitPrice) || 0;
+    const disc = Math.min(100, Math.max(0, Number(line.discountPercent) || 0));
+    return Math.round(qty * unit * (1 - disc / 100) * 100) / 100;
+  }
+
+  function lineSubtotal(line) {
+    return Math.round((Number(line.qty) || 0) * (Number(line.unitPrice) || 0) * 100) / 100;
+  }
+
+  function recalcQuote(q) {
+    const lines = Array.isArray(q.lines) ? q.lines : [];
+    let subtotal = 0;
+    let total = 0;
+    lines.forEach((ln) => {
+      ln.lineSubtotal = lineSubtotal(ln);
+      ln.lineTotal = lineTotal(ln);
+      subtotal += ln.lineSubtotal;
+      total += ln.lineTotal;
+    });
+    q.subtotal = Math.round(subtotal * 100) / 100;
+    q.total = Math.round(total * 100) / 100;
+    q.discountAmount = Math.round((q.subtotal - q.total) * 100) / 100;
+    return q;
+  }
+
+  function defaultCategories(brandId) {
+    return [
+      { id: uid('cat'), brandId, key: 'engines', label: 'Main engines', sortOrder: 10, subgroupBy: true },
+      { id: uid('cat'), brandId, key: 'engine_options', label: 'Engine options', sortOrder: 20, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'covers', label: 'Covers & awnings', sortOrder: 30, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'electronics', label: 'Electronic & electrical', sortOrder: 40, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'other', label: 'Other equipment', sortOrder: 50, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'decking', label: 'Decking', sortOrder: 60, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'trailer', label: 'Trailer', sortOrder: 70, subgroupBy: false }
+    ];
+  }
+
+  function seedOlympicRibs() {
+    const brandId = uid('brand');
+    const cats = defaultCategories(brandId);
+    const byKey = Object.fromEntries(cats.map((c) => [c.key, c.id]));
+    const modelId = uid('model');
+
+    const options = [
+      // Yamaha
+      { subgroup: 'YAMAHA', name: 'F250NSB — Light Grey Metallic', price: 74865.68 },
+      { subgroup: 'YAMAHA', name: 'F250NSB2 — Pearl White', price: 76362.99 },
+      { subgroup: 'YAMAHA', name: 'F300NSB — Light Grey Metallic', price: 77038.54 },
+      { subgroup: 'YAMAHA', name: 'F300NSB2 — Pearl White', price: 78579.41 },
+      { subgroup: 'YAMAHA', name: 'F300XSB2 — Pearl White', price: 78579.41 },
+      // Mercury
+      { subgroup: 'MERCURY', name: '250 AMS DTS EHPS', price: 73958.06 },
+      { subgroup: 'MERCURY', name: '250 CXL AMS DTS', price: 75517.34 },
+      { subgroup: 'MERCURY', name: '300 AMS DTS EHPS', price: 76000.0 },
+      { subgroup: 'MERCURY', name: '300 CXL AMS DTS', price: 77500.0 },
+      // Suzuki
+      { subgroup: 'SUZUKI', name: '250 DF APX', price: 63450.0 },
+      { subgroup: 'SUZUKI', name: '300 DF APX', price: 65200.0 },
+      // Honda
+      { subgroup: 'HONDA', name: 'BF250 XDU NEW', price: 65200.0 },
+      { subgroup: 'HONDA', name: 'BF250 XRU NEW', price: 67500.0 },
+      { subgroup: 'HONDA', name: 'BF300 XDU NEW', price: 70000.0 }
+    ].map((o) => ({
+      id: uid('opt'),
+      categoryId: byKey.engines,
+      brandId,
+      modelIds: [modelId],
+      subgroup: o.subgroup,
+      name: o.name,
+      price: o.price,
+      unit: 'pcs',
+      notes: '',
+      active: true
+    }));
+
+    const more = [
+      [byKey.engine_options, '', 'Hydraulic steering', 3069.84],
+      [byKey.engine_options, '', 'Auxiliary engine mount', 813.06],
+      [byKey.engine_options, '', 'Auxiliary engine Yamaha 9.9HP', 3928.06],
+      [byKey.engine_options, '', 'Auxiliary engine Mercury 9.9HP', 3928.06],
+      [byKey.engine_options, '', 'Auxiliary engine Suzuki 9.9HP', 3928.06],
+      [byKey.engine_options, '', 'Auxiliary engine Honda 9.9HP', 3928.06],
+      [byKey.covers, '', 'Full parking cover', 1436.5],
+      [byKey.covers, '', 'Console cover', 450.0],
+      [byKey.covers, '', 'Sun awning with INOX railings', 1434.51],
+      [byKey.covers, '', 'Aft locker screen', 600.0],
+      [byKey.electronics, '', 'Service battery', 350.0],
+      [byKey.electronics, '', 'Sound Hertz source & 2 speakers', 909.93],
+      [byKey.electronics, '', 'Sound Hertz, 4 speakers & amplifier', 1969.55],
+      [byKey.electronics, '', 'Raymarine Axiom 7" Plotter, transducer & map', 2105.16],
+      [byKey.electronics, '', 'Raymarine Axiom 9" Plotter, transducer & map', 2350.0],
+      [byKey.electronics, '', 'Floor lighting', 800.0],
+      [byKey.electronics, '', 'Windlass remote control', 750.0],
+      [byKey.electronics, '', 'Underwater lights', 1268.34],
+      [byKey.other, '', 'INOX anchor with swivel and 35m chain', 800.0],
+      [byKey.other, '', 'Handles on the tube (per piece)', 180.0],
+      [byKey.other, '', 'Painted INOX with electrostatic paint', 700.0],
+      [byKey.decking, '', 'SeaDeck foam', 2450.0],
+      [byKey.trailer, '', 'Dromeas 670 Trailer with approval', 6800.0],
+      [byKey.trailer, '', 'ELXIS A200', 7850.0]
+    ].map(([categoryId, subgroup, name, price]) => ({
+      id: uid('opt'),
+      categoryId,
+      brandId,
+      modelIds: [modelId],
+      subgroup: subgroup || '',
+      name,
+      price,
+      unit: 'pcs',
+      notes: '',
+      active: true
+    }));
+
+    return {
+      brands: [
+        {
+          id: brandId,
+          name: 'OlympicRibs',
+          slug: 'olympicribs',
+          logo: '',
+          notes: 'Distribution brand — RIBs & leisure boats',
+          active: true,
+          createdAt: new Date().toISOString()
+        }
+      ],
+      models: [
+        {
+          id: modelId,
+          brandId,
+          name: '720 Cruiser',
+          basePrice: 36455.05,
+          currency: 'EUR',
+          active: true,
+          techSpecs: {
+            loa: '7.13 m',
+            boa: '2.53 m',
+            internalBeam: '1.46 m',
+            tubeDiam: '50 cm',
+            maxHp: '300 HP',
+            minHp: '200 HP',
+            suggestedHp: '250 HP',
+            dryWeight: '900 Kg',
+            fuelTank: '440 ltrs',
+            ceCategory: 'C',
+            pax: '8'
+          },
+          standardEquipment: [
+            { category: 'Tubes', items: ['Orca 866 1670 DTEX fabric', 'Peripheral neoprene rubber'] },
+            { category: 'Tanks', items: ['Fuel tank INOX 2×220 ltrs', 'Water tank 140 ltrs'] },
+            {
+              category: 'Deck',
+              items: [
+                'Cushion set',
+                'Reclining bow sun deck',
+                'Steering wheel',
+                'Fresh water system with stern shower',
+                'INOX latches and fasteners',
+                'INOX hinges',
+                'Fuel and water filler caps',
+                'Console rail',
+                'USB sockets',
+                'Electric horn',
+                'Heavy-duty trailer cleat',
+                'Folding cleats',
+                'Swim ladder',
+                'INOX roll bar',
+                'Bow pulpit with roller'
+              ]
+            },
+            {
+              category: 'Electrical',
+              items: [
+                'Digital switches with CZONE system',
+                'Electric anchor windlass 500W',
+                'Navigation lights',
+                'Fresh water pump',
+                'Bilge pump',
+                'Main two-position switch with charging relay',
+                '12V electrical installation with marine cables'
+              ]
+            }
+          ],
+          notes: '',
+          createdAt: new Date().toISOString()
+        }
+      ],
+      optionCategories: cats,
+      options: options.concat(more),
+      quotations: [],
+      soldVessels: [],
+      settings: {
+        quotePrefix: 'ORQ',
+        quoteSequenceNumber: 1000,
+        defaultDiscountPercent: 25,
+        defaultCurrency: 'EUR',
+        companyName: 'Andeco / OlympicRibs Distribution',
+        companyDetails: '',
+        quoteFooter: 'Prices in EUR. Quotation valid for 30 days unless otherwise stated. Technical specifications subject to manufacturer updates.'
+      }
+    };
+  }
+
+  function emptyState() {
+    return seedOlympicRibs();
+  }
+
+  function normalizeState(raw) {
+    const base = emptyState();
+    if (!raw || typeof raw !== 'object') return base;
+    const s = {
+      brands: Array.isArray(raw.brands) ? raw.brands : base.brands,
+      models: Array.isArray(raw.models) ? raw.models : base.models,
+      optionCategories: Array.isArray(raw.optionCategories) ? raw.optionCategories : base.optionCategories,
+      options: Array.isArray(raw.options) ? raw.options : base.options,
+      quotations: Array.isArray(raw.quotations) ? raw.quotations : [],
+      soldVessels: Array.isArray(raw.soldVessels) ? raw.soldVessels : [],
+      settings: Object.assign({}, base.settings, raw.settings || {})
+    };
+    if (!s.brands.length) {
+      const seeded = seedOlympicRibs();
+      s.brands = seeded.brands;
+      s.models = seeded.models;
+      s.optionCategories = seeded.optionCategories;
+      s.options = seeded.options;
+      s.settings = Object.assign({}, seeded.settings, s.settings);
+    }
+    return s;
+  }
+
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return emptyState();
+      return normalizeState(JSON.parse(raw));
+    } catch (_) {
+      return emptyState();
+    }
+  }
+
+  function saveLocal() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (_) { /* ignore */ }
+  }
+
+  function persistAllIfFile() {
+    try {
+      if (window.AccountingData && typeof window.AccountingData.persistAll === 'function') {
+        window.AccountingData.persistAll();
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  function persist(immediate) {
+    saveLocal();
+    const run = () => persistAllIfFile();
+    if (immediate) {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = null;
+      run();
+      return;
+    }
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(run, 400);
+  }
+
+  function brandById(id) {
+    return (state.brands || []).find((b) => b.id === id) || null;
+  }
+
+  function modelById(id) {
+    return (state.models || []).find((m) => m.id === id) || null;
+  }
+
+  function categoryById(id) {
+    return (state.optionCategories || []).find((c) => c.id === id) || null;
+  }
+
+  function optionById(id) {
+    return (state.options || []).find((o) => o.id === id) || null;
+  }
+
+  function quoteById(id) {
+    return (state.quotations || []).find((q) => q.id === id) || null;
+  }
+
+  function clientsList() {
+    try {
+      if (window.DataStore && typeof window.DataStore.getClients === 'function') {
+        return window.DataStore.getClients() || [];
+      }
+    } catch (_) { /* ignore */ }
+    return [];
+  }
+
+  function clientLabel(c) {
+    if (!c) return '';
+    return c.company || c.name || c.contactName || c.email || c.id || 'Client';
+  }
+
+  function nextQuoteNumber() {
+    const n = Number(state.settings.quoteSequenceNumber) || 1000;
+    state.settings.quoteSequenceNumber = n + 1;
+    const prefix = state.settings.quotePrefix || 'ORQ';
+    return `${prefix}-${String(n).padStart(4, '0')}`;
+  }
+
+  function setSection(name, options) {
+    if (!SECTIONS.includes(name)) name = 'dashboard';
+    const keepEditor = options && options.keepEditor;
+    section = name;
+    if (!keepEditor) quoteEditorId = null;
+    document.querySelectorAll('#page-distribution .dist-section-panel').forEach((el) => {
+      const match = el.getAttribute('data-section') === name;
+      el.classList.toggle('active', match);
+      el.style.display = match ? 'block' : 'none';
+    });
+    render();
+  }
+
+  function toast(msg, type) {
+    if (typeof window.showToast === 'function') window.showToast(msg, type || 'success');
+    else console.log(msg);
+  }
+
+  /* ─── Dashboard ─── */
+  function renderDashboard() {
+    const el = document.getElementById('dist-dashboard');
+    if (!el) return;
+    const brands = state.brands.length;
+    const models = state.models.filter((m) => m.active !== false).length;
+    const openQuotes = state.quotations.filter((q) => !['rejected', 'converted'].includes(q.status)).length;
+    const sold = state.soldVessels.length;
+    const recent = [...state.quotations].sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '')).slice(0, 6);
+
+    el.innerHTML = `
+      <div class="dist-metrics">
+        <div class="dist-metric"><div class="label">Brands</div><div class="value">${brands}</div></div>
+        <div class="dist-metric"><div class="label">Active models</div><div class="value">${models}</div></div>
+        <div class="dist-metric"><div class="label">Open quotations</div><div class="value">${openQuotes}</div></div>
+        <div class="dist-metric"><div class="label">Sold vessels</div><div class="value">${sold}</div></div>
+      </div>
+      <div class="dist-card">
+        <div class="dist-card-header">
+          <h3>Recent quotations</h3>
+          <button type="button" class="btn btn-primary btn-sm" data-dist-goto="quotations">New quote</button>
+        </div>
+        ${recent.length ? `
+          <table class="dist-table">
+            <thead><tr><th>Number</th><th>Client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              ${recent.map((q) => {
+                const m = modelById(q.modelId);
+                return `<tr>
+                  <td><strong>${esc(q.number)}</strong></td>
+                  <td>${esc(q.clientSnapshot?.name || '—')}</td>
+                  <td>${esc(m?.name || '—')}</td>
+                  <td>${money(q.total, q.currency)}</td>
+                  <td><span class="dist-badge ${esc(q.status)}">${esc(q.status)}</span></td>
+                  <td><button type="button" class="btn btn-secondary btn-sm" data-dist-open-quote="${esc(q.id)}">Open</button></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>` : '<div class="dist-empty">No quotations yet. Create a model catalog, then build your first quote.</div>'}
+      </div>
+      <div class="dist-card" style="margin-top:1rem">
+        <div class="dist-card-header"><h3>Distribution brands</h3>
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-add-brand">Add brand</button>
+        </div>
+        <div class="dist-list">
+          ${state.brands.map((b) => `
+            <div class="dist-list-item">
+              <div>
+                <strong>${esc(b.name)}</strong>
+                <div class="meta">${esc(b.notes || '')} · ${(state.models.filter((m) => m.brandId === b.id).length)} models</div>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" data-dist-edit-brand="${esc(b.id)}">Edit</button>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    el.querySelector('[data-dist-goto="quotations"]')?.addEventListener('click', () => {
+      if (typeof window.setDistributionSection === 'function') window.setDistributionSection('quotations');
+      else setSection('quotations');
+      createQuote();
+    });
+    el.querySelectorAll('[data-dist-open-quote]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (typeof window.setDistributionSection === 'function') window.setDistributionSection('quotations');
+        else setSection('quotations');
+        openQuoteEditor(btn.getAttribute('data-dist-open-quote'));
+      });
+    });
+    el.querySelector('#dist-add-brand')?.addEventListener('click', () => editBrand(null));
+    el.querySelectorAll('[data-dist-edit-brand]').forEach((btn) => {
+      btn.addEventListener('click', () => editBrand(btn.getAttribute('data-dist-edit-brand')));
+    });
+  }
+
+  function editBrand(id) {
+    const existing = id ? brandById(id) : null;
+    const name = prompt('Brand name:', existing?.name || '');
+    if (name == null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const notes = prompt('Notes (optional):', existing?.notes || '') ?? (existing?.notes || '');
+    if (existing) {
+      existing.name = trimmed;
+      existing.notes = notes;
+    } else {
+      const brandId = uid('brand');
+      state.brands.push({
+        id: brandId,
+        name: trimmed,
+        slug: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        logo: '',
+        notes,
+        active: true,
+        createdAt: new Date().toISOString()
+      });
+      state.optionCategories.push(...defaultCategories(brandId));
+    }
+    persist();
+    render();
+    toast(existing ? 'Brand updated' : 'Brand added');
+  }
+
+  /* ─── Catalog ─── */
+  function renderCatalog() {
+    const el = document.getElementById('dist-catalog');
+    if (!el) return;
+    if (!catalogBrandFilter && state.brands[0]) catalogBrandFilter = state.brands[0].id;
+    const brandId = catalogBrandFilter;
+    const models = state.models.filter((m) => m.brandId === brandId);
+    if (!catalogModelFilter || !models.some((m) => m.id === catalogModelFilter)) {
+      catalogModelFilter = models[0]?.id || '';
+    }
+    const model = modelById(catalogModelFilter);
+    const cats = state.optionCategories
+      .filter((c) => c.brandId === brandId)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+    const optionsForModel = (catId) =>
+      state.options.filter((o) => {
+        if (o.categoryId !== catId || o.active === false) return false;
+        if (!catalogModelFilter) return true;
+        if (!o.modelIds || !o.modelIds.length) return true;
+        return o.modelIds.includes(catalogModelFilter);
+      });
+
+    el.innerHTML = `
+      <div class="dist-toolbar">
+        <div class="dist-filters">
+          <label>Brand
+            <select id="dist-cat-brand">${state.brands.map((b) => `<option value="${esc(b.id)}" ${b.id === brandId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
+          </label>
+          <label>Model
+            <select id="dist-cat-model">
+              ${models.map((m) => `<option value="${esc(m.id)}" ${m.id === catalogModelFilter ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
+              ${!models.length ? '<option value="">— No models —</option>' : ''}
+            </select>
+          </label>
+        </div>
+        <div class="dist-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-add-model">Add model</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-edit-model" ${model ? '' : 'disabled'}>Edit model</button>
+          <button type="button" class="btn btn-primary btn-sm" id="dist-add-option" ${model ? '' : 'disabled'}>Add option</button>
+        </div>
+      </div>
+      ${model ? `
+        <div class="dist-card">
+          <div class="dist-card-header">
+            <h3>${esc(model.name)} — standard equipment & specs</h3>
+            <div class="dist-price">${money(model.basePrice, model.currency)} <span style="font-size:.75rem;font-weight:500;color:var(--text-muted)">base hull</span></div>
+          </div>
+          <div class="dist-split">
+            <div>
+              <h4 style="margin:0 0 .5rem;font-size:.85rem;color:var(--text-muted)">Standard equipment</h4>
+              ${(model.standardEquipment || []).map((g) => `
+                <div class="dist-opt-group">
+                  <div class="dist-opt-group-title">${esc(g.category)}</div>
+                  <ul style="margin:0;padding-left:1.1rem;font-size:.88rem;color:var(--text-secondary)">
+                    ${(g.items || []).map((it) => `<li>${esc(it)}</li>`).join('')}
+                  </ul>
+                </div>`).join('') || '<p class="dist-empty">No standard equipment listed.</p>'}
+            </div>
+            <div>
+              <h4 style="margin:0 0 .5rem;font-size:.85rem;color:var(--text-muted)">Technical specifications</h4>
+              <table class="dist-table">
+                <tbody>
+                  ${Object.entries(model.techSpecs || {}).map(([k, v]) => `
+                    <tr><td style="text-transform:uppercase;font-size:.72rem;letter-spacing:.04em;color:var(--text-muted)">${esc(k)}</td><td><strong>${esc(v)}</strong></td></tr>`).join('') || '<tr><td colspan="2">No specs</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="dist-card" style="margin-top:1rem">
+          <div class="dist-card-header"><h3>Options & prices</h3>
+            <span class="dist-badge draft">${optionsForModel(cats[0]?.id).length >= 0 ? state.options.filter((o) => o.brandId === brandId && (!o.modelIds?.length || o.modelIds.includes(model.id))).length : 0} options</span>
+          </div>
+          ${cats.map((cat) => {
+            const opts = optionsForModel(cat.id);
+            if (!opts.length) {
+              return `<div class="dist-opt-group"><div class="dist-opt-group-title">${esc(cat.label)}</div><p class="dist-empty" style="padding:.5rem 0">No options yet.</p></div>`;
+            }
+            if (cat.subgroupBy) {
+              const groups = {};
+              opts.forEach((o) => {
+                const g = o.subgroup || 'Other';
+                (groups[g] = groups[g] || []).push(o);
+              });
+              return `<div class="dist-opt-group"><div class="dist-opt-group-title">${esc(cat.label)}</div>
+                ${Object.keys(groups).map((g) => `
+                  <div style="margin-bottom:.75rem">
+                    <div style="font-weight:700;font-size:.8rem;margin:.4rem 0;color:var(--accent)">${esc(g)}</div>
+                    <table class="dist-table"><thead><tr><th>Option</th><th>Price</th><th></th></tr></thead>
+                    <tbody>${groups[g].map((o) => optionRow(o)).join('')}</tbody></table>
+                  </div>`).join('')}
+              </div>`;
+            }
+            return `<div class="dist-opt-group"><div class="dist-opt-group-title">${esc(cat.label)}</div>
+              <table class="dist-table"><thead><tr><th>Option</th><th>Price</th><th></th></tr></thead>
+              <tbody>${opts.map((o) => optionRow(o)).join('')}</tbody></table></div>`;
+          }).join('')}
+        </div>` : '<div class="dist-empty">Add a boat model for this brand to manage options and prices.</div>'}`;
+
+    el.querySelector('#dist-cat-brand')?.addEventListener('change', (e) => {
+      catalogBrandFilter = e.target.value;
+      catalogModelFilter = '';
+      renderCatalog();
+    });
+    el.querySelector('#dist-cat-model')?.addEventListener('change', (e) => {
+      catalogModelFilter = e.target.value;
+      renderCatalog();
+    });
+    el.querySelector('#dist-add-model')?.addEventListener('click', () => editModel(null, brandId));
+    el.querySelector('#dist-edit-model')?.addEventListener('click', () => model && editModel(model.id, brandId));
+    el.querySelector('#dist-add-option')?.addEventListener('click', () => model && editOption(null, brandId, model.id));
+    el.querySelectorAll('[data-dist-edit-opt]').forEach((btn) => {
+      btn.addEventListener('click', () => editOption(btn.getAttribute('data-dist-edit-opt'), brandId, catalogModelFilter));
+    });
+    el.querySelectorAll('[data-dist-del-opt]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Deactivate this option?')) return;
+        const o = optionById(btn.getAttribute('data-dist-del-opt'));
+        if (o) { o.active = false; persist(); renderCatalog(); }
+      });
+    });
+  }
+
+  function optionRow(o) {
+    return `<tr>
+      <td>${esc(o.name)}${o.notes ? `<div class="meta" style="font-size:.75rem;color:var(--text-muted)">${esc(o.notes)}</div>` : ''}</td>
+      <td class="dist-price" style="font-size:.95rem">${money(o.price)}</td>
+      <td class="dist-actions">
+        <button type="button" class="btn btn-secondary btn-sm" data-dist-edit-opt="${esc(o.id)}">Edit</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-dist-del-opt="${esc(o.id)}">Remove</button>
+      </td>
+    </tr>`;
+  }
+
+  function editModel(id, brandId) {
+    const existing = id ? modelById(id) : null;
+    const name = prompt('Model name:', existing?.name || '');
+    if (name == null || !name.trim()) return;
+    const priceStr = prompt('Base hull price (EUR):', existing ? String(existing.basePrice) : '0');
+    if (priceStr == null) return;
+    const basePrice = Number(String(priceStr).replace(',', '.')) || 0;
+    if (existing) {
+      existing.name = name.trim();
+      existing.basePrice = basePrice;
+    } else {
+      state.models.push({
+        id: uid('model'),
+        brandId,
+        name: name.trim(),
+        basePrice,
+        currency: state.settings.defaultCurrency || 'EUR',
+        active: true,
+        techSpecs: {},
+        standardEquipment: [],
+        notes: '',
+        createdAt: new Date().toISOString()
+      });
+    }
+    persist();
+    renderCatalog();
+    toast(existing ? 'Model updated' : 'Model created');
+  }
+
+  function editOption(id, brandId, modelId) {
+    const existing = id ? optionById(id) : null;
+    const cats = state.optionCategories.filter((c) => c.brandId === brandId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    if (!cats.length) {
+      toast('No option categories for this brand', 'error');
+      return;
+    }
+    const catLabels = cats.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
+    const catPick = prompt(`Category number:\n${catLabels}`, existing ? String(cats.findIndex((c) => c.id === existing.categoryId) + 1) : '1');
+    if (catPick == null) return;
+    const cat = cats[Number(catPick) - 1];
+    if (!cat) { toast('Invalid category', 'error'); return; }
+    const name = prompt('Option name:', existing?.name || '');
+    if (name == null || !name.trim()) return;
+    const priceStr = prompt('Unit price (EUR):', existing ? String(existing.price) : '0');
+    if (priceStr == null) return;
+    const price = Number(String(priceStr).replace(',', '.')) || 0;
+    let subgroup = existing?.subgroup || '';
+    if (cat.subgroupBy) {
+      const sg = prompt('Subgroup (e.g. YAMAHA, MERCURY):', subgroup || '');
+      if (sg == null) return;
+      subgroup = sg.trim().toUpperCase();
+    }
+    if (existing) {
+      existing.categoryId = cat.id;
+      existing.name = name.trim();
+      existing.price = price;
+      existing.subgroup = subgroup;
+      if (modelId && (!existing.modelIds || !existing.modelIds.includes(modelId))) {
+        existing.modelIds = [...(existing.modelIds || []), modelId];
+      }
+      existing.active = true;
+    } else {
+      state.options.push({
+        id: uid('opt'),
+        categoryId: cat.id,
+        brandId,
+        modelIds: modelId ? [modelId] : [],
+        subgroup,
+        name: name.trim(),
+        price,
+        unit: 'pcs',
+        notes: '',
+        active: true
+      });
+    }
+    persist();
+    renderCatalog();
+    toast(existing ? 'Option updated' : 'Option added');
+  }
+
+  /* ─── Quotations ─── */
+  function renderQuotations() {
+    const el = document.getElementById('dist-quotations');
+    if (!el) return;
+    if (quoteEditorId) {
+      renderQuoteEditor(el);
+      return;
+    }
+    const list = [...state.quotations].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    el.innerHTML = `
+      <div class="dist-toolbar">
+        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build client quotations from model options, apply line discounts, print, and convert to a proforma invoice.</p>
+        <button type="button" class="btn btn-primary" id="dist-new-quote">New quotation</button>
+      </div>
+      <div class="dist-card">
+        ${list.length ? `
+          <table class="dist-table">
+            <thead><tr><th>Number</th><th>Date</th><th>Client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              ${list.map((q) => {
+                const m = modelById(q.modelId);
+                return `<tr>
+                  <td><strong>${esc(q.number)}</strong></td>
+                  <td>${esc(q.date || '—')}</td>
+                  <td>${esc(q.clientSnapshot?.name || '—')}</td>
+                  <td>${esc(m?.name || '—')}</td>
+                  <td>${money(q.total, q.currency)}</td>
+                  <td><span class="dist-badge ${esc(q.status)}">${esc(q.status)}</span>
+                    ${q.convertedToProformaId ? `<div class="meta" style="font-size:.72rem">PF linked</div>` : ''}
+                  </td>
+                  <td class="dist-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-open-quote="${esc(q.id)}">Open</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-print-quote="${esc(q.id)}">Print</button>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>` : '<div class="dist-empty">No quotations yet.</div>'}
+      </div>`;
+    el.querySelector('#dist-new-quote')?.addEventListener('click', () => createQuote());
+    el.querySelectorAll('[data-dist-open-quote]').forEach((btn) => {
+      btn.addEventListener('click', () => openQuoteEditor(btn.getAttribute('data-dist-open-quote')));
+    });
+    el.querySelectorAll('[data-dist-print-quote]').forEach((btn) => {
+      btn.addEventListener('click', () => printQuote(btn.getAttribute('data-dist-print-quote')));
+    });
+  }
+
+  function createQuote() {
+    const brand = state.brands[0];
+    if (!brand) { toast('Add a brand first', 'error'); return; }
+    const models = state.models.filter((m) => m.brandId === brand.id && m.active !== false);
+    if (!models.length) { toast('Add a model first', 'error'); return; }
+    const model = models[0];
+    const disc = Number(state.settings.defaultDiscountPercent) || 0;
+    const q = {
+      id: uid('quote'),
+      number: nextQuoteNumber(),
+      date: todayISO(),
+      status: 'draft',
+      clientId: '',
+      clientSnapshot: { name: '', email: '', phone: '', company: '', address: '' },
+      brandId: brand.id,
+      modelId: model.id,
+      currency: model.currency || 'EUR',
+      lines: [
+        {
+          id: uid('line'),
+          kind: 'model',
+          refId: model.id,
+          description: `${brand.name} ${model.name} — standard equipment`,
+          qty: 1,
+          unit: 'pcs',
+          unitPrice: model.basePrice || 0,
+          discountPercent: disc,
+          categoryKey: 'hull'
+        }
+      ],
+      notes: '',
+      taxRate: 0,
+      taxAmount: 0,
+      convertedToProformaId: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    recalcQuote(q);
+    state.quotations.unshift(q);
+    persist(true);
+    openQuoteEditor(q.id);
+  }
+
+  function openQuoteEditor(id) {
+    quoteEditorId = id;
+    renderQuotations();
+  }
+
+  function renderQuoteEditor(el) {
+    const q = quoteById(quoteEditorId);
+    if (!q) {
+      quoteEditorId = null;
+      renderQuotations();
+      return;
+    }
+    recalcQuote(q);
+    const brand = brandById(q.brandId);
+    const model = modelById(q.modelId);
+    const clients = clientsList();
+    const cats = state.optionCategories
+      .filter((c) => c.brandId === q.brandId)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+    const optionChoices = state.options.filter((o) => {
+      if (o.brandId !== q.brandId || o.active === false) return false;
+      if (!o.modelIds || !o.modelIds.length) return true;
+      return o.modelIds.includes(q.modelId);
+    });
+
+    el.innerHTML = `
+      <div class="dist-toolbar">
+        <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-back">← Back to list</button>
+        <div class="dist-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-print">Print / PDF</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-proforma" ${q.convertedToProformaId ? 'disabled' : ''}>Convert to proforma</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-sold">Mark as sold vessel</button>
+          <button type="button" class="btn btn-primary btn-sm" id="dist-quote-save">Save</button>
+        </div>
+      </div>
+      <div class="dist-card">
+        <div class="dist-card-header">
+          <h3>Quotation ${esc(q.number)}</h3>
+          <span class="dist-badge ${esc(q.status)}">${esc(q.status)}</span>
+        </div>
+        <div class="dist-form-grid">
+          <div class="dist-field"><label>Date</label><input type="date" id="dq-date" value="${esc(q.date || '')}"></div>
+          <div class="dist-field"><label>Status</label>
+            <select id="dq-status">${QUOTE_STATUSES.map((s) => `<option value="${s.value}" ${q.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
+          </div>
+          <div class="dist-field"><label>Client (CRM)</label>
+            <select id="dq-client">
+              <option value="">— Manual / walk-in —</option>
+              ${clients.map((c) => `<option value="${esc(c.id)}" ${q.clientId === c.id ? 'selected' : ''}>${esc(clientLabel(c))}</option>`).join('')}
+            </select>
+          </div>
+          <div class="dist-field"><label>Client name</label><input type="text" id="dq-cname" value="${esc(q.clientSnapshot?.name || '')}" placeholder="Company or contact"></div>
+          <div class="dist-field"><label>Email</label><input type="email" id="dq-cemail" value="${esc(q.clientSnapshot?.email || '')}"></div>
+          <div class="dist-field"><label>Phone</label><input type="text" id="dq-cphone" value="${esc(q.clientSnapshot?.phone || '')}"></div>
+          <div class="dist-field"><label>Brand</label>
+            <select id="dq-brand">${state.brands.map((b) => `<option value="${esc(b.id)}" ${b.id === q.brandId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
+          </div>
+          <div class="dist-field"><label>Model</label>
+            <select id="dq-model">${state.models.filter((m) => m.brandId === q.brandId).map((m) => `<option value="${esc(m.id)}" ${m.id === q.modelId ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div class="dist-field" style="margin-top:.75rem"><label>Notes (shown on quote)</label>
+          <textarea id="dq-notes" rows="2">${esc(q.notes || '')}</textarea>
+        </div>
+      </div>
+
+      <div class="dist-card" style="margin-top:1rem">
+        <div class="dist-card-header">
+          <h3>Line items</h3>
+          <div class="dist-actions">
+            <select id="dq-add-opt" style="min-width:220px">
+              <option value="">— Add catalog option —</option>
+              ${cats.map((cat) => {
+                const opts = optionChoices.filter((o) => o.categoryId === cat.id);
+                if (!opts.length) return '';
+                return `<optgroup label="${esc(cat.label)}">${opts.map((o) =>
+                  `<option value="${esc(o.id)}">${esc(o.subgroup ? o.subgroup + ' · ' : '')}${esc(o.name)} (${money(o.price)})</option>`
+                ).join('')}</optgroup>`;
+              }).join('')}
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" id="dq-add-custom">Custom line</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="dist-table dist-quote-lines">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Qty</th>
+                <th>Unit €</th>
+                <th>Subtotal</th>
+                <th>Disc. %</th>
+                <th>Final €</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(q.lines || []).map((ln, idx) => `
+                <tr data-line-idx="${idx}">
+                  <td><input type="text" data-f="description" value="${esc(ln.description)}"></td>
+                  <td><input type="number" min="0" step="1" data-f="qty" value="${esc(ln.qty)}"></td>
+                  <td><input type="number" min="0" step="0.01" data-f="unitPrice" value="${esc(ln.unitPrice)}"></td>
+                  <td>${money(lineSubtotal(ln), q.currency)}</td>
+                  <td><input type="number" min="0" max="100" step="1" data-f="discountPercent" value="${esc(ln.discountPercent)}"></td>
+                  <td><strong>${money(lineTotal(ln), q.currency)}</strong></td>
+                  <td><button type="button" class="btn btn-secondary btn-sm" data-del-line="${idx}">×</button></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="dist-totals">
+          <div class="row"><span>Quote total (list)</span><strong>${money(q.subtotal, q.currency)}</strong></div>
+          <div class="row"><span>Discounts</span><strong>− ${money(q.discountAmount, q.currency)}</strong></div>
+          <div class="row grand"><span>Final quote total</span><strong>${money(q.total, q.currency)}</strong></div>
+          ${q.convertedToProformaId ? `<div class="row"><span>Proforma</span><strong>${esc(q.convertedToProformaNumber || q.convertedToProformaId)}</strong></div>` : ''}
+        </div>
+      </div>`;
+
+    const saveFields = () => {
+      q.date = el.querySelector('#dq-date')?.value || q.date;
+      q.status = el.querySelector('#dq-status')?.value || q.status;
+      q.notes = el.querySelector('#dq-notes')?.value || '';
+      q.clientSnapshot = {
+        name: el.querySelector('#dq-cname')?.value || '',
+        email: el.querySelector('#dq-cemail')?.value || '',
+        phone: el.querySelector('#dq-cphone')?.value || '',
+        company: q.clientSnapshot?.company || '',
+        address: q.clientSnapshot?.address || ''
+      };
+      q.clientId = el.querySelector('#dq-client')?.value || '';
+      const newBrand = el.querySelector('#dq-brand')?.value;
+      const newModel = el.querySelector('#dq-model')?.value;
+      if (newBrand && newBrand !== q.brandId) {
+        q.brandId = newBrand;
+        const ms = state.models.filter((m) => m.brandId === newBrand);
+        q.modelId = ms[0]?.id || '';
+      } else if (newModel) {
+        q.modelId = newModel;
+      }
+      el.querySelectorAll('.dist-quote-lines tbody tr').forEach((tr) => {
+        const idx = Number(tr.getAttribute('data-line-idx'));
+        const ln = q.lines[idx];
+        if (!ln) return;
+        tr.querySelectorAll('[data-f]').forEach((input) => {
+          const f = input.getAttribute('data-f');
+          if (f === 'description') ln.description = input.value;
+          else ln[f] = Number(input.value) || 0;
+        });
+      });
+      recalcQuote(q);
+      q.updatedAt = new Date().toISOString();
+    };
+
+    el.querySelector('#dist-quote-back')?.addEventListener('click', () => {
+      saveFields();
+      persist(true);
+      quoteEditorId = null;
+      renderQuotations();
+    });
+    el.querySelector('#dist-quote-save')?.addEventListener('click', () => {
+      saveFields();
+      persist(true);
+      toast('Quotation saved');
+      renderQuoteEditor(el);
+    });
+    el.querySelector('#dist-quote-print')?.addEventListener('click', () => {
+      saveFields();
+      persist(true);
+      printQuote(q.id);
+    });
+    el.querySelector('#dist-quote-proforma')?.addEventListener('click', () => {
+      saveFields();
+      convertToProforma(q);
+    });
+    el.querySelector('#dist-quote-sold')?.addEventListener('click', () => {
+      saveFields();
+      createSoldFromQuote(q);
+    });
+    el.querySelector('#dq-client')?.addEventListener('change', (e) => {
+      const c = clients.find((x) => x.id === e.target.value);
+      if (!c) return;
+      el.querySelector('#dq-cname').value = clientLabel(c);
+      el.querySelector('#dq-cemail').value = c.email || '';
+      el.querySelector('#dq-cphone').value = c.phone || c.mobile || '';
+    });
+    el.querySelector('#dq-brand')?.addEventListener('change', () => {
+      saveFields();
+      persist();
+      renderQuoteEditor(el);
+    });
+    el.querySelector('#dq-model')?.addEventListener('change', () => {
+      saveFields();
+      const m = modelById(el.querySelector('#dq-model').value);
+      const b = brandById(q.brandId);
+      if (m) {
+        const hull = q.lines.find((l) => l.kind === 'model');
+        if (hull) {
+          hull.refId = m.id;
+          hull.description = `${b?.name || ''} ${m.name} — standard equipment`.trim();
+          hull.unitPrice = m.basePrice || 0;
+        }
+        q.modelId = m.id;
+        q.currency = m.currency || q.currency;
+      }
+      persist();
+      renderQuoteEditor(el);
+    });
+    el.querySelector('#dq-add-opt')?.addEventListener('change', (e) => {
+      const optId = e.target.value;
+      if (!optId) return;
+      const o = optionById(optId);
+      const cat = o ? categoryById(o.categoryId) : null;
+      if (!o) return;
+      saveFields();
+      q.lines.push({
+        id: uid('line'),
+        kind: 'option',
+        refId: o.id,
+        description: `${o.subgroup ? o.subgroup + ' · ' : ''}${o.name}`,
+        qty: 1,
+        unit: o.unit || 'pcs',
+        unitPrice: o.price || 0,
+        discountPercent: Number(state.settings.defaultDiscountPercent) || 0,
+        categoryKey: cat?.key || ''
+      });
+      recalcQuote(q);
+      persist();
+      renderQuoteEditor(el);
+    });
+    el.querySelector('#dq-add-custom')?.addEventListener('click', () => {
+      saveFields();
+      q.lines.push({
+        id: uid('line'),
+        kind: 'custom',
+        refId: '',
+        description: 'Custom item',
+        qty: 1,
+        unit: 'pcs',
+        unitPrice: 0,
+        discountPercent: Number(state.settings.defaultDiscountPercent) || 0,
+        categoryKey: 'custom'
+      });
+      persist();
+      renderQuoteEditor(el);
+    });
+    el.querySelectorAll('[data-del-line]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        saveFields();
+        const idx = Number(btn.getAttribute('data-del-line'));
+        q.lines.splice(idx, 1);
+        recalcQuote(q);
+        persist();
+        renderQuoteEditor(el);
+      });
+    });
+    el.querySelectorAll('.dist-quote-lines [data-f]').forEach((input) => {
+      input.addEventListener('change', () => {
+        saveFields();
+        persist();
+        renderQuoteEditor(el);
+      });
+    });
+  }
+
+  function printQuote(id) {
+    const q = quoteById(id);
+    if (!q) return;
+    recalcQuote(q);
+    const brand = brandById(q.brandId);
+    const model = modelById(q.modelId);
+    const company = state.settings.companyName || 'OlympicRibs Distribution';
+    const footer = state.settings.quoteFooter || '';
+    const specs = model?.techSpecs || {};
+    const std = model?.standardEquipment || [];
+
+    const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1000');
+    if (!win) {
+      toast('Allow pop-ups to print the quotation', 'error');
+      return;
+    }
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(q.number)}</title>
+      <style>
+        body{font-family:Georgia,'Times New Roman',serif;color:#0f172a;margin:32px;font-size:13px}
+        h1{font-size:22px;margin:0 0 4px;letter-spacing:.04em}
+        h2{font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:.08em;color:#334155;border-bottom:1px solid #cbd5e1;padding-bottom:4px}
+        .muted{color:#64748b}
+        .header{display:flex;justify-content:space-between;gap:24px;margin-bottom:20px}
+        .meta td{padding:2px 12px 2px 0}
+        table.lines{width:100%;border-collapse:collapse;margin-top:8px}
+        table.lines th,table.lines td{border-bottom:1px solid #e2e8f0;padding:8px 6px;text-align:left}
+        table.lines th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b}
+        table.lines td.num,table.lines th.num{text-align:right}
+        .totals{margin-top:16px;width:280px;margin-left:auto}
+        .totals .row{display:flex;justify-content:space-between;padding:4px 0}
+        .totals .grand{font-size:16px;font-weight:700;border-top:2px solid #0f172a;margin-top:6px;padding-top:8px}
+        .highlight{background:#fef08a;padding:8px 12px;font-weight:700}
+        ul{margin:4px 0 12px;padding-left:18px}
+        @media print{body{margin:16px} .no-print{display:none}}
+      </style></head><body>
+      <div class="no-print" style="margin-bottom:16px">
+        <button onclick="window.print()">Print / Save PDF</button>
+        <button onclick="window.close()">Close</button>
+      </div>
+      <div class="header">
+        <div>
+          <h1>${esc(company)}</h1>
+          <div class="muted">${esc(brand?.name || '')} · Distribution quotation</div>
+          ${state.settings.companyDetails ? `<div class="muted" style="margin-top:6px;white-space:pre-line">${esc(state.settings.companyDetails)}</div>` : ''}
+        </div>
+        <div>
+          <table class="meta">
+            <tr><td class="muted">Quote</td><td><strong>${esc(q.number)}</strong></td></tr>
+            <tr><td class="muted">Date</td><td>${esc(q.date || '')}</td></tr>
+            <tr><td class="muted">Status</td><td>${esc(q.status)}</td></tr>
+            <tr><td class="muted">Model</td><td>${esc(model?.name || '')}</td></tr>
+          </table>
+        </div>
+      </div>
+      <h2>Client</h2>
+      <div><strong>${esc(q.clientSnapshot?.name || '—')}</strong></div>
+      <div class="muted">${esc([q.clientSnapshot?.email, q.clientSnapshot?.phone].filter(Boolean).join(' · '))}</div>
+
+      ${Object.keys(specs).length ? `<h2>Technical specifications — ${esc(model?.name || '')}</h2>
+        <table class="meta">${Object.entries(specs).map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>` : ''}
+
+      ${std.length ? `<h2>Standard equipment</h2>
+        ${std.map((g) => `<div><strong>${esc(g.category)}</strong><ul>${(g.items || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('')}` : ''}
+
+      <h2>Quotation lines</h2>
+      <table class="lines">
+        <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Subtotal</th><th class="num">Disc.</th><th class="num">Final</th></tr></thead>
+        <tbody>
+          ${(q.lines || []).map((ln) => `<tr>
+            <td>${esc(ln.description)}</td>
+            <td class="num">${esc(ln.qty)}</td>
+            <td class="num">${money(ln.unitPrice, q.currency)}</td>
+            <td class="num">${money(lineSubtotal(ln), q.currency)}</td>
+            <td class="num">${esc(ln.discountPercent || 0)}%</td>
+            <td class="num">${money(lineTotal(ln), q.currency)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="totals">
+        <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
+        <div class="row"><span>Discounts</span><span>− ${money(q.discountAmount, q.currency)}</span></div>
+        <div class="row grand highlight"><span>Final total</span><span>${money(q.total, q.currency)}</span></div>
+      </div>
+      ${q.notes ? `<h2>Notes</h2><p>${esc(q.notes)}</p>` : ''}
+      <p class="muted" style="margin-top:32px;font-size:11px">${esc(footer)}</p>
+      </body></html>`);
+    win.document.close();
+  }
+
+  function convertToProforma(q) {
+    if (!window.DataStore || typeof window.DataStore.saveInvoice !== 'function') {
+      toast('Accounting module is not available', 'error');
+      return;
+    }
+    if (q.convertedToProformaId) {
+      toast('Already converted to a proforma', 'error');
+      return;
+    }
+    if (!confirm(`Create proforma invoice from quotation ${q.number}?`)) return;
+    recalcQuote(q);
+
+    let invoiceNumber = '';
+    try {
+      if (typeof window.DataStore.getNextProformaNumber === 'function') {
+        invoiceNumber = window.DataStore.getNextProformaNumber();
+      }
+    } catch (_) { /* ignore */ }
+    if (!invoiceNumber) invoiceNumber = 'PF-' + String(Date.now()).slice(-4);
+
+    const items = (q.lines || []).map((ln) => {
+      const qty = Number(ln.qty) || 1;
+      const final = lineTotal(ln);
+      const unitAfterDisc = qty ? Math.round((final / qty) * 100) / 100 : final;
+      const disc = Number(ln.discountPercent) || 0;
+      return {
+        description: disc ? `${ln.description} (${disc}% discount)` : ln.description,
+        quantity: qty,
+        persons: 1,
+        hours: 0,
+        price: unitAfterDisc
+      };
+    });
+
+    const subtotal = items.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.price) || 0), 0);
+    const taxRate = Number(q.taxRate) || 0;
+    const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100;
+    const total = Math.round((subtotal + taxAmount) * 100) / 100;
+    const invoiceId = uid('inv');
+
+    const invoice = {
+      id: invoiceId,
+      invoiceNumber,
+      documentType: 'proforma',
+      convertedToInvoiceId: '',
+      sourceProformaId: '',
+      status: 'draft',
+      date: q.date || todayISO(),
+      dueDate: '',
+      clientCustomerId: '',
+      clientId: q.clientId || '',
+      clientName: q.clientSnapshot?.name || '',
+      clientEmail: q.clientSnapshot?.email || '',
+      clientPhone: q.clientSnapshot?.phone || '',
+      clientAddress: q.clientSnapshot?.address || '',
+      currency: q.currency || 'EUR',
+      itemColumns: { code: true, qty: true, persons: false, hours: false },
+      items,
+      subtotal,
+      taxRate,
+      taxAmount,
+      total,
+      notes: `Converted from distribution quotation ${q.number}.${q.notes ? '\n' + q.notes : ''}`,
+      distributionQuoteId: q.id,
+      distributionQuoteNumber: q.number,
+      brandId: q.brandId,
+      modelId: q.modelId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      window.DataStore.saveInvoice(invoice);
+      q.convertedToProformaId = invoiceId;
+      q.convertedToProformaNumber = invoiceNumber;
+      q.status = 'converted';
+      q.updatedAt = new Date().toISOString();
+      persist(true);
+      toast(`Proforma ${invoiceNumber} created in Accounting`);
+      render();
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || 'Failed to create proforma', 'error');
+    }
+  }
+
+  function createSoldFromQuote(q) {
+    const model = modelById(q.modelId);
+    const brand = brandById(q.brandId);
+    const reg = prompt('Registration number:', '');
+    if (reg == null) return;
+    const hin = prompt('HIN number:', '') ?? '';
+    const engine = prompt('Engine / propulsion summary:', engineSummaryFromQuote(q)) ?? '';
+    const owner = q.clientSnapshot?.name || '';
+    const vessel = {
+      id: uid('vessel'),
+      quoteId: q.id,
+      quoteNumber: q.number,
+      registration: reg.trim(),
+      hin: hin.trim(),
+      brandId: q.brandId,
+      modelId: q.modelId,
+      modelName: model?.name || '',
+      brandName: brand?.name || '',
+      engineSummary: engine.trim(),
+      specs: Object.assign({}, model?.techSpecs || {}),
+      ownerClientId: q.clientId || '',
+      ownerName: owner,
+      ownerEmail: q.clientSnapshot?.email || '',
+      ownerPhone: q.clientSnapshot?.phone || '',
+      saleDate: todayISO(),
+      saleTotal: q.total,
+      currency: q.currency,
+      notes: '',
+      createdAt: new Date().toISOString()
+    };
+    state.soldVessels.unshift(vessel);
+    if (q.status !== 'converted') q.status = 'accepted';
+    persist(true);
+    toast('Sold vessel recorded');
+    if (typeof window.setDistributionSection === 'function') window.setDistributionSection('sold');
+    else setSection('sold');
+  }
+
+  function engineSummaryFromQuote(q) {
+    const engineCat = state.optionCategories.find((c) => c.brandId === q.brandId && c.key === 'engines');
+    if (!engineCat) return '';
+    const engineOptIds = new Set(state.options.filter((o) => o.categoryId === engineCat.id).map((o) => o.id));
+    const lines = (q.lines || []).filter((ln) => ln.kind === 'option' && engineOptIds.has(ln.refId));
+    return lines.map((l) => l.description).join('; ');
+  }
+
+  /* ─── Sold vessels ─── */
+  function renderSold() {
+    const el = document.getElementById('dist-sold');
+    if (!el) return;
+    const list = state.soldVessels;
+    el.innerHTML = `
+      <div class="dist-toolbar">
+        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Registry of vessels already sold — registration, HIN, engine, specs, and owner.</p>
+        <button type="button" class="btn btn-primary" id="dist-add-vessel">Add sold vessel</button>
+      </div>
+      <div class="dist-card">
+        ${list.length ? `
+          <table class="dist-table">
+            <thead>
+              <tr><th>Registration</th><th>HIN</th><th>Model</th><th>Engine</th><th>Owner</th><th>Sale date</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${list.map((v) => `
+                <tr>
+                  <td><strong>${esc(v.registration || '—')}</strong></td>
+                  <td>${esc(v.hin || '—')}</td>
+                  <td>${esc(v.brandName || '')} ${esc(v.modelName || '')}</td>
+                  <td>${esc(v.engineSummary || '—')}</td>
+                  <td>${esc(v.ownerName || '—')}${v.ownerPhone ? `<div class="meta" style="font-size:.75rem">${esc(v.ownerPhone)}</div>` : ''}</td>
+                  <td>${esc(v.saleDate || '—')}</td>
+                  <td class="dist-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-edit-vessel="${esc(v.id)}">Edit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-del-vessel="${esc(v.id)}">Delete</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>` : '<div class="dist-empty">No sold vessels recorded yet. Convert an accepted quote or add manually.</div>'}
+      </div>`;
+
+    el.querySelector('#dist-add-vessel')?.addEventListener('click', () => editVessel(null));
+    el.querySelectorAll('[data-dist-edit-vessel]').forEach((btn) => {
+      btn.addEventListener('click', () => editVessel(btn.getAttribute('data-dist-edit-vessel')));
+    });
+    el.querySelectorAll('[data-dist-del-vessel]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Delete this vessel record?')) return;
+        state.soldVessels = state.soldVessels.filter((v) => v.id !== btn.getAttribute('data-dist-del-vessel'));
+        persist(true);
+        renderSold();
+      });
+    });
+  }
+
+  function editVessel(id) {
+    const existing = id ? state.soldVessels.find((v) => v.id === id) : null;
+    const brand = state.brands[0];
+    const models = state.models.filter((m) => m.brandId === (existing?.brandId || brand?.id));
+    const reg = prompt('Registration number:', existing?.registration || '');
+    if (reg == null) return;
+    const hin = prompt('HIN:', existing?.hin || '') ?? '';
+    const modelNames = models.map((m, i) => `${i + 1}. ${m.name}`).join('\n');
+    let model = existing ? modelById(existing.modelId) : models[0];
+    if (models.length) {
+      const pick = prompt(`Model number:\n${modelNames}`, String(models.findIndex((m) => m.id === model?.id) + 1 || 1));
+      if (pick == null) return;
+      model = models[Number(pick) - 1] || model;
+    }
+    const engine = prompt('Engine / specs summary:', existing?.engineSummary || '') ?? '';
+    const owner = prompt('Owner name:', existing?.ownerName || '') ?? '';
+    const phone = prompt('Owner phone:', existing?.ownerPhone || '') ?? '';
+    const email = prompt('Owner email:', existing?.ownerEmail || '') ?? '';
+    const saleDate = prompt('Sale date (YYYY-MM-DD):', existing?.saleDate || todayISO()) ?? todayISO();
+
+    if (existing) {
+      existing.registration = reg.trim();
+      existing.hin = hin.trim();
+      existing.modelId = model?.id || existing.modelId;
+      existing.modelName = model?.name || existing.modelName;
+      existing.brandId = model?.brandId || existing.brandId;
+      existing.brandName = brandById(existing.brandId)?.name || existing.brandName;
+      existing.engineSummary = engine.trim();
+      existing.ownerName = owner.trim();
+      existing.ownerPhone = phone.trim();
+      existing.ownerEmail = email.trim();
+      existing.saleDate = saleDate;
+      existing.specs = Object.assign({}, model?.techSpecs || existing.specs || {});
+    } else {
+      state.soldVessels.unshift({
+        id: uid('vessel'),
+        quoteId: null,
+        registration: reg.trim(),
+        hin: hin.trim(),
+        brandId: model?.brandId || brand?.id,
+        modelId: model?.id || '',
+        modelName: model?.name || '',
+        brandName: brandById(model?.brandId || brand?.id)?.name || '',
+        engineSummary: engine.trim(),
+        specs: Object.assign({}, model?.techSpecs || {}),
+        ownerClientId: '',
+        ownerName: owner.trim(),
+        ownerEmail: email.trim(),
+        ownerPhone: phone.trim(),
+        saleDate,
+        saleTotal: null,
+        currency: 'EUR',
+        notes: '',
+        createdAt: new Date().toISOString()
+      });
+    }
+    persist(true);
+    renderSold();
+    toast(existing ? 'Vessel updated' : 'Vessel added');
+  }
+
+  function render() {
+    if (!state) return;
+    if (section === 'dashboard') renderDashboard();
+    else if (section === 'catalog') renderCatalog();
+    else if (section === 'quotations') renderQuotations();
+    else if (section === 'sold') renderSold();
+  }
+
+  function applyRemote(data) {
+    if (!data) return;
+    state = normalizeState(data);
+    saveLocal();
+    render();
+  }
+
+  function init() {
+    state = loadLocal();
+    const page = document.getElementById('page-distribution');
+    if (page && page.classList.contains('active')) {
+      setSection(section, { keepEditor: true });
+    } else {
+      render();
+    }
+  }
+
+  window.DistributionModule = {
+    init,
+    render,
+    setSection,
+    getState: () => state,
+    applyRemote,
+    persist,
+    SECTIONS
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('page-distribution')) init();
+  });
+})();

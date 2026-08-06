@@ -57,6 +57,20 @@
         { id: 'compare', label: 'Compare vessels' }
       ]
     },
+    distribution: {
+      dashboard: [
+        { id: 'overview', label: 'Overview' }
+      ],
+      catalog: [
+        { id: 'models', label: 'Models & options' }
+      ],
+      quotations: [
+        { id: 'list', label: 'Quotations' }
+      ],
+      sold: [
+        { id: 'registry', label: 'Sold vessels' }
+      ]
+    },
     hr: {
       employees: [
         { id: 'list', label: 'Employee list' },
@@ -195,6 +209,7 @@
     shifts: '.shifts-section-panel[data-section]',
     settings: '.settings-section-panel[data-section]',
     fleet: '.fleet-section-panel[data-section]',
+    distribution: '.dist-section-panel[data-section]',
     documents: '.docs-section-panel[data-section]',
     contacts: '.contacts-section-panel[data-section]',
     clients: '.clients-section-panel[data-section]',

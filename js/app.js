@@ -78,6 +78,7 @@
     { id: 'accounting', name: 'Accounting' },
     { id: 'clients', name: 'Clients' },
     { id: 'fleet', name: 'Fleet Management' },
+    { id: 'distribution', name: 'Distribution' },
     { id: 'hr', name: 'HR' },
     { id: 'crew', name: 'Crew Management' },
     { id: 'shifts', name: 'Shifts' },
@@ -147,6 +148,12 @@
     fleet: [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'vessels', label: 'Vessels' }
+    ],
+    distribution: [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'catalog', label: 'Models & options' },
+      { id: 'quotations', label: 'Quotations' },
+      { id: 'sold', label: 'Sold vessels' }
     ],
     hr: [
       { id: 'overview', label: 'Overview' },
@@ -345,7 +352,11 @@
   function setGenericSectionPanels(pageSelector, panelSelector, sectionId) {
     document.querySelectorAll(pageSelector + ' ' + panelSelector).forEach(function (p) {
       var match = p.getAttribute('data-section') === sectionId;
-      if (p.classList.contains('shifts-section-panel') || p.classList.contains('lms-section-panel')) {
+      if (
+        p.classList.contains('shifts-section-panel') ||
+        p.classList.contains('lms-section-panel') ||
+        p.classList.contains('dist-section-panel')
+      ) {
         p.classList.toggle('active', match);
         p.style.display = match ? 'block' : 'none';
       } else {
@@ -502,6 +513,20 @@
   }
   window.setLmsSection = setLmsSection;
 
+  function setDistributionSection(sectionId) {
+    if (currentModulePageId !== 'distribution') return;
+    setGenericSectionPanels('#page-distribution', '.dist-section-panel', sectionId);
+    if (window.AndecoModuleNav) {
+      window.AndecoModuleNav.setActiveSectionOnSubtabs('distribution', sectionId);
+      window.AndecoModuleNav.activateSection('distribution', sectionId);
+    }
+    if (typeof window.DistributionModule !== 'undefined') {
+      if (window.DistributionModule.setSection) window.DistributionModule.setSection(sectionId);
+      if (window.DistributionModule.render) window.DistributionModule.render();
+    }
+  }
+  window.setDistributionSection = setDistributionSection;
+
   function setPayrollSubsection(subId) {
     if (subId === 'employees' || subId === 'company') subId = 'ytd';
     var container = document.getElementById('accounting-payroll-content');
@@ -547,6 +572,7 @@
     if (pageId === 'clients') setClientsSection(sectionId);
     if (pageId === 'crew') setCrewSection(sectionId);
     if (pageId === 'lms') setLmsSection(sectionId);
+    if (pageId === 'distribution') setDistributionSection(sectionId);
   }
 
   function initSidebarDelegation() {
@@ -584,6 +610,7 @@
       accounting: 'Accounting',
       clients: 'Clients',
       fleet: 'Fleet Management',
+      distribution: 'Distribution',
       hr: 'HR',
       crew: 'Crew Management',
       shifts: 'Shifts',
@@ -708,6 +735,9 @@
       if (pageId === 'crew' && typeof window.CrewManagement !== 'undefined' && window.CrewManagement.render) window.CrewManagement.render();
       if (pageId === 'shifts' && typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) window.ShiftsManagement.render();
       if (pageId === 'lms' && typeof window.LmsModule !== 'undefined' && window.LmsModule.render) window.LmsModule.render();
+      if (pageId === 'distribution' && typeof window.DistributionModule !== 'undefined' && window.DistributionModule.render) {
+        window.DistributionModule.render();
+      }
       // Offer modern portal entry from CRM Learning module for admins / multi-module users.
       var openPortalBtn = document.getElementById('lms-open-portal-btn');
       if (pageId === 'lms' && openPortalBtn && openPortalBtn.getAttribute('data-bound') !== '1') {
