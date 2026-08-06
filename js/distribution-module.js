@@ -1823,9 +1823,17 @@
     refreshSelectionUi();
   }
 
+  function closeQuotePrintSheet() {
+    document.querySelectorAll('.dist-quote-sheet').forEach((el) => el.remove());
+    document.body.classList.remove('dist-quote-open');
+  }
+
   function printQuote(id) {
     const q = quoteById(id);
-    if (!q) return;
+    if (!q) {
+      toast('Quotation not found', 'error');
+      return;
+    }
     recalcQuote(q);
     const brand = brandById(q.brandId);
     const model = modelById(q.modelId);
@@ -1833,85 +1841,96 @@
     const footer = state.settings.quoteFooter || '';
     const specs = model?.techSpecs || {};
     const std = model?.standardEquipment || [];
+    const lines = Array.isArray(q.lines) ? q.lines : [];
 
-    const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1000');
-    if (!win) {
-      toast('Allow pop-ups to print the quotation', 'error');
-      return;
-    }
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(q.number)}</title>
-      <style>
-        body{font-family:Georgia,'Times New Roman',serif;color:#0f172a;margin:32px;font-size:13px}
-        h1{font-size:22px;margin:0 0 4px;letter-spacing:.04em}
-        h2{font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:.08em;color:#334155;border-bottom:1px solid #cbd5e1;padding-bottom:4px}
-        .muted{color:#64748b}
-        .header{display:flex;justify-content:space-between;gap:24px;margin-bottom:20px}
-        .meta td{padding:2px 12px 2px 0}
-        table.lines{width:100%;border-collapse:collapse;margin-top:8px}
-        table.lines th,table.lines td{border-bottom:1px solid #e2e8f0;padding:8px 6px;text-align:left}
-        table.lines th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b}
-        table.lines td.num,table.lines th.num{text-align:right}
-        .totals{margin-top:16px;width:280px;margin-left:auto}
-        .totals .row{display:flex;justify-content:space-between;padding:4px 0}
-        .totals .grand{font-size:16px;font-weight:700;border-top:2px solid #0f172a;margin-top:6px;padding-top:8px}
-        .highlight{background:#fef08a;padding:8px 12px;font-weight:700}
-        ul{margin:4px 0 12px;padding-left:18px}
-        @media print{body{margin:16px} .no-print{display:none}}
-      </style></head><body>
-      <div class="no-print" style="margin-bottom:16px">
-        <button onclick="window.print()">Print / Save PDF</button>
-        <button onclick="window.close()">Close</button>
+    closeQuotePrintSheet();
+
+    const sheet = document.createElement('div');
+    sheet.className = 'dist-quote-sheet';
+    sheet.innerHTML = `
+      <div class="dist-quote-toolbar no-print">
+        <button type="button" class="btn btn-primary btn-sm" data-dist-print-run>Print / Save PDF</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-dist-print-close>Close</button>
       </div>
-      <div class="header">
-        <div>
-          <h1>${esc(company)}</h1>
-          <div class="muted">${esc(brand?.name || '')} · Distribution quotation</div>
-          ${state.settings.companyDetails ? `<div class="muted" style="margin-top:6px;white-space:pre-line">${esc(state.settings.companyDetails)}</div>` : ''}
+      <div class="dist-quote-doc">
+        <div class="dist-quote-doc-header">
+          <div>
+            <h1>${esc(company)}</h1>
+            <div class="muted">${esc(brand?.name || '')} · Distribution quotation</div>
+            ${state.settings.companyDetails ? `<div class="muted" style="margin-top:6px;white-space:pre-line">${esc(state.settings.companyDetails)}</div>` : ''}
+          </div>
+          <div>
+            <table class="dist-quote-meta-table">
+              <tr><td class="muted">Quote</td><td><strong>${esc(q.number)}</strong></td></tr>
+              <tr><td class="muted">Date</td><td>${esc(q.date || '')}</td></tr>
+              <tr><td class="muted">Status</td><td>${esc(q.status)}</td></tr>
+              <tr><td class="muted">Model</td><td>${esc(model?.name || '')}</td></tr>
+            </table>
+          </div>
         </div>
-        <div>
-          <table class="meta">
-            <tr><td class="muted">Quote</td><td><strong>${esc(q.number)}</strong></td></tr>
-            <tr><td class="muted">Date</td><td>${esc(q.date || '')}</td></tr>
-            <tr><td class="muted">Status</td><td>${esc(q.status)}</td></tr>
-            <tr><td class="muted">Model</td><td>${esc(model?.name || '')}</td></tr>
-          </table>
+
+        <h2>Prepared for</h2>
+        <div><strong>${esc(q.clientSnapshot?.name || '—')}</strong></div>
+        ${q.clientSnapshot?.contactName ? `<div>${esc(q.clientSnapshot.contactName)}</div>` : ''}
+        <div class="muted">${esc([q.clientSnapshot?.email, q.clientSnapshot?.phone].filter(Boolean).join(' · '))}</div>
+        ${q.clientSnapshot?.address ? `<div class="muted">${esc(q.clientSnapshot.address)}</div>` : ''}
+
+        ${Object.keys(specs).length ? `
+          <h2>Technical specifications — ${esc(model?.name || '')}</h2>
+          <table class="dist-quote-meta-table">
+            ${Object.entries(specs).map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}
+          </table>` : ''}
+
+        ${std.length ? `
+          <h2>Standard equipment</h2>
+          ${std.map((g) => `
+            <div class="dist-quote-std-group">
+              <strong>${esc(g.category)}</strong>
+              <ul>${(g.items || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
+            </div>`).join('')}` : ''}
+
+        <h2>Quotation lines</h2>
+        <table class="dist-quote-lines-print">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="num">Qty</th>
+              <th class="num">Unit</th>
+              <th class="num">Subtotal</th>
+              <th class="num">Disc.</th>
+              <th class="num">Final</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.length ? lines.map((ln) => `
+              <tr>
+                <td>${esc(ln.description || '')}</td>
+                <td class="num">${esc(ln.qty)}</td>
+                <td class="num">${money(ln.unitPrice, q.currency)}</td>
+                <td class="num">${money(lineSubtotal(ln), q.currency)}</td>
+                <td class="num">${esc(Number(ln.discountPercent) || 0)}%</td>
+                <td class="num">${money(lineTotal(ln), q.currency)}</td>
+              </tr>`).join('') : '<tr><td colspan="6">No line items on this quotation.</td></tr>'}
+          </tbody>
+        </table>
+
+        <div class="dist-quote-totals-print">
+          <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
+          <div class="row"><span>Discounts</span><span>− ${money(q.discountAmount, q.currency)}</span></div>
+          <div class="row grand"><span>Final total</span><span>${money(q.total, q.currency)}</span></div>
         </div>
-      </div>
-      <h2>Prepared for</h2>
-      <div><strong>${esc(q.clientSnapshot?.name || '—')}</strong></div>
-      ${q.clientSnapshot?.contactName ? `<div>${esc(q.clientSnapshot.contactName)}</div>` : ''}
-      <div class="muted">${esc([q.clientSnapshot?.email, q.clientSnapshot?.phone].filter(Boolean).join(' · '))}</div>
-      ${q.clientSnapshot?.address ? `<div class="muted">${esc(q.clientSnapshot.address)}</div>` : ''}
 
-      ${Object.keys(specs).length ? `<h2>Technical specifications — ${esc(model?.name || '')}</h2>
-        <table class="meta">${Object.entries(specs).map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>` : ''}
+        ${q.notes ? `<h2>Notes</h2><p>${esc(q.notes)}</p>` : ''}
+        <div class="dist-quote-doc-footer">${esc(footer)}</div>
+      </div>`;
 
-      ${std.length ? `<h2>Standard equipment</h2>
-        ${std.map((g) => `<div><strong>${esc(g.category)}</strong><ul>${(g.items || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('')}` : ''}
+    document.body.appendChild(sheet);
+    document.body.classList.add('dist-quote-open');
 
-      <h2>Quotation lines</h2>
-      <table class="lines">
-        <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Subtotal</th><th class="num">Disc.</th><th class="num">Final</th></tr></thead>
-        <tbody>
-          ${(q.lines || []).map((ln) => `<tr>
-            <td>${esc(ln.description)}</td>
-            <td class="num">${esc(ln.qty)}</td>
-            <td class="num">${money(ln.unitPrice, q.currency)}</td>
-            <td class="num">${money(lineSubtotal(ln), q.currency)}</td>
-            <td class="num">${esc(ln.discountPercent || 0)}%</td>
-            <td class="num">${money(lineTotal(ln), q.currency)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-      <div class="totals">
-        <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
-        <div class="row"><span>Discounts</span><span>− ${money(q.discountAmount, q.currency)}</span></div>
-        <div class="row grand highlight"><span>Final total</span><span>${money(q.total, q.currency)}</span></div>
-      </div>
-      ${q.notes ? `<h2>Notes</h2><p>${esc(q.notes)}</p>` : ''}
-      <p class="muted" style="margin-top:32px;font-size:11px">${esc(footer)}</p>
-      </body></html>`);
-    win.document.close();
+    sheet.querySelector('[data-dist-print-close]')?.addEventListener('click', closeQuotePrintSheet);
+    sheet.querySelector('[data-dist-print-run]')?.addEventListener('click', () => {
+      window.print();
+    });
   }
 
   function convertToProforma(q) {

@@ -492,6 +492,21 @@
   color: var(--dist-navy);
 }
 
+.dist-quote-doc h2 {
+  margin: 1.35rem 0 0.55rem;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #334e68;
+  border-bottom: 1px solid #d9e2ec;
+  padding-bottom: 0.3rem;
+}
+
+.dist-quote-doc .muted {
+  color: #627d98;
+  font-size: 0.9rem;
+}
+
 .dist-quote-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -499,10 +514,21 @@
   margin-bottom: 1.25rem;
 }
 
-.dist-quote-doc table {
+.dist-quote-meta-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.dist-quote-meta-table td {
+  padding: 0.15rem 0.75rem 0.15rem 0;
+  vertical-align: top;
+}
+
+.dist-quote-doc table.dist-quote-lines-print {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  margin-top: 0.35rem;
 }
 
 .dist-quote-doc th,
@@ -524,12 +550,50 @@
 .dist-quote-doc td.num,
 .dist-quote-doc th.num { text-align: right; }
 
+.dist-quote-std-group {
+  margin-bottom: 0.65rem;
+}
+
+.dist-quote-std-group ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.15rem;
+  color: #334e68;
+}
+
+.dist-quote-totals-print {
+  margin: 1rem 0 0 auto;
+  width: min(100%, 280px);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dist-quote-totals-print .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.25rem 0;
+}
+
+.dist-quote-totals-print .row.grand {
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: #fff8e7;
+  border: 1px solid #f0d78c;
+  font-weight: 800;
+  color: var(--dist-navy);
+}
+
 .dist-quote-doc-footer {
   margin-top: 1.5rem;
   padding-top: 0.85rem;
   border-top: 1px solid #e2e8f0;
   color: #64748b;
   font-size: 0.85rem;
+}
+
+.dist-quote-toolbar .btn {
+  color: #fff;
 }
 
 body.dist-quote-open { overflow: hidden; }
@@ -708,11 +772,15 @@ body.dist-modal-open { overflow: hidden; }
     background: #fff !important;
     padding: 0 !important;
     inset: auto !important;
+    overflow: visible !important;
+    display: block !important;
   }
-  body.dist-quote-open .dist-quote-toolbar { display: none !important; }
+  body.dist-quote-open .dist-quote-toolbar,
+  body.dist-quote-open .no-print { display: none !important; }
   body.dist-quote-open .dist-quote-doc {
     box-shadow: none !important;
     width: 100% !important;
+    max-width: none !important;
     padding: 0 !important;
   }
 }
