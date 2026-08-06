@@ -1828,6 +1828,54 @@
     document.body.classList.remove('dist-quote-open');
   }
 
+  function formatSpecLabel(key) {
+    const map = {
+      loa: 'LOA',
+      boa: 'BOA',
+      internalBeam: 'Internal beam',
+      tubeDiam: 'Tube diam.',
+      maxHp: 'Max HP',
+      minHp: 'Min HP',
+      suggestedHp: 'Suggested HP',
+      dryWeight: 'Dry weight',
+      fuelTank: 'Fuel tank',
+      ceCategory: 'CE category',
+      pax: 'Passengers'
+    };
+    if (map[key]) return map[key];
+    return String(key || '')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  function getQuoteLogoHtml() {
+    try {
+      if (window.DataStore && typeof window.DataStore.getDocumentLogoHtml === 'function') {
+        return window.DataStore.getDocumentLogoHtml('proforma', 'dist-quote-logo') ||
+          window.DataStore.getDocumentLogoHtml('invoice', 'dist-quote-logo') || '';
+      }
+    } catch (_) { /* ignore */ }
+    return '';
+  }
+
+  function getCompanyContactBits() {
+    try {
+      if (window.DataStore && typeof window.DataStore.getCompanySettings === 'function') {
+        const s = window.DataStore.getCompanySettings() || {};
+        return {
+          name: s.companyName || '',
+          address: s.companyAddress || '',
+          email: s.companyEmail || '',
+          phone: s.companyPhone || '',
+          website: s.companyWebsite || '',
+          taxId: s.companyTaxId || ''
+        };
+      }
+    } catch (_) { /* ignore */ }
+    return { name: '', address: '', email: '', phone: '', website: '', taxId: '' };
+  }
+
   function printQuote(id) {
     const q = quoteById(id);
     if (!q) {
@@ -1837,11 +1885,32 @@
     recalcQuote(q);
     const brand = brandById(q.brandId);
     const model = modelById(q.modelId);
-    const company = state.settings.companyName || 'OlympicRibs Distribution';
-    const footer = state.settings.quoteFooter || '';
+    const companyBits = getCompanyContactBits();
+    const company = state.settings.companyName || companyBits.name || 'OlympicRibs Distribution';
+    const footer = state.settings.quoteFooter ||
+      'Prices in EUR. Quotation valid for 30 days unless otherwise stated. Technical specifications subject to manufacturer updates.';
     const specs = model?.techSpecs || {};
     const std = model?.standardEquipment || [];
     const lines = Array.isArray(q.lines) ? q.lines : [];
+    const logoHtml = getQuoteLogoHtml();
+    const issued = q.date || todayISO();
+    const validUntil = (() => {
+      try {
+        const d = new Date(issued + 'T12:00:00');
+        if (Number.isNaN(d.getTime())) return '';
+        d.setDate(d.getDate() + 30);
+        return d.toISOString().slice(0, 10);
+      } catch (_) {
+        return '';
+      }
+    })();
+    const companyContact = [
+      companyBits.address,
+      companyBits.phone,
+      companyBits.email,
+      companyBits.website
+    ].filter(Boolean).join(' · ');
+    const detailsText = (state.settings.companyDetails || '').trim() || companyContact;
 
     closeQuotePrintSheet();
 
@@ -1852,77 +1921,146 @@
         <button type="button" class="btn btn-primary btn-sm" data-dist-print-run>Print / Save PDF</button>
         <button type="button" class="btn btn-secondary btn-sm" data-dist-print-close>Close</button>
       </div>
-      <div class="dist-quote-doc">
-        <div class="dist-quote-doc-header">
-          <div>
-            <h1>${esc(company)}</h1>
-            <div class="muted">${esc(brand?.name || '')} · Distribution quotation</div>
-            ${state.settings.companyDetails ? `<div class="muted" style="margin-top:6px;white-space:pre-line">${esc(state.settings.companyDetails)}</div>` : ''}
-          </div>
-          <div>
-            <table class="dist-quote-meta-table">
-              <tr><td class="muted">Quote</td><td><strong>${esc(q.number)}</strong></td></tr>
-              <tr><td class="muted">Date</td><td>${esc(q.date || '')}</td></tr>
-              <tr><td class="muted">Status</td><td>${esc(q.status)}</td></tr>
-              <tr><td class="muted">Model</td><td>${esc(model?.name || '')}</td></tr>
-            </table>
-          </div>
-        </div>
+      <article class="dist-quote-doc">
+        <div class="dist-quote-accent"></div>
 
-        <h2>Prepared for</h2>
-        <div><strong>${esc(q.clientSnapshot?.name || '—')}</strong></div>
-        ${q.clientSnapshot?.contactName ? `<div>${esc(q.clientSnapshot.contactName)}</div>` : ''}
-        <div class="muted">${esc([q.clientSnapshot?.email, q.clientSnapshot?.phone].filter(Boolean).join(' · '))}</div>
-        ${q.clientSnapshot?.address ? `<div class="muted">${esc(q.clientSnapshot.address)}</div>` : ''}
+        <header class="dist-quote-top">
+          <div class="dist-quote-brand">
+            ${logoHtml || `<div class="dist-quote-mark">${esc((brand?.name || 'OR').slice(0, 2).toUpperCase())}</div>`}
+            <div>
+              <div class="dist-quote-company">${esc(company)}</div>
+              <div class="dist-quote-brand-sub">${esc(brand?.name || 'Distribution')} · Official quotation</div>
+              ${detailsText ? `<div class="dist-quote-company-details">${esc(detailsText)}</div>` : ''}
+            </div>
+          </div>
+          <div class="dist-quote-titleblock">
+            <div class="dist-quote-kicker">Commercial offer</div>
+            <div class="dist-quote-title">Quotation</div>
+            <div class="dist-quote-number">${esc(q.number)}</div>
+            <div class="dist-quote-title-meta">
+              <span>Issued ${esc(issued)}</span>
+              ${validUntil ? `<span>Valid until ${esc(validUntil)}</span>` : ''}
+            </div>
+          </div>
+        </header>
+
+        <section class="dist-quote-parties">
+          <div class="dist-quote-card">
+            <div class="dist-quote-card-label">Prepared for</div>
+            <div class="dist-quote-card-name">${esc(q.clientSnapshot?.name || '—')}</div>
+            ${q.clientSnapshot?.contactName ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.contactName)}</div>` : ''}
+            ${q.clientSnapshot?.email ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.email)}</div>` : ''}
+            ${q.clientSnapshot?.phone ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.phone)}</div>` : ''}
+            ${q.clientSnapshot?.address ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.address)}</div>` : ''}
+          </div>
+          <div class="dist-quote-card dist-quote-card--model">
+            <div class="dist-quote-card-label">Vessel configuration</div>
+            <div class="dist-quote-card-name">${esc(brand?.name || '')} ${esc(model?.name || '')}</div>
+            <div class="dist-quote-card-line">Currency: ${esc(q.currency || 'EUR')}</div>
+            <div class="dist-quote-card-line">Status: ${esc(statusLabel(QUOTE_STATUSES, q.status))}</div>
+            ${model?.basePrice != null ? `<div class="dist-quote-card-line">Standard equipment (no engine): ${money(model.basePrice, q.currency)}</div>` : ''}
+          </div>
+        </section>
 
         ${Object.keys(specs).length ? `
-          <h2>Technical specifications — ${esc(model?.name || '')}</h2>
-          <table class="dist-quote-meta-table">
-            ${Object.entries(specs).map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}
-          </table>` : ''}
+          <section class="dist-quote-section">
+            <div class="dist-quote-section-head">
+              <h2>Technical specifications</h2>
+              <span>${esc(model?.name || '')}</span>
+            </div>
+            <div class="dist-quote-spec-grid">
+              ${Object.entries(specs).map(([k, v]) => `
+                <div class="dist-quote-spec">
+                  <div class="dist-quote-spec-label">${esc(formatSpecLabel(k))}</div>
+                  <div class="dist-quote-spec-value">${esc(v)}</div>
+                </div>`).join('')}
+            </div>
+          </section>` : ''}
 
         ${std.length ? `
-          <h2>Standard equipment</h2>
-          ${std.map((g) => `
-            <div class="dist-quote-std-group">
-              <strong>${esc(g.category)}</strong>
-              <ul>${(g.items || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
-            </div>`).join('')}` : ''}
+          <section class="dist-quote-section">
+            <div class="dist-quote-section-head">
+              <h2>Standard equipment</h2>
+              <span>Included in base configuration</span>
+            </div>
+            <div class="dist-quote-std-grid">
+              ${std.map((g) => `
+                <div class="dist-quote-std-group">
+                  <div class="dist-quote-std-title">${esc(g.category)}</div>
+                  <ul>${(g.items || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
+                </div>`).join('')}
+            </div>
+          </section>` : ''}
 
-        <h2>Quotation lines</h2>
-        <table class="dist-quote-lines-print">
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th class="num">Qty</th>
-              <th class="num">Unit</th>
-              <th class="num">Subtotal</th>
-              <th class="num">Disc.</th>
-              <th class="num">Final</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lines.length ? lines.map((ln) => `
+        <section class="dist-quote-section">
+          <div class="dist-quote-section-head">
+            <h2>Pricing</h2>
+            <span>${lines.length} line item${lines.length === 1 ? '' : 's'}</span>
+          </div>
+          <table class="dist-quote-lines-print">
+            <thead>
               <tr>
-                <td>${esc(ln.description || '')}</td>
-                <td class="num">${esc(ln.qty)}</td>
-                <td class="num">${money(ln.unitPrice, q.currency)}</td>
-                <td class="num">${money(lineSubtotal(ln), q.currency)}</td>
-                <td class="num">${esc(Number(ln.discountPercent) || 0)}%</td>
-                <td class="num">${money(lineTotal(ln), q.currency)}</td>
-              </tr>`).join('') : '<tr><td colspan="6">No line items on this quotation.</td></tr>'}
-          </tbody>
-        </table>
+                <th class="desc">Description</th>
+                <th class="num">Qty</th>
+                <th class="num">Unit price</th>
+                <th class="num">Subtotal</th>
+                <th class="num">Disc.</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lines.length ? lines.map((ln, idx) => `
+                <tr class="${ln.categoryKey === 'engines' ? 'is-engine' : ''}">
+                  <td class="desc">
+                    <div class="dist-quote-line-name">${esc(ln.description || '')}</div>
+                    ${ln.categoryKey === 'engines' ? '<div class="dist-quote-line-tag">Engine package · includes standard equipment</div>' : ''}
+                    ${ln.categoryKey === 'hull' ? '<div class="dist-quote-line-tag">Standard equipment without engine</div>' : ''}
+                  </td>
+                  <td class="num">${esc(ln.qty)}</td>
+                  <td class="num">${money(ln.unitPrice, q.currency)}</td>
+                  <td class="num">${money(lineSubtotal(ln), q.currency)}</td>
+                  <td class="num">${Number(ln.discountPercent) ? esc(Number(ln.discountPercent)) + '%' : '—'}</td>
+                  <td class="num dist-quote-line-amount">${money(lineTotal(ln), q.currency)}</td>
+                </tr>`).join('') : '<tr><td colspan="6">No line items on this quotation.</td></tr>'}
+            </tbody>
+          </table>
 
-        <div class="dist-quote-totals-print">
-          <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
-          <div class="row"><span>Discounts</span><span>− ${money(q.discountAmount, q.currency)}</span></div>
-          <div class="row grand"><span>Final total</span><span>${money(q.total, q.currency)}</span></div>
-        </div>
+          <div class="dist-quote-totals-wrap">
+            <div class="dist-quote-totals-print">
+              <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
+              <div class="row"><span>Discounts</span><span>${q.discountAmount ? '− ' + money(q.discountAmount, q.currency) : money(0, q.currency)}</span></div>
+              <div class="row grand">
+                <span>Final total</span>
+                <span>${money(q.total, q.currency)}</span>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        ${q.notes ? `<h2>Notes</h2><p>${esc(q.notes)}</p>` : ''}
-        <div class="dist-quote-doc-footer">${esc(footer)}</div>
-      </div>`;
+        ${q.notes ? `
+          <section class="dist-quote-section">
+            <div class="dist-quote-section-head"><h2>Notes</h2></div>
+            <div class="dist-quote-notes">${esc(q.notes)}</div>
+          </section>` : ''}
+
+        <footer class="dist-quote-doc-footer">
+          <div class="dist-quote-footer-grid">
+            <div>
+              <div class="dist-quote-footer-label">Validity</div>
+              <div>This quotation is valid for 30 days from the issue date${validUntil ? ` (until ${esc(validUntil)})` : ''}.</div>
+            </div>
+            <div>
+              <div class="dist-quote-footer-label">Acceptance</div>
+              <div>Prices and availability are subject to confirmation at order.</div>
+            </div>
+          </div>
+          <div class="dist-quote-footer-note">${esc(footer)}</div>
+          <div class="dist-quote-signoff">
+            <div class="dist-quote-sign-line"></div>
+            <div class="dist-quote-sign-caption">Authorized signature / stamp</div>
+          </div>
+        </footer>
+      </article>`;
 
     document.body.appendChild(sheet);
     document.body.classList.add('dist-quote-open');
