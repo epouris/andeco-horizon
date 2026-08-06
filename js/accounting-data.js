@@ -113,6 +113,15 @@ window.AccountingData = (function () {
         discussions: [],
         settings: {}
       },
+      distribution: {
+        brands: [],
+        models: [],
+        optionCategories: [],
+        options: [],
+        quotations: [],
+        soldVessels: [],
+        settings: {}
+      },
       crm: { users: [] }
     };
   }
@@ -174,6 +183,21 @@ window.AccountingData = (function () {
           settings: {}
         };
       })(),
+      distribution: (function () {
+        try {
+          var r = localStorage.getItem('andeco_distribution_data');
+          if (r) return JSON.parse(r);
+        } catch (e) {}
+        return {
+          brands: [],
+          models: [],
+          optionCategories: [],
+          options: [],
+          quotations: [],
+          soldVessels: [],
+          settings: {}
+        };
+      })(),
       crm: {
         users: getLocalStorage('andeco_crm_users', [])
       }
@@ -200,6 +224,17 @@ window.AccountingData = (function () {
           window.LmsModule.render();
         } else if (portalOpen && window.LmsPortal.render) {
           window.LmsPortal.render();
+        }
+      } catch (e) {}
+    }
+    if (typeof window.DistributionModule !== 'undefined') {
+      try {
+        var distRaw = null;
+        try { distRaw = localStorage.getItem('andeco_distribution_data'); } catch (e2) {}
+        if (distRaw && window.DistributionModule.applyRemote) {
+          window.DistributionModule.applyRemote(JSON.parse(distRaw));
+        } else if (window.DistributionModule.render) {
+          window.DistributionModule.render();
         }
       } catch (e) {}
     }
@@ -557,6 +592,9 @@ window.AccountingData = (function () {
         }
         if (data.lms && typeof data.lms === 'object') {
           setLocalStorage('andeco_lms_data', data.lms);
+        }
+        if (data.distribution && typeof data.distribution === 'object') {
+          setLocalStorage('andeco_distribution_data', data.distribution);
         }
         if (data.payroll && typeof data.payroll === 'object') {
           if (Array.isArray(data.payroll.employees)) setLocalStorage('employees', data.payroll.employees);

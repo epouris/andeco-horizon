@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/payroll.css">
   <link rel="stylesheet" href="css/lms.css">
   <link rel="stylesheet" href="css/lms-portal.css">
+  <link rel="stylesheet" href="css/distribution.css">
   <script>
     (function () {
       if (location.protocol !== 'file:') return;
@@ -225,6 +226,12 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20c1.5-1 3-1.5 5-1.5s3.5.5 5 1.5 3 1.5 5 1.5 3.5-.5 5-1.5"/><path d="M4 16l1.2-5.5A2 2 0 0 1 7.15 9H16l3 4v3"/><path d="M12 9V5l3 1v3"/><path d="M7 9V7"/></svg>
             </span>
             <span class="module-title">Fleet Management</span>
+          </a>
+          <a href="#distribution" class="module-card module-card--tile" data-module="distribution">
+            <span class="module-icon-tile module-icon--blue" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 5l4 7 3-5 5 10"/><path d="M3 19h18"/></svg>
+            </span>
+            <span class="module-title">Distribution</span>
           </a>
           <a href="#hr" class="module-card module-card--tile" data-module="hr">
             <span class="module-icon-tile module-icon--orange" aria-hidden="true">
@@ -1455,6 +1462,43 @@
         </div>
       </section>
 
+      <section id="page-distribution" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail distribution-module">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title" id="distribution-title">Distribution</h1>
+              <div class="module-detail-actions"></div>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-distribution" aria-label="Subsections" hidden></nav>
+
+            <div class="dist-section-panel active" data-section="dashboard" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="overview">
+                <div id="dist-dashboard"></div>
+              </div>
+            </div>
+
+            <div class="dist-section-panel" data-section="catalog" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="models">
+                <div id="dist-catalog"></div>
+              </div>
+            </div>
+
+            <div class="dist-section-panel" data-section="quotations" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="list">
+                <div id="dist-quotations"></div>
+              </div>
+            </div>
+
+            <div class="dist-section-panel" data-section="sold" data-subsections-ready="1" style="display:none">
+              <div class="module-subsection-panel active" data-subsection="registry">
+                <div id="dist-sold"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="page-lms" class="page module-detail-page">
         <div class="module-detail-wrap">
           <div class="module-detail lms-module">
@@ -2175,6 +2219,7 @@
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="documents"> Document ISO</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="contacts"> Contacts</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="lms"> Learning (LMS)</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="distribution"> Distribution</label>
               </div>
               <div class="admin-form-buttons">
                 <button type="submit" class="btn btn-primary">Save user</button>
@@ -2257,6 +2302,7 @@
   <script src="js/shifts-management.js" defer></script>
   <script src="js/lms-module.js" defer></script>
   <script src="js/lms-portal.js" defer></script>
+  <script src="js/distribution-module.js" defer></script>
   <script src="js/module-navigation.js" defer></script>
   <script src="js/app.js" defer></script>
   <script>

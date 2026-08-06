@@ -396,6 +396,16 @@ CREATE TABLE IF NOT EXISTS lms_data (
 INSERT INTO lms_data (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
+-- Distribution (brands, models, options, quotations, sold vessels) as JSON
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS distribution_data (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO distribution_data (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
 -- Legacy JSON blob (migration source + optional snapshot)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS app_data (
