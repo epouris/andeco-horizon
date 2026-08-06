@@ -1065,6 +1065,19 @@ body.dist-modal-open { overflow: hidden; }
     box-shadow: none !important;
     width: 100% !important;
     max-width: none !important;
-    padding: 0 !important;
+    padding: 0 0 0.5rem !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.dist-quote-open .dist-quote-top,
+  body.dist-quote-open .dist-quote-card,
+  body.dist-quote-open .dist-quote-card--model,
+  body.dist-quote-open .dist-quote-lines-print thead th,
+  body.dist-quote-open .dist-quote-totals-print .row.grand,
+  body.dist-quote-open .dist-quote-accent,
+  body.dist-quote-open .dist-quote-number,
+  body.dist-quote-open .dist-quote-mark {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
