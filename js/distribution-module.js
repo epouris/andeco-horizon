@@ -263,7 +263,7 @@
       settings: {
         quotePrefix: 'ORQ',
         quoteSequenceNumber: 1000,
-        defaultDiscountPercent: 25,
+        defaultDiscountPercent: 0,
         defaultCurrency: 'EUR',
         companyName: 'Andeco / OlympicRibs Distribution',
         companyDetails: '',
@@ -347,13 +347,24 @@
         : [],
       settings: Object.assign({}, base.settings, raw.settings || {})
     };
+    // Discount is opt-in only. Clear the old Excel-seeded 25% default.
+    if (
+      s.settings.defaultDiscountPercent == null ||
+      Number(s.settings.defaultDiscountPercent) === 25
+    ) {
+      s.settings.defaultDiscountPercent = 0;
+    } else {
+      s.settings.defaultDiscountPercent = Number(s.settings.defaultDiscountPercent) || 0;
+    }
     if (!s.brands.length) {
       const seeded = seedOlympicRibs();
       s.brands = seeded.brands;
       s.models = seeded.models;
       s.optionCategories = seeded.optionCategories;
       s.options = seeded.options;
-      s.settings = Object.assign({}, seeded.settings, s.settings);
+      s.settings = Object.assign({}, seeded.settings, s.settings, {
+        defaultDiscountPercent: 0
+      });
     }
     return s;
   }
