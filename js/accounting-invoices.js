@@ -3792,6 +3792,7 @@ const app = {
                 options: [],
                 quotations: [],
                 soldVessels: [],
+                potentialClients: [],
                 settings: {}
             })
         };

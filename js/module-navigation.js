@@ -64,6 +64,9 @@
       catalog: [
         { id: 'models', label: 'Models & options' }
       ],
+      prospects: [
+        { id: 'directory', label: 'Potential clients' }
+      ],
       quotations: [
         { id: 'list', label: 'Quotations' }
       ],
