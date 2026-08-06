@@ -1656,12 +1656,22 @@
               });
               return `<div class="dist-option-group">
                 <div class="dist-option-group-head">${esc(cat.label)}${isEngine ? ' — package price (incl. standard equipment)' : ''}</div>
+                ${isEngine ? `
+                  <div class="dist-opt-check-list">
+                    <label class="dist-opt-check">
+                      <input type="radio" name="dist-engine-opt" value="" ${!currentEngineId ? 'checked' : ''}>
+                      <span class="dist-opt-check-text">
+                        <span class="dist-opt-check-name">No engine — standard equipment only</span>
+                        <span class="dist-opt-check-price">${money(modelById(q.modelId)?.basePrice || 0)}</span>
+                      </span>
+                    </label>
+                  </div>` : ''}
                 ${Object.keys(groups).map((g) => `
                   <div class="dist-option-subgroup">${esc(g)}</div>
                   <div class="dist-opt-check-list">
                     ${groups[g].map((o) => `
                       <label class="dist-opt-check">
-                        <input type="${isEngine ? 'radio' : 'checkbox'}" name="${isEngine ? 'dist-engine-opt' : 'dist-opt'}" value="${esc(o.id)}" ${selected.has(o.id) || (isEngine && currentEngineId === o.id) ? 'checked' : ''}>
+                        <input type="${isEngine ? 'radio' : 'checkbox'}" name="${isEngine ? 'dist-engine-opt' : 'dist-opt'}" value="${esc(o.id)}" ${!isEngine && selected.has(o.id) || (isEngine && currentEngineId === o.id) ? 'checked' : ''}>
                         <span class="dist-opt-check-text">
                           <span class="dist-opt-check-name">${esc(o.name)}</span>
                           <span class="dist-opt-check-price">${money(o.price)}</span>
@@ -1706,7 +1716,7 @@
       const ids = [];
       overlay.querySelectorAll('input[name="dist-opt"]:checked').forEach((input) => ids.push(input.value));
       const engine = overlay.querySelector('input[name="dist-engine-opt"]:checked');
-      if (engine) ids.push(engine.value);
+      if (engine && engine.value) ids.push(engine.value);
       syncQuoteSelectedOptions(q, ids);
       close();
       if (typeof onDone === 'function') onDone();
