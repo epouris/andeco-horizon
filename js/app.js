@@ -152,6 +152,7 @@
     distribution: [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'catalog', label: 'Models & options' },
+      { id: 'prospects', label: 'Potential clients' },
       { id: 'quotations', label: 'Quotations' },
       { id: 'sold', label: 'Sold vessels' }
     ],

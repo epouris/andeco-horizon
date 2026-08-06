@@ -235,6 +235,20 @@
 .dist-badge.accepted { background: #eff6ff; color: #1d4ed8; }
 .dist-badge.rejected { background: #fef2f2; color: #b91c1c; }
 .dist-badge.converted { background: #fff7ed; color: #c2410c; }
+.dist-badge.lead { background: #f1f5f9; color: #475569; }
+.dist-badge.contacted { background: #e0f2fe; color: #0369a1; }
+.dist-badge.quoted { background: #eff6ff; color: #1d4ed8; }
+.dist-badge.negotiating { background: #fff7ed; color: #c2410c; }
+.dist-badge.won { background: #ecfdf5; color: #047857; }
+.dist-badge.lost { background: #fef2f2; color: #b91c1c; }
+
+.distribution-module .search-input {
+  border: 1px solid var(--dist-line);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  background: #fff;
+}
 
 .dist-section-panel { display: none; }
 .dist-section-panel.active { display: block; }
@@ -292,6 +306,7 @@
 }
 
 .dist-form-grid .full,
+.dist-field.full,
 .dist-span-2 { grid-column: 1 / -1; }
 
 .dist-form-grid input,

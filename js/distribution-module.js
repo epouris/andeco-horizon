@@ -7,7 +7,7 @@
 
   const STORAGE_KEY = 'andeco_distribution_data';
   const MODULE_ID = 'distribution';
-  const SECTIONS = ['dashboard', 'catalog', 'quotations', 'sold'];
+  const SECTIONS = ['dashboard', 'catalog', 'prospects', 'quotations', 'sold'];
   const QUOTE_STATUSES = [
     { value: 'draft', label: 'Draft' },
     { value: 'sent', label: 'Sent' },
@@ -15,13 +15,31 @@
     { value: 'rejected', label: 'Rejected' },
     { value: 'converted', label: 'Converted to proforma' }
   ];
+  const PROSPECT_STATUSES = [
+    { value: 'lead', label: 'Lead' },
+    { value: 'contacted', label: 'Contacted' },
+    { value: 'quoted', label: 'Quoted' },
+    { value: 'negotiating', label: 'Negotiating' },
+    { value: 'won', label: 'Won / purchased' },
+    { value: 'lost', label: 'Lost' }
+  ];
+  const PROSPECT_SOURCES = [
+    { value: 'newsletter', label: 'Newsletter' },
+    { value: 'exhibition', label: 'Exhibition / boat show' },
+    { value: 'referral', label: 'Referral' },
+    { value: 'website', label: 'Website' },
+    { value: 'walk-in', label: 'Walk-in' },
+    { value: 'other', label: 'Other' }
+  ];
 
   let state = null;
   let section = 'dashboard';
   let saveTimer = null;
   let quoteEditorId = null;
+  let prospectEditorId = null; // null = list, '' = new, id = edit
   let catalogBrandFilter = '';
   let catalogModelFilter = '';
+  let prospectSearch = '';
 
   function uid(prefix) {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -241,6 +259,7 @@
       options: options.concat(more),
       quotations: [],
       soldVessels: [],
+      potentialClients: [],
       settings: {
         quotePrefix: 'ORQ',
         quoteSequenceNumber: 1000,
@@ -250,6 +269,62 @@
         companyDetails: '',
         quoteFooter: 'Prices in EUR. Quotation valid for 30 days unless otherwise stated. Technical specifications subject to manufacturer updates.'
       }
+    };
+  }
+
+  function emptyProspect() {
+    return {
+      id: uid('prospect'),
+      company: '',
+      contactName: '',
+      email: '',
+      phone: '',
+      mobile: '',
+      address: '',
+      city: '',
+      country: '',
+      postalCode: '',
+      taxId: '',
+      website: '',
+      source: 'other',
+      status: 'lead',
+      newsletterOptIn: true,
+      interestNotes: '',
+      notes: '',
+      convertedToClientId: null,
+      convertedToClientCustomerId: null,
+      convertedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function normalizeProspect(raw) {
+    const base = emptyProspect();
+    if (!raw || typeof raw !== 'object') return base;
+    return {
+      id: raw.id || base.id,
+      company: raw.company || '',
+      contactName: raw.contactName || raw.name || '',
+      email: raw.email || '',
+      phone: raw.phone || '',
+      mobile: raw.mobile || '',
+      address: raw.address || '',
+      city: raw.city || '',
+      country: raw.country || '',
+      postalCode: raw.postalCode || '',
+      taxId: raw.taxId || '',
+      website: raw.website || '',
+      source: raw.source || 'other',
+      status: raw.status || 'lead',
+      newsletterOptIn: raw.newsletterOptIn !== false,
+      interestNotes: raw.interestNotes || '',
+      notes: raw.notes || '',
+      convertedToClientId: raw.convertedToClientId || null,
+      convertedToClientCustomerId: raw.convertedToClientCustomerId || null,
+      convertedAt: raw.convertedAt || null,
+      createdAt: raw.createdAt || base.createdAt,
+      updatedAt: raw.updatedAt || base.updatedAt
     };
   }
 
@@ -267,6 +342,9 @@
       options: Array.isArray(raw.options) ? raw.options : base.options,
       quotations: Array.isArray(raw.quotations) ? raw.quotations : [],
       soldVessels: Array.isArray(raw.soldVessels) ? raw.soldVessels : [],
+      potentialClients: Array.isArray(raw.potentialClients)
+        ? raw.potentialClients.map(normalizeProspect)
+        : [],
       settings: Object.assign({}, base.settings, raw.settings || {})
     };
     if (!s.brands.length) {
@@ -337,18 +415,45 @@
     return (state.quotations || []).find((q) => q.id === id) || null;
   }
 
-  function clientsList() {
-    try {
-      if (window.DataStore && typeof window.DataStore.getClients === 'function') {
-        return window.DataStore.getClients() || [];
-      }
-    } catch (_) { /* ignore */ }
-    return [];
+  function prospectById(id) {
+    return (state.potentialClients || []).find((p) => p.id === id) || null;
   }
 
-  function clientLabel(c) {
-    if (!c) return '';
-    return c.company || c.name || c.contactName || c.email || c.id || 'Client';
+  function prospectLabel(p) {
+    if (!p) return '';
+    const company = (p.company || '').trim();
+    const contact = (p.contactName || '').trim();
+    if (company && contact) return `${company} — ${contact}`;
+    return company || contact || p.email || 'Potential client';
+  }
+
+  function prospectDisplayName(p) {
+    if (!p) return '';
+    return (p.company || '').trim() || (p.contactName || '').trim() || p.email || '';
+  }
+
+  function snapshotFromProspect(p) {
+    if (!p) {
+      return { name: '', contactName: '', email: '', phone: '', company: '', address: '', city: '', country: '', postalCode: '', taxId: '' };
+    }
+    const addressParts = [p.address, p.postalCode, p.city, p.country].filter(Boolean);
+    return {
+      name: prospectDisplayName(p),
+      contactName: p.contactName || '',
+      email: p.email || '',
+      phone: p.phone || p.mobile || '',
+      company: p.company || '',
+      address: addressParts.join(', '),
+      city: p.city || '',
+      country: p.country || '',
+      postalCode: p.postalCode || '',
+      taxId: p.taxId || ''
+    };
+  }
+
+  function statusLabel(list, value) {
+    const hit = list.find((s) => s.value === value);
+    return hit ? hit.label : (value || '—');
   }
 
   function nextQuoteNumber() {
@@ -362,7 +467,10 @@
     if (!SECTIONS.includes(name)) name = 'dashboard';
     const keepEditor = options && options.keepEditor;
     section = name;
-    if (!keepEditor) quoteEditorId = null;
+    if (!keepEditor) {
+      quoteEditorId = null;
+      if (name !== 'prospects') prospectEditorId = null;
+    }
     document.querySelectorAll('#page-distribution .dist-section-panel').forEach((el) => {
       const match = el.getAttribute('data-section') === name;
       el.classList.toggle('active', match);
@@ -383,13 +491,18 @@
     const brands = state.brands.length;
     const models = state.models.filter((m) => m.active !== false).length;
     const openQuotes = state.quotations.filter((q) => !['rejected', 'converted'].includes(q.status)).length;
+    const prospects = (state.potentialClients || []).length;
     const sold = state.soldVessels.length;
     const recent = [...state.quotations].sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '')).slice(0, 6);
+    const recentProspects = [...(state.potentialClients || [])]
+      .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''))
+      .slice(0, 5);
 
     el.innerHTML = `
       <div class="dist-metrics">
         <div class="dist-metric"><div class="label">Brands</div><div class="value">${brands}</div></div>
         <div class="dist-metric"><div class="label">Active models</div><div class="value">${models}</div></div>
+        <div class="dist-metric"><div class="label">Potential clients</div><div class="value">${prospects}</div></div>
         <div class="dist-metric"><div class="label">Open quotations</div><div class="value">${openQuotes}</div></div>
         <div class="dist-metric"><div class="label">Sold vessels</div><div class="value">${sold}</div></div>
       </div>
@@ -400,7 +513,7 @@
         </div>
         ${recent.length ? `
           <table class="dist-table">
-            <thead><tr><th>Number</th><th>Client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Number</th><th>Potential client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
             <tbody>
               ${recent.map((q) => {
                 const m = modelById(q.modelId);
@@ -415,6 +528,24 @@
               }).join('')}
             </tbody>
           </table>` : '<div class="dist-empty">No quotations yet. Create a model catalog, then build your first quote.</div>'}
+      </div>
+      <div class="dist-card" style="margin-top:1rem">
+        <div class="dist-card-header">
+          <h3>Potential clients</h3>
+          <button type="button" class="btn btn-secondary btn-sm" data-dist-goto="prospects">Manage list</button>
+        </div>
+        ${recentProspects.length ? `
+          <table class="dist-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Newsletter</th></tr></thead>
+            <tbody>
+              ${recentProspects.map((p) => `<tr>
+                <td><strong>${esc(prospectLabel(p))}</strong></td>
+                <td>${esc(p.email || '—')}</td>
+                <td><span class="dist-badge ${esc(p.status)}">${esc(statusLabel(PROSPECT_STATUSES, p.status))}</span></td>
+                <td>${p.newsletterOptIn ? 'Yes' : 'No'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>` : '<div class="dist-empty">No potential clients yet. Add leads here for quotations and future newsletters — separate from Accounting clients.</div>'}
       </div>
       <div class="dist-card" style="margin-top:1rem">
         <div class="dist-card-header"><h3>Distribution brands</h3>
@@ -436,6 +567,10 @@
       if (typeof window.setDistributionSection === 'function') window.setDistributionSection('quotations');
       else setSection('quotations');
       createQuote();
+    });
+    el.querySelector('[data-dist-goto="prospects"]')?.addEventListener('click', () => {
+      if (typeof window.setDistributionSection === 'function') window.setDistributionSection('prospects');
+      else setSection('prospects');
     });
     el.querySelectorAll('[data-dist-open-quote]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -693,6 +828,285 @@
     toast(existing ? 'Option updated' : 'Option added');
   }
 
+  /* ─── Potential clients ─── */
+  function renderProspects() {
+    const el = document.getElementById('dist-prospects');
+    if (!el) return;
+    if (prospectEditorId !== null) {
+      renderProspectEditor(el);
+      return;
+    }
+    const q = (prospectSearch || '').trim().toLowerCase();
+    let list = [...(state.potentialClients || [])].sort((a, b) =>
+      (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '')
+    );
+    if (q) {
+      list = list.filter((p) => {
+        const hay = [p.company, p.contactName, p.email, p.phone, p.mobile, p.city, p.country, p.notes, p.interestNotes]
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    const newsletterCount = (state.potentialClients || []).filter((p) => p.newsletterOptIn && p.email).length;
+
+    el.innerHTML = `
+      <div class="dist-toolbar">
+        <div>
+          <p style="margin:0;color:var(--text-secondary);font-size:.9rem">
+            Leads and prospects for quotations and newsletters. Separate from Accounting clients — convert only after they buy.
+          </p>
+          <p style="margin:.35rem 0 0;color:var(--text-muted);font-size:.8rem">${newsletterCount} with newsletter opt-in + email</p>
+        </div>
+        <div class="dist-actions">
+          <input type="search" id="dist-prospect-search" class="search-input" placeholder="Search…" value="${esc(prospectSearch)}" style="min-width:180px">
+          <button type="button" class="btn btn-primary" id="dist-add-prospect">Add potential client</button>
+        </div>
+      </div>
+      <div class="dist-card">
+        ${list.length ? `
+          <table class="dist-table">
+            <thead>
+              <tr>
+                <th>Company / contact</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>City</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Newsletter</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map((p) => `
+                <tr>
+                  <td>
+                    <strong>${esc(prospectLabel(p))}</strong>
+                    ${p.convertedToClientId ? `<div class="meta" style="font-size:.72rem;color:var(--dist-accent)">Accounting client ${esc(p.convertedToClientCustomerId || 'linked')}</div>` : ''}
+                  </td>
+                  <td>${esc(p.email || '—')}</td>
+                  <td>${esc(p.phone || p.mobile || '—')}</td>
+                  <td>${esc([p.city, p.country].filter(Boolean).join(', ') || '—')}</td>
+                  <td>${esc(statusLabel(PROSPECT_SOURCES, p.source))}</td>
+                  <td><span class="dist-badge ${esc(p.status)}">${esc(statusLabel(PROSPECT_STATUSES, p.status))}</span></td>
+                  <td>${p.newsletterOptIn ? 'Yes' : 'No'}</td>
+                  <td class="dist-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-edit-prospect="${esc(p.id)}">Edit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-quote-prospect="${esc(p.id)}">Quote</button>
+                    ${!p.convertedToClientId ? `<button type="button" class="btn btn-secondary btn-sm" data-dist-convert-prospect="${esc(p.id)}">Add as client</button>` : ''}
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-del-prospect="${esc(p.id)}">Delete</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>` : '<div class="dist-empty">No potential clients yet. Add someone before building a quotation, or create them from the quote screen.</div>'}
+      </div>`;
+
+    el.querySelector('#dist-prospect-search')?.addEventListener('input', (e) => {
+      prospectSearch = e.target.value || '';
+      renderProspects();
+    });
+    el.querySelector('#dist-add-prospect')?.addEventListener('click', () => {
+      prospectEditorId = '';
+      renderProspects();
+    });
+    el.querySelectorAll('[data-dist-edit-prospect]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        prospectEditorId = btn.getAttribute('data-dist-edit-prospect');
+        renderProspects();
+      });
+    });
+    el.querySelectorAll('[data-dist-quote-prospect]').forEach((btn) => {
+      btn.addEventListener('click', () => createQuoteForProspect(btn.getAttribute('data-dist-quote-prospect')));
+    });
+    el.querySelectorAll('[data-dist-convert-prospect]').forEach((btn) => {
+      btn.addEventListener('click', () => convertProspectToAccountingClient(btn.getAttribute('data-dist-convert-prospect')));
+    });
+    el.querySelectorAll('[data-dist-del-prospect]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Delete this potential client?')) return;
+        const id = btn.getAttribute('data-dist-del-prospect');
+        state.potentialClients = (state.potentialClients || []).filter((p) => p.id !== id);
+        persist(true);
+        renderProspects();
+        toast('Potential client deleted');
+      });
+    });
+  }
+
+  function renderProspectEditor(el) {
+    const isNew = prospectEditorId === '';
+    const existing = isNew ? null : prospectById(prospectEditorId);
+    if (!isNew && !existing) {
+      prospectEditorId = null;
+      renderProspects();
+      return;
+    }
+    const p = existing || emptyProspect();
+
+    el.innerHTML = `
+      <div class="dist-toolbar">
+        <button type="button" class="btn btn-secondary btn-sm" id="dist-prospect-back">← Back to list</button>
+        <div class="dist-actions">
+          ${existing && !existing.convertedToClientId ? `<button type="button" class="btn btn-secondary btn-sm" id="dist-prospect-convert">Add as Accounting client</button>` : ''}
+          <button type="button" class="btn btn-primary btn-sm" id="dist-prospect-save">Save</button>
+        </div>
+      </div>
+      <div class="dist-card">
+        <div class="dist-card-header">
+          <h3>${isNew ? 'New potential client' : 'Edit potential client'}</h3>
+          ${existing?.convertedToClientId ? `<span class="dist-badge converted">Accounting client linked</span>` : `<span class="dist-badge ${esc(p.status)}">${esc(statusLabel(PROSPECT_STATUSES, p.status))}</span>`}
+        </div>
+        <div class="dist-form-grid">
+          <div class="dist-field"><label>Company</label><input type="text" id="dp-company" value="${esc(p.company)}" placeholder="Company name"></div>
+          <div class="dist-field"><label>Contact person</label><input type="text" id="dp-contact" value="${esc(p.contactName)}" placeholder="Full name"></div>
+          <div class="dist-field"><label>Email</label><input type="email" id="dp-email" value="${esc(p.email)}"></div>
+          <div class="dist-field"><label>Phone</label><input type="text" id="dp-phone" value="${esc(p.phone)}"></div>
+          <div class="dist-field"><label>Mobile</label><input type="text" id="dp-mobile" value="${esc(p.mobile)}"></div>
+          <div class="dist-field"><label>Website</label><input type="text" id="dp-website" value="${esc(p.website)}"></div>
+          <div class="dist-field full"><label>Address</label><input type="text" id="dp-address" value="${esc(p.address)}"></div>
+          <div class="dist-field"><label>Postal code</label><input type="text" id="dp-postal" value="${esc(p.postalCode)}"></div>
+          <div class="dist-field"><label>City</label><input type="text" id="dp-city" value="${esc(p.city)}"></div>
+          <div class="dist-field"><label>Country</label><input type="text" id="dp-country" value="${esc(p.country)}"></div>
+          <div class="dist-field"><label>Tax ID / VAT</label><input type="text" id="dp-tax" value="${esc(p.taxId)}"></div>
+          <div class="dist-field"><label>Source</label>
+            <select id="dp-source">${PROSPECT_SOURCES.map((s) => `<option value="${s.value}" ${p.source === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
+          </div>
+          <div class="dist-field"><label>Status</label>
+            <select id="dp-status">${PROSPECT_STATUSES.map((s) => `<option value="${s.value}" ${p.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
+          </div>
+          <div class="dist-field">
+            <label class="admin-check-label" style="margin-top:1.6rem">
+              <input type="checkbox" id="dp-newsletter" ${p.newsletterOptIn ? 'checked' : ''}> Newsletter opt-in
+            </label>
+          </div>
+          <div class="dist-field full"><label>Interest / models of interest</label><textarea id="dp-interest" rows="2" placeholder="e.g. 720 Cruiser, twin engines…">${esc(p.interestNotes)}</textarea></div>
+          <div class="dist-field full"><label>Internal notes</label><textarea id="dp-notes" rows="2">${esc(p.notes)}</textarea></div>
+        </div>
+      </div>`;
+
+    const readForm = () => ({
+      company: el.querySelector('#dp-company')?.value.trim() || '',
+      contactName: el.querySelector('#dp-contact')?.value.trim() || '',
+      email: el.querySelector('#dp-email')?.value.trim() || '',
+      phone: el.querySelector('#dp-phone')?.value.trim() || '',
+      mobile: el.querySelector('#dp-mobile')?.value.trim() || '',
+      website: el.querySelector('#dp-website')?.value.trim() || '',
+      address: el.querySelector('#dp-address')?.value.trim() || '',
+      postalCode: el.querySelector('#dp-postal')?.value.trim() || '',
+      city: el.querySelector('#dp-city')?.value.trim() || '',
+      country: el.querySelector('#dp-country')?.value.trim() || '',
+      taxId: el.querySelector('#dp-tax')?.value.trim() || '',
+      source: el.querySelector('#dp-source')?.value || 'other',
+      status: el.querySelector('#dp-status')?.value || 'lead',
+      newsletterOptIn: !!el.querySelector('#dp-newsletter')?.checked,
+      interestNotes: el.querySelector('#dp-interest')?.value.trim() || '',
+      notes: el.querySelector('#dp-notes')?.value.trim() || ''
+    });
+
+    el.querySelector('#dist-prospect-back')?.addEventListener('click', () => {
+      prospectEditorId = null;
+      renderProspects();
+    });
+    el.querySelector('#dist-prospect-save')?.addEventListener('click', () => {
+      const data = readForm();
+      if (!data.company && !data.contactName) {
+        toast('Enter a company or contact name', 'error');
+        return;
+      }
+      if (existing) {
+        Object.assign(existing, data, { updatedAt: new Date().toISOString() });
+        persist(true);
+        toast('Potential client updated');
+        prospectEditorId = null;
+      } else {
+        const created = normalizeProspect(Object.assign(emptyProspect(), data));
+        state.potentialClients.unshift(created);
+        persist(true);
+        toast('Potential client added');
+        prospectEditorId = null;
+      }
+      renderProspects();
+    });
+    el.querySelector('#dist-prospect-convert')?.addEventListener('click', () => {
+      if (!existing) return;
+      const data = readForm();
+      Object.assign(existing, data, { updatedAt: new Date().toISOString() });
+      persist(true);
+      convertProspectToAccountingClient(existing.id);
+    });
+  }
+
+  function convertProspectToAccountingClient(prospectId) {
+    const p = prospectById(prospectId);
+    if (!p) return;
+    if (p.convertedToClientId) {
+      toast('Already linked to an Accounting client', 'error');
+      return;
+    }
+    if (!window.DataStore || typeof window.DataStore.saveClient !== 'function') {
+      toast('Accounting module is not available', 'error');
+      return;
+    }
+    const companyName = (p.company || '').trim() || (p.contactName || '').trim();
+    if (!companyName) {
+      toast('Company or contact name is required to create a client', 'error');
+      return;
+    }
+    if (!confirm(`Create Accounting client for “${companyName}”? Use this after they purchase.`)) return;
+
+    let customerId = '';
+    try {
+      if (typeof window.DataStore.getNextCustomerId === 'function') {
+        customerId = window.DataStore.getNextCustomerId();
+      }
+    } catch (_) { /* ignore */ }
+
+    const client = {
+      id: uid('client'),
+      customerId: customerId || '',
+      name: companyName,
+      contactPerson: p.company ? (p.contactName || '') : '',
+      company: '',
+      address: [p.address, p.postalCode, p.city, p.country].filter(Boolean).join(', '),
+      email: p.email || '',
+      phone: p.phone || p.mobile || '',
+      taxId: p.taxId || '',
+      website: p.website || '',
+      notes: [
+        'Converted from Distribution potential client.',
+        p.interestNotes ? `Interest: ${p.interestNotes}` : '',
+        p.notes || ''
+      ].filter(Boolean).join('\n'),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      window.DataStore.saveClient(client);
+      p.convertedToClientId = client.id;
+      p.convertedToClientCustomerId = client.customerId || client.id;
+      p.convertedAt = new Date().toISOString();
+      if (p.status !== 'won') p.status = 'won';
+      p.updatedAt = new Date().toISOString();
+      persist(true);
+      toast(`Accounting client ${client.customerId || ''} created`);
+      if (typeof window.ClientsModule !== 'undefined' && window.ClientsModule.render) {
+        try { window.ClientsModule.render(); } catch (_) { /* ignore */ }
+      }
+      renderProspects();
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || 'Failed to create Accounting client', 'error');
+    }
+  }
+
+  function createQuoteForProspect(prospectId) {
+    if (typeof window.setDistributionSection === 'function') window.setDistributionSection('quotations');
+    else setSection('quotations');
+    createQuote(prospectId);
+  }
+
   /* ─── Quotations ─── */
   function renderQuotations() {
     const el = document.getElementById('dist-quotations');
@@ -704,13 +1118,13 @@
     const list = [...state.quotations].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     el.innerHTML = `
       <div class="dist-toolbar">
-        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build client quotations from model options, apply line discounts, print, and convert to a proforma invoice.</p>
+        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build quotations for potential clients from model options, apply line discounts, print, and convert to a proforma invoice.</p>
         <button type="button" class="btn btn-primary" id="dist-new-quote">New quotation</button>
       </div>
       <div class="dist-card">
         ${list.length ? `
           <table class="dist-table">
-            <thead><tr><th>Number</th><th>Date</th><th>Client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Number</th><th>Date</th><th>Potential client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
             <tbody>
               ${list.map((q) => {
                 const m = modelById(q.modelId);
@@ -741,20 +1155,22 @@
     });
   }
 
-  function createQuote() {
+  function createQuote(prospectId) {
     const brand = state.brands[0];
     if (!brand) { toast('Add a brand first', 'error'); return; }
     const models = state.models.filter((m) => m.brandId === brand.id && m.active !== false);
     if (!models.length) { toast('Add a model first', 'error'); return; }
     const model = models[0];
     const disc = Number(state.settings.defaultDiscountPercent) || 0;
+    const prospect = prospectId ? prospectById(prospectId) : null;
     const q = {
       id: uid('quote'),
       number: nextQuoteNumber(),
       date: todayISO(),
       status: 'draft',
-      clientId: '',
-      clientSnapshot: { name: '', email: '', phone: '', company: '', address: '' },
+      prospectId: prospect ? prospect.id : '',
+      clientId: '', // legacy; quotations use potential clients only
+      clientSnapshot: snapshotFromProspect(prospect),
       brandId: brand.id,
       modelId: model.id,
       currency: model.currency || 'EUR',
@@ -797,9 +1213,12 @@
       return;
     }
     recalcQuote(q);
+    if (!q.prospectId && q.clientId) q.prospectId = '';
     const brand = brandById(q.brandId);
     const model = modelById(q.modelId);
-    const clients = clientsList();
+    const prospects = [...(state.potentialClients || [])].sort((a, b) =>
+      prospectLabel(a).localeCompare(prospectLabel(b))
+    );
     const cats = state.optionCategories
       .filter((c) => c.brandId === q.brandId)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
@@ -830,15 +1249,21 @@
           <div class="dist-field"><label>Status</label>
             <select id="dq-status">${QUOTE_STATUSES.map((s) => `<option value="${s.value}" ${q.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
           </div>
-          <div class="dist-field"><label>Client (CRM)</label>
-            <select id="dq-client">
-              <option value="">— Manual / walk-in —</option>
-              ${clients.map((c) => `<option value="${esc(c.id)}" ${q.clientId === c.id ? 'selected' : ''}>${esc(clientLabel(c))}</option>`).join('')}
-            </select>
+          <div class="dist-field full"><label>Potential client</label>
+            <div class="dist-actions" style="align-items:stretch">
+              <select id="dq-prospect" style="flex:1;min-width:220px">
+                <option value="">— Select potential client —</option>
+                ${prospects.map((p) => `<option value="${esc(p.id)}" ${(q.prospectId || '') === p.id ? 'selected' : ''}>${esc(prospectLabel(p))}</option>`).join('')}
+              </select>
+              <button type="button" class="btn btn-secondary btn-sm" id="dq-new-prospect">New</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="dq-manage-prospects">Manage list</button>
+            </div>
           </div>
-          <div class="dist-field"><label>Client name</label><input type="text" id="dq-cname" value="${esc(q.clientSnapshot?.name || '')}" placeholder="Company or contact"></div>
+          <div class="dist-field"><label>Company / name on quote</label><input type="text" id="dq-cname" value="${esc(q.clientSnapshot?.name || '')}" placeholder="Shown on quotation"></div>
+          <div class="dist-field"><label>Contact person</label><input type="text" id="dq-ccontact" value="${esc(q.clientSnapshot?.contactName || '')}"></div>
           <div class="dist-field"><label>Email</label><input type="email" id="dq-cemail" value="${esc(q.clientSnapshot?.email || '')}"></div>
           <div class="dist-field"><label>Phone</label><input type="text" id="dq-cphone" value="${esc(q.clientSnapshot?.phone || '')}"></div>
+          <div class="dist-field full"><label>Address</label><input type="text" id="dq-caddress" value="${esc(q.clientSnapshot?.address || '')}"></div>
           <div class="dist-field"><label>Brand</label>
             <select id="dq-brand">${state.brands.map((b) => `<option value="${esc(b.id)}" ${b.id === q.brandId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
           </div>
@@ -907,14 +1332,20 @@
       q.date = el.querySelector('#dq-date')?.value || q.date;
       q.status = el.querySelector('#dq-status')?.value || q.status;
       q.notes = el.querySelector('#dq-notes')?.value || '';
+      q.prospectId = el.querySelector('#dq-prospect')?.value || '';
+      q.clientId = '';
       q.clientSnapshot = {
         name: el.querySelector('#dq-cname')?.value || '',
+        contactName: el.querySelector('#dq-ccontact')?.value || '',
         email: el.querySelector('#dq-cemail')?.value || '',
         phone: el.querySelector('#dq-cphone')?.value || '',
-        company: q.clientSnapshot?.company || '',
-        address: q.clientSnapshot?.address || ''
+        company: el.querySelector('#dq-cname')?.value || '',
+        address: el.querySelector('#dq-caddress')?.value || '',
+        city: q.clientSnapshot?.city || '',
+        country: q.clientSnapshot?.country || '',
+        postalCode: q.clientSnapshot?.postalCode || '',
+        taxId: q.clientSnapshot?.taxId || ''
       };
-      q.clientId = el.querySelector('#dq-client')?.value || '';
       const newBrand = el.querySelector('#dq-brand')?.value;
       const newModel = el.querySelector('#dq-model')?.value;
       if (newBrand && newBrand !== q.brandId) {
@@ -936,6 +1367,16 @@
       });
       recalcQuote(q);
       q.updatedAt = new Date().toISOString();
+    };
+
+    const applyProspectToForm = (p) => {
+      const snap = snapshotFromProspect(p);
+      el.querySelector('#dq-cname').value = snap.name;
+      el.querySelector('#dq-ccontact').value = snap.contactName;
+      el.querySelector('#dq-cemail').value = snap.email;
+      el.querySelector('#dq-cphone').value = snap.phone;
+      el.querySelector('#dq-caddress').value = snap.address;
+      q.clientSnapshot = snap;
     };
 
     el.querySelector('#dist-quote-back')?.addEventListener('click', () => {
@@ -963,12 +1404,45 @@
       saveFields();
       createSoldFromQuote(q);
     });
-    el.querySelector('#dq-client')?.addEventListener('change', (e) => {
-      const c = clients.find((x) => x.id === e.target.value);
-      if (!c) return;
-      el.querySelector('#dq-cname').value = clientLabel(c);
-      el.querySelector('#dq-cemail').value = c.email || '';
-      el.querySelector('#dq-cphone').value = c.phone || c.mobile || '';
+    el.querySelector('#dq-prospect')?.addEventListener('change', (e) => {
+      const p = prospectById(e.target.value);
+      if (!p) return;
+      applyProspectToForm(p);
+      q.prospectId = p.id;
+      if (p.status === 'lead' || p.status === 'contacted') {
+        p.status = 'quoted';
+        p.updatedAt = new Date().toISOString();
+      }
+      persist();
+    });
+    el.querySelector('#dq-new-prospect')?.addEventListener('click', () => {
+      saveFields();
+      persist(true);
+      const company = prompt('Company name (or leave blank):', '') ?? '';
+      const contact = prompt('Contact person:', '') ?? '';
+      if (!company.trim() && !contact.trim()) return;
+      const email = prompt('Email:', '') ?? '';
+      const phone = prompt('Phone:', '') ?? '';
+      const created = normalizeProspect(Object.assign(emptyProspect(), {
+        company: company.trim(),
+        contactName: contact.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        status: 'quoted',
+        source: 'other'
+      }));
+      state.potentialClients.unshift(created);
+      q.prospectId = created.id;
+      q.clientSnapshot = snapshotFromProspect(created);
+      persist(true);
+      toast('Potential client added');
+      renderQuoteEditor(el);
+    });
+    el.querySelector('#dq-manage-prospects')?.addEventListener('click', () => {
+      saveFields();
+      persist(true);
+      if (typeof window.setDistributionSection === 'function') window.setDistributionSection('prospects');
+      else setSection('prospects');
     });
     el.querySelector('#dq-brand')?.addEventListener('change', () => {
       saveFields();
@@ -1103,9 +1577,11 @@
           </table>
         </div>
       </div>
-      <h2>Client</h2>
+      <h2>Prepared for</h2>
       <div><strong>${esc(q.clientSnapshot?.name || '—')}</strong></div>
+      ${q.clientSnapshot?.contactName ? `<div>${esc(q.clientSnapshot.contactName)}</div>` : ''}
       <div class="muted">${esc([q.clientSnapshot?.email, q.clientSnapshot?.phone].filter(Boolean).join(' · '))}</div>
+      ${q.clientSnapshot?.address ? `<div class="muted">${esc(q.clientSnapshot.address)}</div>` : ''}
 
       ${Object.keys(specs).length ? `<h2>Technical specifications — ${esc(model?.name || '')}</h2>
         <table class="meta">${Object.entries(specs).map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>` : ''}
@@ -1188,7 +1664,7 @@
       date: q.date || todayISO(),
       dueDate: '',
       clientCustomerId: '',
-      clientId: q.clientId || '',
+      clientId: '',
       clientName: q.clientSnapshot?.name || '',
       clientEmail: q.clientSnapshot?.email || '',
       clientPhone: q.clientSnapshot?.phone || '',
@@ -1203,6 +1679,7 @@
       notes: `Converted from distribution quotation ${q.number}.${q.notes ? '\n' + q.notes : ''}`,
       distributionQuoteId: q.id,
       distributionQuoteNumber: q.number,
+      distributionProspectId: q.prospectId || '',
       brandId: q.brandId,
       modelId: q.modelId,
       createdAt: new Date().toISOString(),
@@ -1244,7 +1721,8 @@
       brandName: brand?.name || '',
       engineSummary: engine.trim(),
       specs: Object.assign({}, model?.techSpecs || {}),
-      ownerClientId: q.clientId || '',
+      ownerProspectId: q.prospectId || '',
+      ownerClientId: '',
       ownerName: owner,
       ownerEmail: q.clientSnapshot?.email || '',
       ownerPhone: q.clientSnapshot?.phone || '',
@@ -1256,8 +1734,18 @@
     };
     state.soldVessels.unshift(vessel);
     if (q.status !== 'converted') q.status = 'accepted';
+    const prospect = q.prospectId ? prospectById(q.prospectId) : null;
+    if (prospect) {
+      prospect.status = 'won';
+      prospect.updatedAt = new Date().toISOString();
+    }
     persist(true);
     toast('Sold vessel recorded');
+    if (prospect && !prospect.convertedToClientId) {
+      if (confirm('Add this potential client to Accounting clients now that they purchased?')) {
+        convertProspectToAccountingClient(prospect.id);
+      }
+    }
     if (typeof window.setDistributionSection === 'function') window.setDistributionSection('sold');
     else setSection('sold');
   }
@@ -1383,6 +1871,7 @@
     if (!state) return;
     if (section === 'dashboard') renderDashboard();
     else if (section === 'catalog') renderCatalog();
+    else if (section === 'prospects') renderProspects();
     else if (section === 'quotations') renderQuotations();
     else if (section === 'sold') renderSold();
   }

@@ -120,6 +120,7 @@ window.AccountingData = (function () {
         options: [],
         quotations: [],
         soldVessels: [],
+        potentialClients: [],
         settings: {}
       },
       crm: { users: [] }
@@ -195,6 +196,7 @@ window.AccountingData = (function () {
           options: [],
           quotations: [],
           soldVessels: [],
+          potentialClients: [],
           settings: {}
         };
       })(),
