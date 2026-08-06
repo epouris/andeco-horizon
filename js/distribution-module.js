@@ -659,7 +659,7 @@
         <div class="dist-card">
           <div class="dist-card-header">
             <h3>${esc(model.name)} — standard equipment & specs</h3>
-            <div class="dist-price">${money(model.basePrice, model.currency)} <span style="font-size:.75rem;font-weight:500;color:var(--text-muted)">base hull</span></div>
+            <div class="dist-price">${money(model.basePrice, model.currency)} <span style="font-size:.75rem;font-weight:500;color:var(--text-muted)">standard equipment (without engine)</span></div>
           </div>
           <div class="dist-split">
             <div>
@@ -752,7 +752,7 @@
     const existing = id ? modelById(id) : null;
     const name = prompt('Model name:', existing?.name || '');
     if (name == null || !name.trim()) return;
-    const priceStr = prompt('Base hull price (EUR):', existing ? String(existing.basePrice) : '0');
+    const priceStr = prompt('Standard equipment price without engine (EUR):', existing ? String(existing.basePrice) : '0');
     if (priceStr == null) return;
     const basePrice = Number(String(priceStr).replace(',', '.')) || 0;
     if (existing) {
@@ -1155,6 +1155,119 @@
     });
   }
 
+  function isEngineOption(opt) {
+    if (!opt) return false;
+    const cat = categoryById(opt.categoryId);
+    return !!(cat && cat.key === 'engines');
+  }
+
+  function hullLineDescription(brand, model) {
+    return `${brand?.name || ''} ${model?.name || ''} — standard equipment (without engine)`.trim();
+  }
+
+  function enginePackageDescription(brand, model, engineOpt) {
+    const eng = `${engineOpt.subgroup ? engineOpt.subgroup + ' · ' : ''}${engineOpt.name}`;
+    return `${brand?.name || ''} ${model?.name || ''} + ${eng} (incl. standard equipment)`.trim();
+  }
+
+  function ensureHullOrEngineLine(q) {
+    const brand = brandById(q.brandId);
+    const model = modelById(q.modelId);
+    const disc = Number(state.settings.defaultDiscountPercent) || 0;
+    const hasEngine = (q.lines || []).some((ln) => ln.kind === 'option' && ln.categoryKey === 'engines');
+    const hullIdx = (q.lines || []).findIndex((ln) => ln.kind === 'model' || ln.categoryKey === 'hull');
+    if (hasEngine) {
+      if (hullIdx >= 0) q.lines.splice(hullIdx, 1);
+      return;
+    }
+    if (hullIdx >= 0) {
+      const hull = q.lines[hullIdx];
+      hull.refId = model?.id || hull.refId;
+      hull.description = hullLineDescription(brand, model);
+      hull.unitPrice = model?.basePrice || 0;
+      hull.kind = 'model';
+      hull.categoryKey = 'hull';
+      return;
+    }
+    if (model) {
+      q.lines.unshift({
+        id: uid('line'),
+        kind: 'model',
+        refId: model.id,
+        description: hullLineDescription(brand, model),
+        qty: 1,
+        unit: 'pcs',
+        unitPrice: model.basePrice || 0,
+        discountPercent: disc,
+        categoryKey: 'hull'
+      });
+    }
+  }
+
+  function syncQuoteSelectedOptions(q, selectedIds) {
+    const brand = brandById(q.brandId);
+    const model = modelById(q.modelId);
+    const disc = Number(state.settings.defaultDiscountPercent) || 0;
+    const selected = (selectedIds || []).map((id) => optionById(id)).filter(Boolean);
+    const engineOpts = selected.filter(isEngineOption);
+    const otherOpts = selected.filter((o) => !isEngineOption(o));
+    const engine = engineOpts[0] || null; // one engine package only
+    const customLines = (q.lines || []).filter((ln) => ln.kind === 'custom');
+    const prevByRef = {};
+    (q.lines || []).forEach((ln) => {
+      if (ln.kind === 'option' && ln.refId) prevByRef[ln.refId] = ln;
+    });
+
+    const lines = [];
+    if (engine) {
+      const prev = prevByRef[engine.id];
+      lines.push({
+        id: prev?.id || uid('line'),
+        kind: 'option',
+        refId: engine.id,
+        description: enginePackageDescription(brand, model, engine),
+        qty: prev?.qty != null ? prev.qty : 1,
+        unit: engine.unit || 'pcs',
+        unitPrice: engine.price || 0,
+        discountPercent: prev?.discountPercent != null ? prev.discountPercent : disc,
+        categoryKey: 'engines',
+        includesStandardEquipment: true
+      });
+    } else if (model) {
+      const prevHull = (q.lines || []).find((ln) => ln.kind === 'model' || ln.categoryKey === 'hull');
+      lines.push({
+        id: prevHull?.id || uid('line'),
+        kind: 'model',
+        refId: model.id,
+        description: hullLineDescription(brand, model),
+        qty: prevHull?.qty != null ? prevHull.qty : 1,
+        unit: 'pcs',
+        unitPrice: model.basePrice || 0,
+        discountPercent: prevHull?.discountPercent != null ? prevHull.discountPercent : disc,
+        categoryKey: 'hull'
+      });
+    }
+
+    otherOpts.forEach((o) => {
+      const cat = categoryById(o.categoryId);
+      const prev = prevByRef[o.id];
+      lines.push({
+        id: prev?.id || uid('line'),
+        kind: 'option',
+        refId: o.id,
+        description: prev?.description || `${o.subgroup ? o.subgroup + ' · ' : ''}${o.name}`,
+        qty: prev?.qty != null ? prev.qty : 1,
+        unit: o.unit || 'pcs',
+        unitPrice: o.price || 0,
+        discountPercent: prev?.discountPercent != null ? prev.discountPercent : disc,
+        categoryKey: cat?.key || ''
+      });
+    });
+
+    q.lines = lines.concat(customLines);
+    recalcQuote(q);
+  }
+
   function createQuote(prospectId) {
     const brand = state.brands[0];
     if (!brand) { toast('Add a brand first', 'error'); return; }
@@ -1179,7 +1292,7 @@
           id: uid('line'),
           kind: 'model',
           refId: model.id,
-          description: `${brand.name} ${model.name} — standard equipment`,
+          description: hullLineDescription(brand, model),
           qty: 1,
           unit: 'pcs',
           unitPrice: model.basePrice || 0,
@@ -1219,15 +1332,6 @@
     const prospects = [...(state.potentialClients || [])].sort((a, b) =>
       prospectLabel(a).localeCompare(prospectLabel(b))
     );
-    const cats = state.optionCategories
-      .filter((c) => c.brandId === q.brandId)
-      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-
-    const optionChoices = state.options.filter((o) => {
-      if (o.brandId !== q.brandId || o.active === false) return false;
-      if (!o.modelIds || !o.modelIds.length) return true;
-      return o.modelIds.includes(q.modelId);
-    });
 
     el.innerHTML = `
       <div class="dist-toolbar">
@@ -1280,19 +1384,13 @@
         <div class="dist-card-header">
           <h3>Line items</h3>
           <div class="dist-actions">
-            <select id="dq-add-opt" style="min-width:220px">
-              <option value="">— Add catalog option —</option>
-              ${cats.map((cat) => {
-                const opts = optionChoices.filter((o) => o.categoryId === cat.id);
-                if (!opts.length) return '';
-                return `<optgroup label="${esc(cat.label)}">${opts.map((o) =>
-                  `<option value="${esc(o.id)}">${esc(o.subgroup ? o.subgroup + ' · ' : '')}${esc(o.name)} (${money(o.price)})</option>`
-                ).join('')}</optgroup>`;
-              }).join('')}
-            </select>
+            <button type="button" class="btn btn-primary btn-sm" id="dq-open-options">Select options…</button>
             <button type="button" class="btn btn-secondary btn-sm" id="dq-add-custom">Custom line</button>
           </div>
         </div>
+        <p class="dist-hint" style="margin:0 0 .75rem">
+          Standard equipment is the vessel without engine. A main engine price already includes standard equipment — selecting an engine replaces the without-engine line.
+        </p>
         <div style="overflow-x:auto">
           <table class="dist-table dist-quote-lines">
             <thead>
@@ -1454,39 +1552,25 @@
       const m = modelById(el.querySelector('#dq-model').value);
       const b = brandById(q.brandId);
       if (m) {
-        const hull = q.lines.find((l) => l.kind === 'model');
-        if (hull) {
-          hull.refId = m.id;
-          hull.description = `${b?.name || ''} ${m.name} — standard equipment`.trim();
-          hull.unitPrice = m.basePrice || 0;
-        }
         q.modelId = m.id;
         q.currency = m.currency || q.currency;
+        const engineLine = (q.lines || []).find((l) => l.kind === 'option' && l.categoryKey === 'engines');
+        if (engineLine) {
+          const eng = optionById(engineLine.refId);
+          if (eng) engineLine.description = enginePackageDescription(b, m, eng);
+        } else {
+          ensureHullOrEngineLine(q);
+        }
       }
       persist();
       renderQuoteEditor(el);
     });
-    el.querySelector('#dq-add-opt')?.addEventListener('change', (e) => {
-      const optId = e.target.value;
-      if (!optId) return;
-      const o = optionById(optId);
-      const cat = o ? categoryById(o.categoryId) : null;
-      if (!o) return;
+    el.querySelector('#dq-open-options')?.addEventListener('click', () => {
       saveFields();
-      q.lines.push({
-        id: uid('line'),
-        kind: 'option',
-        refId: o.id,
-        description: `${o.subgroup ? o.subgroup + ' · ' : ''}${o.name}`,
-        qty: 1,
-        unit: o.unit || 'pcs',
-        unitPrice: o.price || 0,
-        discountPercent: Number(state.settings.defaultDiscountPercent) || 0,
-        categoryKey: cat?.key || ''
+      openQuoteOptionsDialog(q, () => {
+        persist(true);
+        renderQuoteEditor(el);
       });
-      recalcQuote(q);
-      persist();
-      renderQuoteEditor(el);
     });
     el.querySelector('#dq-add-custom')?.addEventListener('click', () => {
       saveFields();
@@ -1508,7 +1592,16 @@
       btn.addEventListener('click', () => {
         saveFields();
         const idx = Number(btn.getAttribute('data-del-line'));
+        const removed = q.lines[idx];
         q.lines.splice(idx, 1);
+        if (
+          removed &&
+          ((removed.kind === 'option' && removed.categoryKey === 'engines') ||
+            removed.kind === 'model' ||
+            removed.categoryKey === 'hull')
+        ) {
+          ensureHullOrEngineLine(q);
+        }
         recalcQuote(q);
         persist();
         renderQuoteEditor(el);
@@ -1521,6 +1614,117 @@
         renderQuoteEditor(el);
       });
     });
+  }
+
+  function openQuoteOptionsDialog(q, onDone) {
+    const cats = state.optionCategories
+      .filter((c) => c.brandId === q.brandId)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const optionChoices = state.options.filter((o) => {
+      if (o.brandId !== q.brandId || o.active === false) return false;
+      if (!o.modelIds || !o.modelIds.length) return true;
+      return o.modelIds.includes(q.modelId);
+    });
+    const selected = new Set(
+      (q.lines || [])
+        .filter((ln) => ln.kind === 'option' && ln.refId)
+        .map((ln) => ln.refId)
+    );
+    const currentEngineId = (q.lines || []).find((ln) => ln.kind === 'option' && ln.categoryKey === 'engines')?.refId || '';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dist-modal-overlay';
+    overlay.innerHTML = `
+      <div class="dist-modal" role="dialog" aria-modal="true" aria-labelledby="dist-opt-dialog-title">
+        <div class="dist-modal-header">
+          <div>
+            <h3 id="dist-opt-dialog-title">Select options</h3>
+            <p class="dist-hint">Tick the options to include. Main engines are package prices (vessel + engine); only one engine can be selected.</p>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" data-dist-opt-cancel aria-label="Close">✕</button>
+        </div>
+        <div class="dist-modal-body">
+          ${cats.map((cat) => {
+            const opts = optionChoices.filter((o) => o.categoryId === cat.id);
+            if (!opts.length) return '';
+            const isEngine = cat.key === 'engines';
+            if (isEngine || cat.subgroupBy) {
+              const groups = {};
+              opts.forEach((o) => {
+                const g = o.subgroup || 'Other';
+                (groups[g] = groups[g] || []).push(o);
+              });
+              return `<div class="dist-option-group">
+                <div class="dist-option-group-head">${esc(cat.label)}${isEngine ? ' — package price (incl. standard equipment)' : ''}</div>
+                ${isEngine ? `
+                  <div class="dist-opt-check-list">
+                    <label class="dist-opt-check">
+                      <input type="radio" name="dist-engine-opt" value="" ${!currentEngineId ? 'checked' : ''}>
+                      <span class="dist-opt-check-text">
+                        <span class="dist-opt-check-name">No engine — standard equipment only</span>
+                        <span class="dist-opt-check-price">${money(modelById(q.modelId)?.basePrice || 0)}</span>
+                      </span>
+                    </label>
+                  </div>` : ''}
+                ${Object.keys(groups).map((g) => `
+                  <div class="dist-option-subgroup">${esc(g)}</div>
+                  <div class="dist-opt-check-list">
+                    ${groups[g].map((o) => `
+                      <label class="dist-opt-check">
+                        <input type="${isEngine ? 'radio' : 'checkbox'}" name="${isEngine ? 'dist-engine-opt' : 'dist-opt'}" value="${esc(o.id)}" ${!isEngine && selected.has(o.id) || (isEngine && currentEngineId === o.id) ? 'checked' : ''}>
+                        <span class="dist-opt-check-text">
+                          <span class="dist-opt-check-name">${esc(o.name)}</span>
+                          <span class="dist-opt-check-price">${money(o.price)}</span>
+                        </span>
+                      </label>`).join('')}
+                  </div>`).join('')}
+              </div>`;
+            }
+            return `<div class="dist-option-group">
+              <div class="dist-option-group-head">${esc(cat.label)}</div>
+              <div class="dist-opt-check-list">
+                ${opts.map((o) => `
+                  <label class="dist-opt-check">
+                    <input type="checkbox" name="dist-opt" value="${esc(o.id)}" ${selected.has(o.id) ? 'checked' : ''}>
+                    <span class="dist-opt-check-text">
+                      <span class="dist-opt-check-name">${esc(o.name)}</span>
+                      <span class="dist-opt-check-price">${money(o.price)}</span>
+                    </span>
+                  </label>`).join('')}
+              </div>
+            </div>`;
+          }).join('') || '<div class="dist-empty">No catalog options for this model.</div>'}
+        </div>
+        <div class="dist-modal-footer">
+          <button type="button" class="btn btn-secondary" data-dist-opt-cancel>Cancel</button>
+          <button type="button" class="btn btn-primary" data-dist-opt-apply>Apply selection</button>
+        </div>
+      </div>`;
+
+    const close = () => {
+      overlay.remove();
+      document.body.classList.remove('dist-modal-open');
+    };
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelectorAll('[data-dist-opt-cancel]').forEach((btn) => {
+      btn.addEventListener('click', close);
+    });
+    overlay.querySelector('[data-dist-opt-apply]')?.addEventListener('click', () => {
+      const ids = [];
+      overlay.querySelectorAll('input[name="dist-opt"]:checked').forEach((input) => ids.push(input.value));
+      const engine = overlay.querySelector('input[name="dist-engine-opt"]:checked');
+      if (engine && engine.value) ids.push(engine.value);
+      syncQuoteSelectedOptions(q, ids);
+      close();
+      if (typeof onDone === 'function') onDone();
+      toast('Options updated');
+    });
+
+    document.body.classList.add('dist-modal-open');
+    document.body.appendChild(overlay);
   }
 
   function printQuote(id) {
