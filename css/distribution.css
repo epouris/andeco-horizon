@@ -452,7 +452,7 @@
 .dist-quote-sheet.hidden { display: none; }
 
 .dist-quote-toolbar {
-  width: min(100%, 920px);
+  width: min(100%, 210mm);
   display: flex;
   justify-content: flex-end;
   gap: 0.55rem;
@@ -469,15 +469,43 @@
   color: #fff;
 }
 
-.dist-quote-doc {
+.dist-quote-doc,
+.dist-quote-doc--portrait {
   position: relative;
-  width: min(100%, 920px);
+  width: min(100%, 210mm);
+  max-width: 210mm;
   background: #fff;
   color: #12263a;
-  padding: 0 0 2rem;
+  padding: 0 0 1.5rem;
   box-shadow: 0 28px 70px rgba(7, 20, 38, 0.35);
   font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
   overflow: hidden;
+}
+
+.dist-photo-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.dist-photo-preview {
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--dist-line);
+  border-radius: 12px;
+  background: linear-gradient(165deg, #fff 0%, var(--dist-sand) 100%);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #627d98;
+  font-size: 0.85rem;
+}
+
+.dist-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .dist-quote-accent {
@@ -487,9 +515,9 @@
 
 .dist-quote-top {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: 1.5rem;
-  padding: 1.75rem 2.1rem 1.35rem;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.15rem;
+  padding: 1.35rem 1.5rem 1.1rem;
   background:
     linear-gradient(180deg, #f7fafc 0%, #ffffff 70%);
   border-bottom: 1px solid #e3ebf2;
@@ -580,6 +608,13 @@
   letter-spacing: 0.03em;
 }
 
+.dist-quote-olr {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-weight: 700;
+  color: #0b2545;
+}
+
 .dist-quote-title-meta {
   margin-top: 0.55rem;
   display: grid;
@@ -591,8 +626,25 @@
 .dist-quote-parties {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  padding: 1.25rem 2.1rem 0.25rem;
+  gap: 0.85rem;
+  padding: 1rem 1.5rem 0.2rem;
+}
+
+.dist-quote-vessel-photo {
+  margin: 0.85rem 1.5rem 0.15rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #d9e6ef;
+  background: #0b2545;
+  max-height: 220px;
+}
+
+.dist-quote-vessel-photo img {
+  display: block;
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  object-position: center;
 }
 
 .dist-quote-card {
@@ -644,7 +696,7 @@
 }
 
 .dist-quote-section {
-  padding: 1.1rem 2.1rem 0.2rem;
+  padding: 0.9rem 1.5rem 0.15rem;
 }
 
 .dist-quote-section-head {
@@ -812,7 +864,8 @@
   padding: 0.85rem 0.9rem;
 }
 
-.dist-quote-notes {
+.dist-quote-notes,
+.dist-quote-payment-terms {
   border: 1px solid #d9e6ef;
   border-radius: 12px;
   padding: 0.85rem 1rem;
@@ -823,8 +876,8 @@
 }
 
 .dist-quote-doc-footer {
-  margin: 1.5rem 2.1rem 0;
-  padding-top: 1rem;
+  margin: 1.15rem 1.5rem 0;
+  padding-top: 0.85rem;
   border-top: 1px solid #d9e6ef;
   color: #627d98;
   font-size: 0.82rem;
@@ -873,7 +926,8 @@
   .dist-quote-top,
   .dist-quote-parties,
   .dist-quote-std-grid,
-  .dist-quote-footer-grid {
+  .dist-quote-footer-grid,
+  .dist-photo-row {
     grid-template-columns: 1fr;
   }
   .dist-quote-titleblock { text-align: left; }
@@ -1048,6 +1102,11 @@ body.dist-modal-open { overflow: hidden; }
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 10mm 12mm;
+  }
+
   body.dist-quote-open * { visibility: hidden !important; }
   body.dist-quote-open .dist-quote-sheet,
   body.dist-quote-open .dist-quote-sheet * { visibility: visible !important; }
@@ -1058,16 +1117,25 @@ body.dist-modal-open { overflow: hidden; }
     inset: auto !important;
     overflow: visible !important;
     display: block !important;
+    width: auto !important;
   }
   body.dist-quote-open .dist-quote-toolbar,
   body.dist-quote-open .no-print { display: none !important; }
-  body.dist-quote-open .dist-quote-doc {
+  body.dist-quote-open .dist-quote-doc,
+  body.dist-quote-open .dist-quote-doc--portrait {
     box-shadow: none !important;
     width: 100% !important;
     max-width: none !important;
-    padding: 0 0 0.5rem !important;
+    padding: 0 0 0.35rem !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+  body.dist-quote-open .dist-quote-vessel-photo {
+    max-height: 180px;
+    break-inside: avoid;
+  }
+  body.dist-quote-open .dist-quote-vessel-photo img {
+    height: 180px;
   }
   body.dist-quote-open .dist-quote-top,
   body.dist-quote-open .dist-quote-card,
@@ -1076,7 +1144,8 @@ body.dist-modal-open { overflow: hidden; }
   body.dist-quote-open .dist-quote-totals-print .row.grand,
   body.dist-quote-open .dist-quote-accent,
   body.dist-quote-open .dist-quote-number,
-  body.dist-quote-open .dist-quote-mark {
+  body.dist-quote-open .dist-quote-mark,
+  body.dist-quote-open .dist-quote-vessel-photo {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

@@ -78,6 +78,18 @@
     return Math.round((Number(line.qty) || 0) * (Number(line.unitPrice) || 0) * 100) / 100;
   }
 
+  function defaultPaymentTerms() {
+    return (
+      state?.settings?.defaultPaymentTerms ||
+      '40% upon order confirmation\n40% before completion / ready for delivery\n20% before delivery / shipment'
+    );
+  }
+
+  function feeAmount(q, key) {
+    const n = Number(q && q[key]);
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
+  }
+
   function recalcQuote(q) {
     const lines = Array.isArray(q.lines) ? q.lines : [];
     let subtotal = 0;
@@ -88,10 +100,39 @@
       subtotal += ln.lineSubtotal;
       total += ln.lineTotal;
     });
+    const transport = feeAmount(q, 'transportFee');
+    const packaging = feeAmount(q, 'packagingFee');
+    q.transportFee = transport;
+    q.packagingFee = packaging;
+    q.feesTotal = Math.round((transport + packaging) * 100) / 100;
     q.subtotal = Math.round(subtotal * 100) / 100;
-    q.total = Math.round(total * 100) / 100;
-    q.discountAmount = Math.round((q.subtotal - q.total) * 100) / 100;
+    q.discountAmount = Math.round((q.subtotal - total) * 100) / 100;
+    q.linesTotal = Math.round(total * 100) / 100;
+    q.total = Math.round((total + q.feesTotal) * 100) / 100;
     return q;
+  }
+
+  function readImageAsDataUrl(file, maxBytes) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        reject(new Error('No file selected'));
+        return;
+      }
+      if (maxBytes && file.size > maxBytes) {
+        reject(new Error('Image is too large (max 1.5 MB)'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function resolveQuoteVesselPhoto(q, model) {
+    if (q && q.vesselPhoto) return q.vesselPhoto;
+    if (model && model.photo) return model.photo;
+    return '';
   }
 
   function defaultCategories(brandId) {
@@ -251,6 +292,7 @@
               ]
             }
           ],
+          photo: '',
           notes: '',
           createdAt: new Date().toISOString()
         }
@@ -267,6 +309,8 @@
         defaultCurrency: 'EUR',
         companyName: 'Andeco / OlympicRibs Distribution',
         companyDetails: '',
+        defaultPaymentTerms:
+          '40% upon order confirmation\n40% before completion / ready for delivery\n20% before delivery / shipment',
         quoteFooter: 'Prices in EUR. Quotation valid for 30 days unless otherwise stated. Technical specifications subject to manufacturer updates.'
       }
     };
@@ -347,6 +391,23 @@
         : [],
       settings: Object.assign({}, base.settings, raw.settings || {})
     };
+    if (!s.settings.defaultPaymentTerms) {
+      s.settings.defaultPaymentTerms = base.settings.defaultPaymentTerms;
+    }
+    s.models = (s.models || []).map((m) => {
+      if (!m || typeof m !== 'object') return m;
+      if (m.photo == null) m.photo = '';
+      return m;
+    });
+    s.quotations = (s.quotations || []).map((q) => {
+      if (!q || typeof q !== 'object') return q;
+      if (q.olrRef == null) q.olrRef = '';
+      if (q.vesselPhoto == null) q.vesselPhoto = '';
+      if (q.paymentTerms == null) q.paymentTerms = s.settings.defaultPaymentTerms || '';
+      if (q.transportFee == null) q.transportFee = 0;
+      if (q.packagingFee == null) q.packagingFee = 0;
+      return q;
+    });
     // Discount is opt-in only. Clear the old Excel-seeded 25% default.
     if (
       s.settings.defaultDiscountPercent == null ||
@@ -797,9 +858,18 @@
         active: true,
         techSpecs: {},
         standardEquipment: [],
+        photo: '',
         notes: '',
         createdAt: new Date().toISOString()
       });
+    }
+    const photoUrl = prompt(
+      'Vessel photo URL (optional — used on quotations):',
+      existing?.photo || ''
+    );
+    if (photoUrl != null) {
+      const target = existing || state.models[state.models.length - 1];
+      if (target) target.photo = String(photoUrl || '').trim();
     }
     persist();
     renderCatalog();
@@ -1153,12 +1223,13 @@
       <div class="dist-card">
         ${list.length ? `
           <table class="dist-table">
-            <thead><tr><th>Number</th><th>Date</th><th>Potential client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Number</th><th>OLR Ref</th><th>Date</th><th>Potential client</th><th>Model</th><th>Total</th><th>Status</th><th></th></tr></thead>
             <tbody>
               ${list.map((q) => {
                 const m = modelById(q.modelId);
                 return `<tr>
                   <td><strong>${esc(q.number)}</strong></td>
+                  <td>${esc(q.olrRef || '—')}</td>
                   <td>${esc(q.date || '—')}</td>
                   <td>${esc(q.clientSnapshot?.name || '—')}</td>
                   <td>${esc(m?.name || '—')}</td>
@@ -1324,6 +1395,11 @@
       brandId: brand.id,
       modelId: model.id,
       currency: model.currency || 'EUR',
+      olrRef: '',
+      vesselPhoto: model.photo || '',
+      paymentTerms: defaultPaymentTerms(),
+      transportFee: 0,
+      packagingFee: 0,
       lines: [
         {
           id: uid('line'),
@@ -1362,10 +1438,16 @@
       renderQuotations();
       return;
     }
+    if (q.olrRef == null) q.olrRef = '';
+    if (q.paymentTerms == null) q.paymentTerms = defaultPaymentTerms();
+    if (q.transportFee == null) q.transportFee = 0;
+    if (q.packagingFee == null) q.packagingFee = 0;
+    if (q.vesselPhoto == null) q.vesselPhoto = '';
     recalcQuote(q);
     if (!q.prospectId && q.clientId) q.prospectId = '';
     const brand = brandById(q.brandId);
     const model = modelById(q.modelId);
+    const vesselPhoto = resolveQuoteVesselPhoto(q, model);
     const prospects = [...(state.potentialClients || [])].sort((a, b) =>
       prospectLabel(a).localeCompare(prospectLabel(b))
     );
@@ -1390,6 +1472,13 @@
           <div class="dist-field"><label>Status</label>
             <select id="dq-status">${QUOTE_STATUSES.map((s) => `<option value="${s.value}" ${q.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
           </div>
+          <div class="dist-field"><label>OLR Ref:</label><input type="text" id="dq-olr" value="${esc(q.olrRef || '')}" placeholder="OlympicRibs configurator reference"></div>
+          <div class="dist-field"><label>Brand</label>
+            <select id="dq-brand">${state.brands.map((b) => `<option value="${esc(b.id)}" ${b.id === q.brandId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
+          </div>
+          <div class="dist-field"><label>Model</label>
+            <select id="dq-model">${state.models.filter((m) => m.brandId === q.brandId).map((m) => `<option value="${esc(m.id)}" ${m.id === q.modelId ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+          </div>
           <div class="dist-field full"><label>Potential client</label>
             <div class="dist-actions" style="align-items:stretch">
               <select id="dq-prospect" style="flex:1;min-width:220px">
@@ -1405,15 +1494,23 @@
           <div class="dist-field"><label>Email</label><input type="email" id="dq-cemail" value="${esc(q.clientSnapshot?.email || '')}"></div>
           <div class="dist-field"><label>Phone</label><input type="text" id="dq-cphone" value="${esc(q.clientSnapshot?.phone || '')}"></div>
           <div class="dist-field full"><label>Address</label><input type="text" id="dq-caddress" value="${esc(q.clientSnapshot?.address || '')}"></div>
-          <div class="dist-field"><label>Brand</label>
-            <select id="dq-brand">${state.brands.map((b) => `<option value="${esc(b.id)}" ${b.id === q.brandId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
+          <div class="dist-field"><label>Transportation fee (€)</label><input type="number" min="0" step="0.01" id="dq-transport" value="${esc(q.transportFee || 0)}"></div>
+          <div class="dist-field"><label>Packaging fee (€)</label><input type="number" min="0" step="0.01" id="dq-packaging" value="${esc(q.packagingFee || 0)}"></div>
+          <div class="dist-field full"><label>Payment terms</label><textarea id="dq-payment" rows="3" placeholder="e.g. deposit / balance schedule">${esc(q.paymentTerms || '')}</textarea></div>
+          <div class="dist-field full"><label>Notes (shown on quote)</label>
+            <textarea id="dq-notes" rows="2">${esc(q.notes || '')}</textarea>
           </div>
-          <div class="dist-field"><label>Model</label>
-            <select id="dq-model">${state.models.filter((m) => m.brandId === q.brandId).map((m) => `<option value="${esc(m.id)}" ${m.id === q.modelId ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+          <div class="dist-field full">
+            <label>Vessel photo</label>
+            <div class="dist-photo-row">
+              <div class="dist-photo-preview">${vesselPhoto ? `<img src="${esc(vesselPhoto)}" alt="Vessel">` : '<span>No photo yet</span>'}</div>
+              <div class="dist-actions" style="flex-direction:column;align-items:stretch">
+                <input type="file" id="dq-photo-file" accept="image/*">
+                <input type="url" id="dq-photo-url" value="${esc(q.vesselPhoto && String(q.vesselPhoto).indexOf('data:') === 0 ? '' : (q.vesselPhoto || ''))}" placeholder="Or paste image URL">
+                <button type="button" class="btn btn-secondary btn-sm" id="dq-photo-clear">Remove photo</button>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="dist-field" style="margin-top:.75rem"><label>Notes (shown on quote)</label>
-          <textarea id="dq-notes" rows="2">${esc(q.notes || '')}</textarea>
         </div>
       </div>
 
@@ -1473,6 +1570,9 @@
         <div class="dist-totals">
           <div class="row"><span>Quote total (list)</span><strong>${money(q.subtotal, q.currency)}</strong></div>
           <div class="row"><span>Discounts</span><strong>− ${money(q.discountAmount, q.currency)}</strong></div>
+          <div class="row"><span>Lines after discount</span><strong>${money(q.linesTotal != null ? q.linesTotal : (q.subtotal - q.discountAmount), q.currency)}</strong></div>
+          <div class="row"><span>Transportation</span><strong>${money(feeAmount(q, 'transportFee'), q.currency)}</strong></div>
+          <div class="row"><span>Packaging</span><strong>${money(feeAmount(q, 'packagingFee'), q.currency)}</strong></div>
           <div class="row grand"><span>Final quote total</span><strong>${money(q.total, q.currency)}</strong></div>
           ${q.convertedToProformaId ? `<div class="row"><span>Proforma</span><strong>${esc(q.convertedToProformaNumber || q.convertedToProformaId)}</strong></div>` : ''}
         </div>
@@ -1481,7 +1581,13 @@
     const saveFields = () => {
       q.date = el.querySelector('#dq-date')?.value || q.date;
       q.status = el.querySelector('#dq-status')?.value || q.status;
+      q.olrRef = String(el.querySelector('#dq-olr')?.value || '').trim();
       q.notes = el.querySelector('#dq-notes')?.value || '';
+      q.paymentTerms = String(el.querySelector('#dq-payment')?.value || '').trim();
+      q.transportFee = Number(el.querySelector('#dq-transport')?.value) || 0;
+      q.packagingFee = Number(el.querySelector('#dq-packaging')?.value) || 0;
+      const photoUrl = String(el.querySelector('#dq-photo-url')?.value || '').trim();
+      if (photoUrl) q.vesselPhoto = photoUrl;
       q.prospectId = el.querySelector('#dq-prospect')?.value || '';
       q.clientId = '';
       q.clientSnapshot = {
@@ -1606,6 +1712,7 @@
       if (m) {
         q.modelId = m.id;
         q.currency = m.currency || q.currency;
+        if (!q.vesselPhoto && m.photo) q.vesselPhoto = m.photo;
         const engineLine = (q.lines || []).find((l) => l.kind === 'option' && l.categoryKey === 'engines');
         if (engineLine) {
           const eng = optionById(engineLine.refId);
@@ -1615,6 +1722,44 @@
         }
       }
       persist();
+      renderQuoteEditor(el);
+    });
+    ['#dq-olr', '#dq-payment', '#dq-transport', '#dq-packaging', '#dq-notes', '#dq-date', '#dq-status'].forEach((sel) => {
+      el.querySelector(sel)?.addEventListener('change', () => {
+        saveFields();
+        persist();
+        if (sel === '#dq-transport' || sel === '#dq-packaging') renderQuoteEditor(el);
+      });
+    });
+    ['#dq-transport', '#dq-packaging'].forEach((sel) => {
+      el.querySelector(sel)?.addEventListener('input', () => {
+        saveFields();
+      });
+    });
+    el.querySelector('#dq-photo-file')?.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        q.vesselPhoto = await readImageAsDataUrl(file, 1.5 * 1024 * 1024);
+        q.updatedAt = new Date().toISOString();
+        await persist(true);
+        renderQuoteEditor(el);
+      } catch (err) {
+        console.error(err);
+        toast(err?.message || 'Could not read that image', 'error');
+      }
+    });
+    el.querySelector('#dq-photo-url')?.addEventListener('change', () => {
+      const url = String(el.querySelector('#dq-photo-url')?.value || '').trim();
+      q.vesselPhoto = url;
+      q.updatedAt = new Date().toISOString();
+      persist(true);
+      renderQuoteEditor(el);
+    });
+    el.querySelector('#dq-photo-clear')?.addEventListener('click', () => {
+      q.vesselPhoto = '';
+      q.updatedAt = new Date().toISOString();
+      persist(true);
       renderQuoteEditor(el);
     });
     el.querySelector('#dq-open-options')?.addEventListener('click', () => {
@@ -1885,6 +2030,11 @@
     recalcQuote(q);
     const brand = brandById(q.brandId);
     const model = modelById(q.modelId);
+    const vesselPhoto = resolveQuoteVesselPhoto(q, model);
+    const transport = feeAmount(q, 'transportFee');
+    const packaging = feeAmount(q, 'packagingFee');
+    const paymentTerms = String(q.paymentTerms || '').trim() || defaultPaymentTerms();
+    const olrRef = String(q.olrRef || '').trim();
     const companyBits = getCompanyContactBits();
     const company = state.settings.companyName || companyBits.name || 'OlympicRibs Distribution';
     const footer = state.settings.quoteFooter ||
@@ -1921,7 +2071,7 @@
         <button type="button" class="btn btn-primary btn-sm" data-dist-print-run>Print / Save PDF</button>
         <button type="button" class="btn btn-secondary btn-sm" data-dist-print-close>Close</button>
       </div>
-      <article class="dist-quote-doc">
+      <article class="dist-quote-doc dist-quote-doc--portrait">
         <div class="dist-quote-accent"></div>
 
         <header class="dist-quote-top">
@@ -1940,6 +2090,7 @@
             <div class="dist-quote-title-meta">
               <span>Issued ${esc(issued)}</span>
               ${validUntil ? `<span>Valid until ${esc(validUntil)}</span>` : ''}
+              ${olrRef ? `<span class="dist-quote-olr">OLR Ref: ${esc(olrRef)}</span>` : ''}
             </div>
           </div>
         </header>
@@ -1956,11 +2107,17 @@
           <div class="dist-quote-card dist-quote-card--model">
             <div class="dist-quote-card-label">Vessel configuration</div>
             <div class="dist-quote-card-name">${esc(brand?.name || '')} ${esc(model?.name || '')}</div>
+            ${olrRef ? `<div class="dist-quote-card-line"><strong>OLR Ref:</strong> ${esc(olrRef)}</div>` : ''}
             <div class="dist-quote-card-line">Currency: ${esc(q.currency || 'EUR')}</div>
             <div class="dist-quote-card-line">Status: ${esc(statusLabel(QUOTE_STATUSES, q.status))}</div>
             ${model?.basePrice != null ? `<div class="dist-quote-card-line">Standard equipment (no engine): ${money(model.basePrice, q.currency)}</div>` : ''}
           </div>
         </section>
+
+        ${vesselPhoto ? `
+          <section class="dist-quote-vessel-photo">
+            <img src="${esc(vesselPhoto)}" alt="${esc((brand?.name || '') + ' ' + (model?.name || 'Vessel'))}">
+          </section>` : ''}
 
         ${Object.keys(specs).length ? `
           <section class="dist-quote-section">
@@ -2009,7 +2166,7 @@
               </tr>
             </thead>
             <tbody>
-              ${lines.length ? lines.map((ln, idx) => `
+              ${lines.length ? lines.map((ln) => `
                 <tr class="${ln.categoryKey === 'engines' ? 'is-engine' : ''}">
                   <td class="desc">
                     <div class="dist-quote-line-name">${esc(ln.description || '')}</div>
@@ -2029,12 +2186,20 @@
             <div class="dist-quote-totals-print">
               <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
               <div class="row"><span>Discounts</span><span>${q.discountAmount ? '− ' + money(q.discountAmount, q.currency) : money(0, q.currency)}</span></div>
+              <div class="row"><span>Lines after discount</span><span>${money(q.linesTotal != null ? q.linesTotal : (q.subtotal - q.discountAmount), q.currency)}</span></div>
+              <div class="row"><span>Transportation</span><span>${money(transport, q.currency)}</span></div>
+              <div class="row"><span>Packaging</span><span>${money(packaging, q.currency)}</span></div>
               <div class="row grand">
                 <span>Final total</span>
                 <span>${money(q.total, q.currency)}</span>
               </div>
             </div>
           </div>
+        </section>
+
+        <section class="dist-quote-section">
+          <div class="dist-quote-section-head"><h2>Payment terms</h2></div>
+          <div class="dist-quote-notes dist-quote-payment-terms">${esc(paymentTerms)}</div>
         </section>
 
         ${q.notes ? `
@@ -2104,12 +2269,40 @@
         price: unitAfterDisc
       };
     });
+    const transport = feeAmount(q, 'transportFee');
+    const packaging = feeAmount(q, 'packagingFee');
+    if (transport > 0) {
+      items.push({
+        description: 'Transportation',
+        quantity: 1,
+        persons: 1,
+        hours: 0,
+        price: transport
+      });
+    }
+    if (packaging > 0) {
+      items.push({
+        description: 'Packaging',
+        quantity: 1,
+        persons: 1,
+        hours: 0,
+        price: packaging
+      });
+    }
 
     const subtotal = items.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.price) || 0), 0);
     const taxRate = Number(q.taxRate) || 0;
     const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100;
     const total = Math.round((subtotal + taxAmount) * 100) / 100;
     const invoiceId = uid('inv');
+    const olrRef = String(q.olrRef || '').trim();
+    const paymentTerms = String(q.paymentTerms || '').trim();
+    const noteParts = [
+      `Converted from distribution quotation ${q.number}.`,
+      olrRef ? `OLR Ref: ${olrRef}` : '',
+      paymentTerms ? `Payment terms:\n${paymentTerms}` : '',
+      q.notes || ''
+    ].filter(Boolean);
 
     const invoice = {
       id: invoiceId,
@@ -2133,10 +2326,11 @@
       taxRate,
       taxAmount,
       total,
-      notes: `Converted from distribution quotation ${q.number}.${q.notes ? '\n' + q.notes : ''}`,
+      notes: noteParts.join('\n\n'),
       distributionQuoteId: q.id,
       distributionQuoteNumber: q.number,
       distributionProspectId: q.prospectId || '',
+      distributionOlrRef: olrRef,
       brandId: q.brandId,
       modelId: q.modelId,
       createdAt: new Date().toISOString(),
