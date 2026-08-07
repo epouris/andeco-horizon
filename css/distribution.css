@@ -346,6 +346,26 @@
   min-width: 180px;
 }
 
+.dist-import-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+  margin: 0 0 0.85rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #cfe0ef;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f3f8fc 0%, #eef5fb 100%);
+  color: #334e68;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.dist-import-banner strong {
+  color: #0b2545;
+  font-weight: 700;
+}
+
 .dist-panel {
   background: #fff;
   border: 1px solid var(--dist-line);
