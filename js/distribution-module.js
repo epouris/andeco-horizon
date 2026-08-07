@@ -2479,6 +2479,8 @@
     const specs = model?.techSpecs || {};
     const std = model?.standardEquipment || [];
     const lines = Array.isArray(q.lines) ? q.lines : [];
+    const optionLines = lines.filter((ln) => ln.kind === 'option');
+    const optionalCount = optionLines.length;
     const logoHtml = getQuoteLogoHtml();
     const issued = q.date || todayISO();
     const validUntil = (() => {
@@ -2555,7 +2557,8 @@
             <div class="dist-quote-card-label">Vessel</div>
             <div class="dist-quote-card-name">${esc(brand?.name || '')} ${esc(model?.name || '')}</div>
             <div class="dist-quote-card-line">Currency: ${esc(q.currency || 'EUR')}</div>
-            ${model?.basePrice != null ? `<div class="dist-quote-card-line">Base (no engine): ${money(model.basePrice, q.currency)}</div>` : ''}
+            <div class="dist-quote-card-line dist-quote-card-final">Final price: ${money(q.total, q.currency)}</div>
+            <div class="dist-quote-card-line">Optional selections: ${optionalCount}</div>
           </div>
           ${vesselPhoto ? `
             <div class="dist-quote-vessel-photo">
