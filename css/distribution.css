@@ -641,8 +641,9 @@
 
 .dist-quote-logos {
   display: flex;
-  align-items: center;
-  gap: 0.55rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
   flex-shrink: 0;
 }
 
@@ -659,7 +660,7 @@
 
 .dist-quote-logo--brand {
   max-width: 100px;
-  max-height: 44px;
+  max-height: 40px;
 }
 
 .dist-quote-mark {
