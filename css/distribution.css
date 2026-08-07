@@ -441,32 +441,56 @@
   background:
     radial-gradient(1200px 500px at 10% -10%, rgba(31, 111, 139, 0.28), transparent 55%),
     rgba(11, 37, 69, 0.72);
-  overflow: auto;
-  padding: 1.25rem;
+  overflow: hidden;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.85rem;
+  align-items: stretch;
+  min-height: 0;
 }
 
 .dist-quote-sheet.hidden { display: none; }
 
 .dist-quote-toolbar {
-  width: min(100%, 210mm);
+  width: 100%;
+  flex: 0 0 auto;
   display: flex;
-  justify-content: flex-end;
-  gap: 0.55rem;
-  position: sticky;
-  top: 0;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
   z-index: 2;
-  padding: 0.55rem 0.75rem;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.78);
+  padding: 0.65rem 1rem;
+  background: rgba(15, 23, 42, 0.92);
   backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dist-quote-toolbar-hint {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.85rem;
+}
+
+.dist-quote-toolbar .dist-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
 }
 
 .dist-quote-toolbar .btn {
   color: #fff;
+}
+
+.dist-quote-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 1rem 1rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .dist-quote-doc,
@@ -474,12 +498,14 @@
   position: relative;
   width: min(100%, 210mm);
   max-width: 210mm;
+  flex: 0 0 auto;
   background: #fff;
   color: #12263a;
   padding: 0 0 1rem;
+  margin: 0 auto 1.5rem;
   box-shadow: 0 28px 70px rgba(7, 20, 38, 0.35);
   font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .dist-quote-doc--compact {
