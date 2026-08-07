@@ -231,12 +231,16 @@ window.AccountingData = (function () {
     }
     if (typeof window.DistributionModule !== 'undefined') {
       try {
-        var distRaw = null;
-        try { distRaw = localStorage.getItem('andeco_distribution_data'); } catch (e2) {}
-        if (distRaw && window.DistributionModule.applyRemote) {
-          window.DistributionModule.applyRemote(JSON.parse(distRaw));
-        } else if (window.DistributionModule.render) {
-          window.DistributionModule.render();
+        var distAcceptRemote = !window.DistributionModule.shouldAcceptRemote ||
+          window.DistributionModule.shouldAcceptRemote();
+        if (distAcceptRemote) {
+          var distRaw = null;
+          try { distRaw = localStorage.getItem('andeco_distribution_data'); } catch (e2) {}
+          if (distRaw && window.DistributionModule.applyRemote) {
+            window.DistributionModule.applyRemote(JSON.parse(distRaw));
+          } else if (window.DistributionModule.render) {
+            window.DistributionModule.render();
+          }
         }
       } catch (e) {}
     }
@@ -596,7 +600,12 @@ window.AccountingData = (function () {
           setLocalStorage('andeco_lms_data', data.lms);
         }
         if (data.distribution && typeof data.distribution === 'object') {
-          setLocalStorage('andeco_distribution_data', data.distribution);
+          var distAccept = !(
+            typeof window.DistributionModule !== 'undefined' &&
+            window.DistributionModule.shouldAcceptRemote &&
+            !window.DistributionModule.shouldAcceptRemote()
+          );
+          if (distAccept) setLocalStorage('andeco_distribution_data', data.distribution);
         }
         if (data.payroll && typeof data.payroll === 'object') {
           if (Array.isArray(data.payroll.employees)) setLocalStorage('employees', data.payroll.employees);

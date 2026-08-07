@@ -40,6 +40,8 @@
   let catalogBrandFilter = '';
   let catalogModelFilter = '';
   let prospectSearch = '';
+  let optionsDialogOpen = false;
+  let localWriteGuardUntil = 0;
 
   function uid(prefix) {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -379,10 +381,33 @@
     }
   }
 
+  function isBusy() {
+    return (
+      prospectEditorId !== null ||
+      quoteEditorId != null ||
+      optionsDialogOpen ||
+      document.body.classList.contains('dist-quote-open') ||
+      document.body.classList.contains('dist-modal-open')
+    );
+  }
+
+  function touchLocalWriteGuard(ms) {
+    const hold = typeof ms === 'number' ? ms : 8000;
+    localWriteGuardUntil = Math.max(localWriteGuardUntil, Date.now() + hold);
+  }
+
+  function shouldAcceptRemote() {
+    return !isBusy() && Date.now() >= localWriteGuardUntil;
+  }
+
   function saveLocal() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (_) { /* ignore */ }
+      return true;
+    } catch (err) {
+      console.error('Distribution local save failed', err);
+      return false;
+    }
   }
 
   function persistAllIfFile() {
@@ -394,16 +419,18 @@
   }
 
   function persist(immediate) {
-    saveLocal();
+    const ok = saveLocal();
+    touchLocalWriteGuard(immediate ? 10000 : 8000);
     const run = () => persistAllIfFile();
     if (immediate) {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = null;
       run();
-      return;
+      return ok;
     }
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(run, 400);
+    return ok;
   }
 
   function brandById(id) {
@@ -1038,24 +1065,43 @@
       renderProspects();
     });
     el.querySelector('#dist-prospect-save')?.addEventListener('click', () => {
-      const data = readForm();
-      if (!data.company && !data.contactName) {
-        toast('Enter a company or contact name', 'error');
-        return;
+      try {
+        const data = readForm();
+        if (!data.company && !data.contactName) {
+          toast('Enter a company or contact name', 'error');
+          return;
+        }
+        if (!state) {
+          toast('Distribution data is not loaded yet. Try again.', 'error');
+          return;
+        }
+        if (!Array.isArray(state.potentialClients)) state.potentialClients = [];
+        if (existing) {
+          Object.assign(existing, data, { updatedAt: new Date().toISOString() });
+          const ok = persist(true);
+          if (!ok) {
+            toast('Could not save potential client (storage full or unavailable)', 'error');
+            return;
+          }
+          toast('Potential client updated');
+          prospectEditorId = null;
+        } else {
+          const created = normalizeProspect(Object.assign(emptyProspect(), data));
+          state.potentialClients.unshift(created);
+          const ok = persist(true);
+          if (!ok) {
+            state.potentialClients = state.potentialClients.filter((p) => p.id !== created.id);
+            toast('Could not save potential client (storage full or unavailable)', 'error');
+            return;
+          }
+          toast('Potential client added');
+          prospectEditorId = null;
+        }
+        renderProspects();
+      } catch (err) {
+        console.error(err);
+        toast(err?.message || 'Could not save potential client', 'error');
       }
-      if (existing) {
-        Object.assign(existing, data, { updatedAt: new Date().toISOString() });
-        persist(true);
-        toast('Potential client updated');
-        prospectEditorId = null;
-      } else {
-        const created = normalizeProspect(Object.assign(emptyProspect(), data));
-        state.potentialClients.unshift(created);
-        persist(true);
-        toast('Potential client added');
-        prospectEditorId = null;
-      }
-      renderProspects();
     });
     el.querySelector('#dist-prospect-convert')?.addEventListener('click', () => {
       if (!existing) return;
@@ -1766,6 +1812,7 @@
     const close = () => {
       overlay.remove();
       document.body.classList.remove('dist-modal-open');
+      optionsDialogOpen = false;
     };
 
     const refreshSelectionUi = () => {
@@ -1818,6 +1865,7 @@
       toast(optCount ? `${optCount} option(s) on quotation` : 'Options cleared — standard equipment only');
     });
 
+    optionsDialogOpen = true;
     document.body.classList.add('dist-modal-open');
     document.body.appendChild(overlay);
     refreshSelectionUi();
@@ -2324,8 +2372,11 @@
     toast(existing ? 'Vessel updated' : 'Vessel added');
   }
 
-  function render() {
+  function render(options) {
+    options = options || {};
     if (!state) return;
+    // Background shared-data polls must not wipe open Distribution forms.
+    if (!options.force && isBusy()) return;
     if (section === 'dashboard') renderDashboard();
     else if (section === 'catalog') renderCatalog();
     else if (section === 'prospects') renderProspects();
@@ -2334,19 +2385,23 @@
   }
 
   function applyRemote(data) {
-    if (!data) return;
+    if (!data) return false;
+    // Don't clobber an open editor, and briefly ignore stale poll payloads after a local save.
+    if (!shouldAcceptRemote()) return false;
     state = normalizeState(data);
     saveLocal();
-    render();
+    render({ force: true });
+    return true;
   }
 
   function init() {
     state = loadLocal();
+    if (!Array.isArray(state.potentialClients)) state.potentialClients = [];
     const page = document.getElementById('page-distribution');
     if (page && page.classList.contains('active')) {
       setSection(section, { keepEditor: true });
     } else {
-      render();
+      render({ force: true });
     }
   }
 
@@ -2357,6 +2412,8 @@
     getState: () => state,
     applyRemote,
     persist,
+    isBusy,
+    shouldAcceptRemote,
     SECTIONS
   };
 
