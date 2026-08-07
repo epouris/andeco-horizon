@@ -2775,10 +2775,73 @@
     return chunks.join('\n');
   }
 
+  /** Build a regex that matches a phrase even when PDF.js inserts letter-spacing spaces. */
+  function flexiblePhrasePattern(phrase) {
+    return String(phrase || '')
+      .split(/\s+/)
+      .map((word) =>
+        word
+          .split('')
+          .map((ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('\\s*')
+      )
+      .join('\\s+');
+  }
+
+  /**
+   * PDF.js often extracts stylized headers as spaced letters, e.g. "YO U R C O D E :".
+   * Normalize known configurator phrases so OLR Ref / colour sections parse reliably.
+   */
+  function normalizeConfiguratorPdfText(text) {
+    let s = String(text || '');
+    const phrases = [
+      'YOUR CODE',
+      'ENGINE COLOUR',
+      'MAIN DECK',
+      'DECK OPTIONS',
+      'FOAM DECK MAIN COLOUR',
+      'SECONDARY COLOUR',
+      'BIMINI TOP',
+      'MAIN COLOUR',
+      'JOYSTICKS & THRUSTERS',
+      'CATEGORY OPTION OPTION CODE'
+    ].concat(CONFIG_COLOUR_SECTIONS.map((sec) => sec.key));
+    // Longer phrases first so "FOAM DECK MAIN COLOUR" wins over "MAIN COLOUR".
+    const unique = [...new Set(phrases)].sort((a, b) => b.length - a.length);
+    unique.forEach((phrase) => {
+      const re = new RegExp(flexiblePhrasePattern(phrase), 'gi');
+      s = s.replace(re, phrase);
+    });
+    // Also collapse remaining single-letter spaced ALLCAPS runs (e.g. "H U L L", "T U B E S").
+    s = s.replace(/\b(?:[A-Z](?:\s+[A-Z]){2,})\b/g, (m) => m.replace(/\s+/g, ''));
+    return s;
+  }
+
+  function extractOlrRefFromConfiguratorText(raw, flat) {
+    const sources = [flat, String(raw || '').replace(/\s+/g, ' ').trim()];
+    for (let i = 0; i < sources.length; i += 1) {
+      const m = String(sources[i] || '').match(/YOUR\s*CODE\s*:?\s*([A-Z0-9]{5,16})/i);
+      if (m) return m[1].toUpperCase();
+    }
+    // Line-based fallback: compact "YO U R C O D E :" then read the next code line.
+    const lines = String(raw || '').split(/\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const compact = lines[i].replace(/\s+/g, '').toUpperCase();
+      if (!compact.startsWith('YOURCODE')) continue;
+      const sameLine = compact.replace(/^YOURCODE:?/, '');
+      if (/^[A-Z0-9]{5,16}$/.test(sameLine)) return sameLine;
+      const next = String(lines[i + 1] || '')
+        .replace(/\s+/g, '')
+        .toUpperCase();
+      if (/^[A-Z0-9]{5,16}$/.test(next)) return next;
+    }
+    return '';
+  }
+
   function parseOlympicRibsConfiguratorText(text) {
-    const raw = String(text || '');
+    const raw = normalizeConfiguratorPdfText(text);
     const flat = raw.replace(/\s+/g, ' ').trim();
-    const olrRef = ((flat.match(/YOUR CODE:\s*([A-Z0-9]+)/i) || [])[1] || '').toUpperCase();
+    const olrRef = extractOlrRefFromConfiguratorText(raw, flat);
     let modelName = '';
     const modelNearCode = flat.match(/Created on:\s*[\d./-]+\s+([A-Z0-9][A-Z0-9 /-]{1,24}?)\s+YOUR CODE/i);
     if (modelNearCode) modelName = modelNearCode[1].trim();
@@ -2786,7 +2849,7 @@
       const lineModel = raw.match(/Created on:[^\n]*\n+\s*([A-Z0-9][A-Z0-9 /-]{1,24})/i);
       if (lineModel) modelName = lineModel[1].trim();
     }
-    modelName = modelName.replace(/\s+/g, ' ').trim();
+    modelName = modelName.replace(/\s+/g, ' ').replace(/\b(\d+)\s+([A-Z]{2,})\b/g, '$1$2').trim();
 
     const sectionHits = [];
     CONFIG_COLOUR_SECTIONS.forEach((sec) => {
