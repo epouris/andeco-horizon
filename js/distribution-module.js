@@ -2501,6 +2501,15 @@
 
     closeQuotePrintSheet();
 
+    const hasDiscount = Number(q.discountAmount) > 0;
+    const linesAfterDisc = q.linesTotal != null ? q.linesTotal : (q.subtotal - (q.discountAmount || 0));
+    const clientBits = [
+      q.clientSnapshot?.contactName,
+      q.clientSnapshot?.email,
+      q.clientSnapshot?.phone,
+      q.clientSnapshot?.address
+    ].filter(Boolean);
+
     const sheet = document.createElement('div');
     sheet.className = 'dist-quote-sheet';
     sheet.innerHTML = `
@@ -2508,7 +2517,7 @@
         <button type="button" class="btn btn-primary btn-sm" data-dist-print-run>Print / Save PDF</button>
         <button type="button" class="btn btn-secondary btn-sm" data-dist-print-close>Close</button>
       </div>
-      <article class="dist-quote-doc dist-quote-doc--portrait">
+      <article class="dist-quote-doc dist-quote-doc--portrait dist-quote-doc--compact">
         <div class="dist-quote-accent"></div>
 
         <header class="dist-quote-top">
@@ -2532,72 +2541,35 @@
           </div>
         </header>
 
-        <section class="dist-quote-parties">
+        <section class="dist-quote-intro ${vesselPhoto ? 'has-photo' : ''}">
           <div class="dist-quote-card">
             <div class="dist-quote-card-label">Prepared for</div>
             <div class="dist-quote-card-name">${esc(q.clientSnapshot?.name || '—')}</div>
-            ${q.clientSnapshot?.contactName ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.contactName)}</div>` : ''}
-            ${q.clientSnapshot?.email ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.email)}</div>` : ''}
-            ${q.clientSnapshot?.phone ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.phone)}</div>` : ''}
-            ${q.clientSnapshot?.address ? `<div class="dist-quote-card-line">${esc(q.clientSnapshot.address)}</div>` : ''}
+            ${clientBits.map((line) => `<div class="dist-quote-card-line">${esc(line)}</div>`).join('')}
           </div>
           <div class="dist-quote-card dist-quote-card--model">
-            <div class="dist-quote-card-label">Vessel configuration</div>
+            <div class="dist-quote-card-label">Vessel</div>
             <div class="dist-quote-card-name">${esc(brand?.name || '')} ${esc(model?.name || '')}</div>
-            ${olrRef ? `<div class="dist-quote-card-line"><strong>OLR Ref:</strong> ${esc(olrRef)}</div>` : ''}
             <div class="dist-quote-card-line">Currency: ${esc(q.currency || 'EUR')}</div>
-            <div class="dist-quote-card-line">Status: ${esc(statusLabel(QUOTE_STATUSES, q.status))}</div>
-            ${model?.basePrice != null ? `<div class="dist-quote-card-line">Standard equipment (no engine): ${money(model.basePrice, q.currency)}</div>` : ''}
+            ${model?.basePrice != null ? `<div class="dist-quote-card-line">Base (no engine): ${money(model.basePrice, q.currency)}</div>` : ''}
           </div>
+          ${vesselPhoto ? `
+            <div class="dist-quote-vessel-photo">
+              <img src="${esc(vesselPhoto)}" alt="${esc((brand?.name || '') + ' ' + (model?.name || 'Vessel'))}">
+            </div>` : ''}
         </section>
 
-        ${vesselPhoto ? `
-          <section class="dist-quote-vessel-photo">
-            <img src="${esc(vesselPhoto)}" alt="${esc((brand?.name || '') + ' ' + (model?.name || 'Vessel'))}">
-          </section>` : ''}
-
-        ${Object.keys(specs).length ? `
-          <section class="dist-quote-section">
-            <div class="dist-quote-section-head">
-              <h2>Technical specifications</h2>
-              <span>${esc(model?.name || '')}</span>
-            </div>
-            <div class="dist-quote-spec-grid">
-              ${Object.entries(specs).map(([k, v]) => `
-                <div class="dist-quote-spec">
-                  <div class="dist-quote-spec-label">${esc(formatSpecLabel(k))}</div>
-                  <div class="dist-quote-spec-value">${esc(v)}</div>
-                </div>`).join('')}
-            </div>
-          </section>` : ''}
-
-        ${std.length ? `
-          <section class="dist-quote-section">
-            <div class="dist-quote-section-head">
-              <h2>Standard equipment</h2>
-              <span>Included in base configuration</span>
-            </div>
-            <div class="dist-quote-std-grid">
-              ${std.map((g) => `
-                <div class="dist-quote-std-group">
-                  <div class="dist-quote-std-title">${esc(g.category)}</div>
-                  <ul>${(g.items || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
-                </div>`).join('')}
-            </div>
-          </section>` : ''}
-
-        <section class="dist-quote-section">
+        <section class="dist-quote-section dist-quote-section--pricing">
           <div class="dist-quote-section-head">
             <h2>Pricing</h2>
-            <span>${lines.length} line item${lines.length === 1 ? '' : 's'}</span>
+            <span>${lines.length} line${lines.length === 1 ? '' : 's'}</span>
           </div>
           <table class="dist-quote-lines-print">
             <thead>
               <tr>
                 <th class="desc">Description</th>
                 <th class="num">Qty</th>
-                <th class="num">Unit price</th>
-                <th class="num">Subtotal</th>
+                <th class="num">Unit</th>
                 <th class="num">Disc.</th>
                 <th class="num">Amount</th>
               </tr>
@@ -2612,20 +2584,19 @@
                   </td>
                   <td class="num">${esc(ln.qty)}</td>
                   <td class="num">${money(ln.unitPrice, q.currency)}</td>
-                  <td class="num">${money(lineSubtotal(ln), q.currency)}</td>
                   <td class="num">${Number(ln.discountPercent) ? esc(Number(ln.discountPercent)) + '%' : '—'}</td>
                   <td class="num dist-quote-line-amount">${money(lineTotal(ln), q.currency)}</td>
-                </tr>`).join('') : '<tr><td colspan="6">No line items on this quotation.</td></tr>'}
+                </tr>`).join('') : '<tr><td colspan="5">No line items on this quotation.</td></tr>'}
             </tbody>
           </table>
 
           <div class="dist-quote-totals-wrap">
             <div class="dist-quote-totals-print">
               <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
-              <div class="row"><span>Discounts</span><span>${q.discountAmount ? '− ' + money(q.discountAmount, q.currency) : money(0, q.currency)}</span></div>
-              <div class="row"><span>Lines after discount</span><span>${money(q.linesTotal != null ? q.linesTotal : (q.subtotal - q.discountAmount), q.currency)}</span></div>
-              <div class="row"><span>Transportation</span><span>${money(transport, q.currency)}</span></div>
-              <div class="row"><span>Packaging</span><span>${money(packaging, q.currency)}</span></div>
+              ${hasDiscount ? `<div class="row"><span>Discounts</span><span>− ${money(q.discountAmount, q.currency)}</span></div>
+              <div class="row"><span>After discount</span><span>${money(linesAfterDisc, q.currency)}</span></div>` : ''}
+              ${transport > 0 ? `<div class="row"><span>Transportation</span><span>${money(transport, q.currency)}</span></div>` : ''}
+              ${packaging > 0 ? `<div class="row"><span>Packaging</span><span>${money(packaging, q.currency)}</span></div>` : ''}
               <div class="row grand">
                 <span>Final total</span>
                 <span>${money(q.total, q.currency)}</span>
@@ -2634,28 +2605,54 @@
           </div>
         </section>
 
-        <section class="dist-quote-section">
-          <div class="dist-quote-section-head"><h2>Payment terms</h2></div>
-          <div class="dist-quote-notes dist-quote-payment-terms">${esc(paymentTerms)}</div>
+        <section class="dist-quote-section dist-quote-section--terms">
+          <div class="dist-quote-terms-grid">
+            <div>
+              <div class="dist-quote-section-head"><h2>Payment terms</h2></div>
+              <div class="dist-quote-notes dist-quote-payment-terms">${esc(paymentTerms)}</div>
+            </div>
+            <div>
+              <div class="dist-quote-section-head"><h2>Validity</h2></div>
+              <div class="dist-quote-notes">
+                Valid for 30 days from issue date${validUntil ? ` (until ${esc(validUntil)})` : ''}.
+                Prices and availability are subject to confirmation at order.
+                ${q.notes ? `\n\nNotes: ${esc(q.notes)}` : ''}
+              </div>
+            </div>
+          </div>
         </section>
 
-        ${q.notes ? `
-          <section class="dist-quote-section">
-            <div class="dist-quote-section-head"><h2>Notes</h2></div>
-            <div class="dist-quote-notes">${esc(q.notes)}</div>
+        ${Object.keys(specs).length ? `
+          <section class="dist-quote-section dist-quote-section--specs">
+            <div class="dist-quote-section-head">
+              <h2>Technical specifications</h2>
+              <span>${esc(model?.name || '')}</span>
+            </div>
+            <div class="dist-quote-spec-grid">
+              ${Object.entries(specs).map(([k, v]) => `
+                <div class="dist-quote-spec">
+                  <div class="dist-quote-spec-label">${esc(formatSpecLabel(k))}</div>
+                  <div class="dist-quote-spec-value">${esc(v)}</div>
+                </div>`).join('')}
+            </div>
+          </section>` : ''}
+
+        ${std.length ? `
+          <section class="dist-quote-section dist-quote-section--std">
+            <div class="dist-quote-section-head">
+              <h2>Standard equipment</h2>
+              <span>Included in base configuration</span>
+            </div>
+            <div class="dist-quote-std-grid">
+              ${std.map((g) => `
+                <div class="dist-quote-std-group">
+                  <div class="dist-quote-std-title">${esc(g.category)}</div>
+                  <p class="dist-quote-std-items">${(g.items || []).map((i) => esc(i)).join(' · ')}</p>
+                </div>`).join('')}
+            </div>
           </section>` : ''}
 
         <footer class="dist-quote-doc-footer">
-          <div class="dist-quote-footer-grid">
-            <div>
-              <div class="dist-quote-footer-label">Validity</div>
-              <div>This quotation is valid for 30 days from the issue date${validUntil ? ` (until ${esc(validUntil)})` : ''}.</div>
-            </div>
-            <div>
-              <div class="dist-quote-footer-label">Acceptance</div>
-              <div>Prices and availability are subject to confirmation at order.</div>
-            </div>
-          </div>
           <div class="dist-quote-footer-note">${esc(footer)}</div>
           <div class="dist-quote-signoff">
             <div class="dist-quote-sign-line"></div>
