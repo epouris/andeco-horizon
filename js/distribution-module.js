@@ -3539,6 +3539,9 @@
       toast('Quotation saved');
       renderQuoteEditor(el);
     });
+    el.querySelector('#dist-quote-delete')?.addEventListener('click', () => {
+      deleteQuote(q.id);
+    });
     el.querySelector('#dist-quote-print')?.addEventListener('click', () => {
       saveFields();
       persist(true);
