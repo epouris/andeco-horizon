@@ -1404,11 +1404,18 @@ body.dist-modal-open { overflow: hidden; }
     page-break-inside: avoid;
   }
 
+  /* Page 1: header, prepared for, tech specs, standard equipment.
+     Page 2+: pricing, then payment terms. */
+  body.dist-quote-open .dist-quote-section--pricing {
+    break-before: page;
+    page-break-before: always;
+  }
+
   body.dist-quote-open .dist-quote-section--std,
   body.dist-quote-open .dist-quote-std-grid,
   body.dist-quote-open .dist-quote-section--specs {
-    break-inside: auto;
-    page-break-inside: auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   body.dist-quote-open .dist-quote-lines-print thead {
