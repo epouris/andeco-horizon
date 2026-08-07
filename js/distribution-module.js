@@ -40,6 +40,7 @@
   let catalogBrandFilter = '';
   let catalogModelFilter = '';
   let prospectSearch = '';
+  let pendingCatalogPersist = false;
 
   function uid(prefix) {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -99,11 +100,359 @@
       { id: uid('cat'), brandId, key: 'engines', label: 'Main engines', sortOrder: 10, subgroupBy: true },
       { id: uid('cat'), brandId, key: 'engine_options', label: 'Engine options', sortOrder: 20, subgroupBy: false },
       { id: uid('cat'), brandId, key: 'covers', label: 'Covers & awnings', sortOrder: 30, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'cabin', label: 'Cabin options', sortOrder: 34, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'wetbar', label: 'Wet bar options', sortOrder: 36, subgroupBy: false },
       { id: uid('cat'), brandId, key: 'electronics', label: 'Electronic & electrical', sortOrder: 40, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'lights', label: 'Lights', sortOrder: 42, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'sound', label: 'Sound systems', sortOrder: 44, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'generators', label: 'Generators', sortOrder: 48, subgroupBy: false },
       { id: uid('cat'), brandId, key: 'other', label: 'Other equipment', sortOrder: 50, subgroupBy: false },
+      { id: uid('cat'), brandId, key: 'exclusives', label: 'Exclusives', sortOrder: 55, subgroupBy: false },
       { id: uid('cat'), brandId, key: 'decking', label: 'Decking', sortOrder: 60, subgroupBy: false },
       { id: uid('cat'), brandId, key: 'trailer', label: 'Trailer', sortOrder: 70, subgroupBy: false }
     ];
+  }
+
+  function extraCategoryDefs() {
+    return [
+      { key: 'cabin', label: 'Cabin options', sortOrder: 34, subgroupBy: false },
+      { key: 'wetbar', label: 'Wet bar options', sortOrder: 36, subgroupBy: false },
+      { key: 'lights', label: 'Lights', sortOrder: 42, subgroupBy: false },
+      { key: 'sound', label: 'Sound systems', sortOrder: 44, subgroupBy: false },
+      { key: 'generators', label: 'Generators', sortOrder: 48, subgroupBy: false },
+      { key: 'exclusives', label: 'Exclusives', sortOrder: 55, subgroupBy: false }
+    ];
+  }
+
+  function ensureBrandCategories(state, brandId) {
+    if (!state.optionCategories) state.optionCategories = [];
+    const existing = new Set(
+      state.optionCategories.filter((c) => c.brandId === brandId).map((c) => c.key)
+    );
+    extraCategoryDefs().forEach((def) => {
+      if (existing.has(def.key)) return;
+      state.optionCategories.push({
+        id: uid('cat'),
+        brandId,
+        key: def.key,
+        label: def.label,
+        sortOrder: def.sortOrder,
+        subgroupBy: !!def.subgroupBy
+      });
+    });
+    return Object.fromEntries(
+      state.optionCategories.filter((c) => c.brandId === brandId).map((c) => [c.key, c.id])
+    );
+  }
+
+  /** OlympicRibs 45SRC / 45SRC S — from manufacturer Excel price list. */
+  function build45SrcCatalog(brandId, byKey) {
+    const outboardId = uid('model');
+    const sternId = uid('model');
+    const now = new Date().toISOString();
+
+    const techSpecs = {
+      loaOutboards: '14.5 m',
+      loaSterndrives: '15 m',
+      boa: '3.65 m',
+      internalBeam: '2.5 m',
+      tubeDiam: '55-65 cm',
+      maxHp: '3x600 HP',
+      minHp: '800 HP',
+      suggestedHp: '2 x 600 HP',
+      dryWeight: '6300 Kg (incl. engines)',
+      fuelTank: '1200 ltrs',
+      waterTank: '200 ltrs',
+      ceCategory: 'B',
+      pax: '14'
+    };
+
+    const standardEquipment = [
+      {
+        category: 'Seats',
+        items: [
+          'Three seater sofa & 2 single Ullman Echelon seats for driver / co-driver'
+        ]
+      },
+      {
+        category: 'Hull / Internal',
+        items: [
+          'Stainless steel fuel tanks 1200 ltrs (2×600 ltrs)',
+          'Fresh water tank 200 ltrs',
+          'Black water tank 40 ltrs with macerator',
+          'Fresh water system',
+          'Engine room bilge pumps (4)',
+          'ZipWake interceptors with automatic operation',
+          'Electric windlass 800W',
+          'Ultra Marine 8kg anchor',
+          'Stainless steel chain 6mm 60m',
+          'Custom bow roller',
+          'Chain counter',
+          'Windlass remote control'
+        ]
+      },
+      {
+        category: 'Deck',
+        items: [
+          'Seadeck decking',
+          'Seasmart anodized aluminum cleat with logo',
+          'Stainless steel cupholder at console',
+          'Premium branded steering wheel',
+          'Bow sunlounge with stainless steel cup',
+          'Aft sundeck',
+          'Aft lounge passenger seats with electrically reclining backs',
+          'Engine room hatch electric actuators',
+          'Exterior upholstery with Silvertex fabrics',
+          'Aft shower',
+          'Swimming ladder with custom handrails'
+        ]
+      },
+      {
+        category: 'T-Top',
+        items: [
+          'T-Top with stainless steel frame and full carbon top',
+          'Windshield with tempered glass',
+          'Ambient lighting with LED tape',
+          'Ceiling LED spot lights',
+          'Navigation and anchor lights',
+          'Electric horn',
+          'Wiper with water sprayer'
+        ]
+      },
+      {
+        category: 'Wet Bar',
+        items: [
+          'Stainless steel cup holders',
+          'Stainless steel custom upholstered handrails',
+          'Scanstrut USB / USB-C charging station',
+          'Storage cupboards and drawers'
+        ]
+      },
+      {
+        category: 'Cabin',
+        items: [
+          'Internal decoration made from wood and upholstered surfaces',
+          'Furniture with storage space',
+          'Laminate flooring',
+          'King size bed convertible to “U” shape sofa with table',
+          'Interior upholstery',
+          'LED secret lighting',
+          'Reading lights',
+          'USB / USB-C / 220V charging plugs',
+          '220V plugs',
+          'Sliding door',
+          'Retractable staircase with gas springs',
+          'Under-deck storage space convertible to small cabin'
+        ]
+      },
+      {
+        category: 'WC',
+        items: [
+          'Wooden furniture interior with LED secret lighting and LED spot lights',
+          'Full bathroom kit with glass sink',
+          'Electric toilet',
+          'Retractable shower head',
+          'Grey water system'
+        ]
+      },
+      {
+        category: 'Electrical and electronic equipment',
+        items: [
+          '12V electrical installation',
+          'Digital switching (CZONE)',
+          'Custom interface',
+          'Plotter Raymarine Axiom Pro 12s',
+          'VHF RAY 90 with black box',
+          'Depth sounder',
+          'Standard JL Audio sound system M3 (8× speakers, 1× subwoofer, 2× amps)',
+          'Service batteries',
+          'Remotely operated battery switches',
+          'ACR (automatic charging relay)',
+          'Engine room standalone lights',
+          'Battery charger 16A with 15m cable',
+          '220V installation with 3000W inverter',
+          'Standard deck light package (1 zone)'
+        ]
+      }
+    ];
+
+    const models = [
+      {
+        id: outboardId,
+        brandId,
+        name: '45SRC',
+        basePrice: 511957,
+        currency: 'EUR',
+        active: true,
+        techSpecs: Object.assign({}, techSpecs),
+        standardEquipment: standardEquipment.slice(),
+        notes:
+          'Outboards version — deck setup with wetbar or reverse sofa (standard equipment without engines). Engine lines are package prices (vessel + engines).',
+        createdAt: now
+      },
+      {
+        id: sternId,
+        brandId,
+        name: '45SRC S',
+        basePrice: 520511,
+        currency: 'EUR',
+        active: true,
+        techSpecs: Object.assign({}, techSpecs),
+        standardEquipment: standardEquipment.slice(),
+        notes:
+          'Stern drives version with aft platform — wetbar or reverse sofa (standard equipment without engines). Engine lines are package prices (vessel + stern drives).',
+        createdAt: now
+      }
+    ];
+
+    const mk = (categoryKey, subgroup, name, price, modelIds, notes) => ({
+      id: uid('opt'),
+      categoryId: byKey[categoryKey],
+      brandId,
+      modelIds: modelIds || [outboardId, sternId],
+      subgroup: subgroup || '',
+      name,
+      price,
+      unit: 'pcs',
+      notes: notes || '',
+      active: true
+    });
+
+    const options = [
+      // Yamaha outboard packages (vessel + engines)
+      mk('engines', 'YAMAHA', 'Triple F350NSA — Light Grey Metallic (Elect. ST)', 632420, [outboardId]),
+      mk('engines', 'YAMAHA', 'Triple F350NSA2 — Pearl White (Elect. ST)', 637924, [outboardId]),
+      mk('engines', 'YAMAHA', 'Twin XTO 450NSA — Light Grey Metallic (Elect. ST)', 643797, [outboardId]),
+      mk('engines', 'YAMAHA', 'Twin XTO 450NSA2 — Pearl White (Elect. ST)', 648109, [outboardId]),
+      mk('engines', 'YAMAHA', 'Triple XTO 450NSA — Light Grey Metallic (Elect. ST)', 707735, [outboardId]),
+      mk('engines', 'YAMAHA', 'Triple XTO 450NSA2 — Pearl White (Elect. ST)', 714206, [outboardId]),
+
+      // Mercury outboard packages
+      mk('engines', 'MERCURY', 'Dual 400 V10 EHPS', 619255, [outboardId]),
+      mk('engines', 'MERCURY', 'Dual 400 V10 EHPS White', 621340, [outboardId]),
+      mk('engines', 'MERCURY', 'Dual 425 V10 EHPS', 622190, [outboardId]),
+      mk('engines', 'MERCURY', 'Dual 425 V10 EHPS White', 624276, [outboardId]),
+      mk('engines', 'MERCURY', 'Dual 600 V12 DTS BL', 731406, [outboardId]),
+      mk('engines', 'MERCURY', 'Dual 600 V12 DTS CF', 734880, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple 400 V10 EHPS', 666982, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple 400 V10 EHPS White', 670109, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple 425 V10 EHPS', 671386, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple 425 V10 EHPS White', 674513, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple R500 R-Drive 1.60', 752297, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple R500 R-Drive 1.60 CF', 755424, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple R500 R-Drive SM 1.60 RT', 773065, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple R500 R-Drive SM 1.60 RT CF', 776192, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple 600 V12 DTS BL', 831634, [outboardId]),
+      mk('engines', 'MERCURY', 'Triple 600 V12 DTS CF', 836845, [outboardId]),
+
+      // Volvo Penta stern drive packages
+      mk('engines', 'VOLVO PENTA', '2 × 440 DP6 Joystick', 691586, [sternId]),
+      mk(
+        'engines',
+        'VOLVO PENTA',
+        '2 × 440 DP6 Joystick & Dynamic Positioning',
+        702086,
+        [sternId]
+      ),
+
+      // Decking
+      mk('decking', '', 'Synthetic TEAK Esthec — Outboards version', 18596, [outboardId]),
+      mk('decking', '', 'Burma TEAK wood — Outboards version', 17457, [outboardId]),
+      mk('decking', '', 'Synthetic TEAK Esthec — Stern drives version', 23546, [sternId]),
+      mk('decking', '', 'Burma TEAK wood — Stern drives version', 20163, [sternId]),
+
+      // Cabin
+      mk('cabin', '', 'Drawer refrigerator 35 ltrs', 1601),
+      mk('cabin', '', 'Drawer freezer 35 ltrs', 1733),
+      mk('cabin', '', 'Air Condition 10,000 BTU with 3000W Inverter/Charger', 9893),
+      mk('cabin', '', 'Water heater 20 ltrs', 2055),
+
+      // Wet bar
+      mk('wetbar', '', 'Dual electric hob', 1448),
+      mk('wetbar', '', 'Sink with folding tap', 1241),
+      mk('wetbar', '', 'Drawer refrigerator 90 ltrs', 1320),
+      mk('wetbar', '', 'Drawer freezer 60 ltrs', 1980),
+      mk('wetbar', '', 'Drawer freezer 35 ltrs', 1605),
+
+      // Electric / electronics
+      mk('electronics', '', 'Electric fully flush aft tables (2 pcs)', 9088),
+      mk('electronics', '', 'Electric fully flush bow table', 4973),
+      mk('electronics', '', 'Additional Inverter/Battery charger 3000W/16A', 2880),
+      mk('electronics', '', 'Scanstrut wireless charger on console (per piece)', 456),
+      mk('electronics', '', '15Amp solar panels', 1360),
+      mk('electronics', '', 'Main plotter upgrade to Raymarine AXIOM PRO 16″', 3570),
+      mk(
+        'electronics',
+        '',
+        'Second plotter at the console, Raymarine AXIOM PRO 12″ (outboard versions only)',
+        5897,
+        [outboardId]
+      ),
+      mk('electronics', '', 'T-Top aft plotter screen Raymarine plotter RV+ 12″', 4789),
+      mk('electronics', '', 'Radar Raymarine HD Color Radome Radar 4kW with base', 4769),
+      mk('electronics', '', 'FLIR night vision camera', 6863),
+
+      // Lights
+      mk('lights', '', 'Remotely operated search light', 632),
+      mk('lights', '', 'Deck lights package upgrade (3 zones) single colour', 3588),
+      mk('lights', '', 'Under water lights — single colour', 2700),
+      mk(
+        'lights',
+        '',
+        'Premium RGB package with underwater lights and Sound to light module (SHADOW CASTER)',
+        13993
+      ),
+
+      // Sound
+      mk(
+        'sound',
+        '',
+        'Premium Soundsystem package Upgrade, JL Audio M6 (10× speakers, 2× subwoofer, 2× amplifiers)',
+        5266
+      ),
+      mk(
+        'sound',
+        '',
+        'Ultra Soundsystem package JL Audio M6 — with LED RGB (16× speakers, 2× subwoofers, 4× amplifiers)',
+        8161
+      ),
+
+      // Generators
+      mk(
+        'generators',
+        '',
+        '3KWA single cylinder generator — available only for outboards version',
+        13959,
+        [outboardId]
+      ),
+
+      // Covers & awnings
+      mk('covers', '', 'Ullman Echelon seats passengers package (3 pcs)', 40800),
+      mk('covers', '', 'Bow awning system with carbon poles', 6546),
+      mk(
+        'covers',
+        '',
+        'Aft awning system with carbon poles — for outboards version',
+        4600,
+        [outboardId]
+      ),
+
+      // Other
+      mk('other', '', 'Inox style removable modular shower head', 8280),
+      mk('other', '', 'Quick release system for fenders (10 pcs)', 2592),
+      mk(
+        'other',
+        '',
+        'Electric recessed platform with three steps — available only for stern drives',
+        18240,
+        [sternId]
+      ),
+
+      // Exclusives
+      mk('exclusives', '', 'Corto Maltese Limited Edition Customization', 50000)
+    ].filter((o) => !!o.categoryId);
+
+    return { models, options, outboardId, sternId };
   }
 
   function seedOlympicRibs() {
@@ -182,6 +531,8 @@
       active: true
     }));
 
+    const src45 = build45SrcCatalog(brandId, byKey);
+
     return {
       brands: [
         {
@@ -253,10 +604,11 @@
           ],
           notes: '',
           createdAt: new Date().toISOString()
-        }
+        },
+        ...src45.models
       ],
       optionCategories: cats,
-      options: options.concat(more),
+      options: options.concat(more, src45.options),
       quotations: [],
       soldVessels: [],
       potentialClients: [],
@@ -270,6 +622,38 @@
         quoteFooter: 'Prices in EUR. Quotation valid for 30 days unless otherwise stated. Technical specifications subject to manufacturer updates.'
       }
     };
+  }
+
+  function ensure45SrcCatalog(state) {
+    if (!state || !Array.isArray(state.brands) || !state.brands.length) return false;
+    const brand =
+      state.brands.find((b) => String(b.slug || '').toLowerCase() === 'olympicribs') ||
+      state.brands.find((b) => /olympic\s*ribs/i.test(String(b.name || ''))) ||
+      state.brands[0];
+    if (!brand) return false;
+    const models = Array.isArray(state.models) ? state.models : [];
+    const already = models.some((m) => /^45\s*src\b/i.test(String(m.name || '').trim()));
+    if (already) {
+      // Still ensure newer option categories exist for the brand.
+      const beforeCats = (state.optionCategories || []).length;
+      ensureBrandCategories(state, brand.id);
+      if ((state.optionCategories || []).length > beforeCats) pendingCatalogPersist = true;
+      return false;
+    }
+    const byKey = ensureBrandCategories(state, brand.id);
+    // Engines / decking / covers categories are required for 45SRC options.
+    ['engines', 'covers', 'electronics', 'other', 'decking'].forEach((key) => {
+      if (byKey[key]) return;
+      const fallback = defaultCategories(brand.id).find((c) => c.key === key);
+      if (!fallback) return;
+      state.optionCategories.push(fallback);
+      byKey[key] = fallback.id;
+    });
+    const built = build45SrcCatalog(brand.id, byKey);
+    state.models = models.concat(built.models);
+    state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
+    pendingCatalogPersist = true;
+    return true;
   }
 
   function emptyProspect() {
@@ -365,6 +749,8 @@
       s.settings = Object.assign({}, seeded.settings, s.settings, {
         defaultDiscountPercent: 0
       });
+    } else {
+      ensure45SrcCatalog(s);
     }
     return s;
   }
@@ -1831,6 +2217,8 @@
   function formatSpecLabel(key) {
     const map = {
       loa: 'LOA',
+      loaOutboards: 'LOA (Outboards)',
+      loaSterndrives: 'LOA (Sterndrives)',
       boa: 'BOA',
       internalBeam: 'Internal beam',
       tubeDiam: 'Tube diam.',
@@ -1839,6 +2227,7 @@
       suggestedHp: 'Suggested HP',
       dryWeight: 'Dry weight',
       fuelTank: 'Fuel tank',
+      waterTank: 'Water tank',
       ceCategory: 'CE category',
       pax: 'Passengers'
     };
@@ -2336,12 +2725,21 @@
   function applyRemote(data) {
     if (!data) return;
     state = normalizeState(data);
-    saveLocal();
+    if (pendingCatalogPersist) {
+      pendingCatalogPersist = false;
+      persist(true);
+    } else {
+      saveLocal();
+    }
     render();
   }
 
   function init() {
     state = loadLocal();
+    if (pendingCatalogPersist) {
+      pendingCatalogPersist = false;
+      persist(true);
+    }
     const page = document.getElementById('page-distribution');
     if (page && page.classList.contains('active')) {
       setSection(section, { keepEditor: true });
