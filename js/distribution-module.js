@@ -3026,6 +3026,7 @@
                   <td class="dist-actions">
                     <button type="button" class="btn btn-secondary btn-sm" data-dist-open-quote="${esc(q.id)}">Open</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-dist-print-quote="${esc(q.id)}">Print</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-dist-del-quote="${esc(q.id)}">Delete</button>
                   </td>
                 </tr>`;
               }).join('')}
@@ -3040,6 +3041,9 @@
     });
     el.querySelectorAll('[data-dist-print-quote]').forEach((btn) => {
       btn.addEventListener('click', () => printQuote(btn.getAttribute('data-dist-print-quote')));
+    });
+    el.querySelectorAll('[data-dist-del-quote]').forEach((btn) => {
+      btn.addEventListener('click', () => deleteQuote(btn.getAttribute('data-dist-del-quote')));
     });
   }
 
@@ -3221,6 +3225,25 @@
     renderQuotations();
   }
 
+  function deleteQuote(id) {
+    const q = quoteById(id);
+    if (!q) {
+      toast('Quotation not found', 'error');
+      return false;
+    }
+    const label = q.number || 'this quotation';
+    const linked = q.convertedToProformaId
+      ? `\n\nNote: a proforma (${q.convertedToProformaNumber || q.convertedToProformaId}) was created from this quote; only the quotation record will be deleted.`
+      : '';
+    if (!confirm(`Delete quotation ${label}? This cannot be undone.${linked}`)) return false;
+    state.quotations = (state.quotations || []).filter((item) => item.id !== id);
+    if (quoteEditorId === id) quoteEditorId = null;
+    persist(true);
+    toast(`Quotation ${label} deleted`);
+    renderQuotations();
+    return true;
+  }
+
   function renderQuoteEditor(el) {
     const q = quoteById(quoteEditorId);
     if (!q) {
@@ -3254,6 +3277,7 @@
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-proforma" ${q.convertedToProformaId ? 'disabled' : ''}>Convert to proforma</button>
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-sold">Mark as sold vessel</button>
           <button type="button" class="btn btn-primary btn-sm" id="dist-quote-save">Save</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-delete">Delete</button>
         </div>
       </div>
       ${importInfo ? `
@@ -3514,6 +3538,9 @@
       persist(true);
       toast('Quotation saved');
       renderQuoteEditor(el);
+    });
+    el.querySelector('#dist-quote-delete')?.addEventListener('click', () => {
+      deleteQuote(q.id);
     });
     el.querySelector('#dist-quote-print')?.addEventListener('click', () => {
       saveFields();
