@@ -149,6 +149,7 @@
   function escapeHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function id() { return 'f' + Date.now() + '-' + Math.random().toString(36).slice(2, 9); }
   function formatDateDDMMYYYY(dateString) {
+    if (window.AndecoDate) return window.AndecoDate.formatDate(dateString) || '';
     if (!dateString) return '';
     var d = new Date(dateString);
     if (isNaN(d.getTime())) return '';

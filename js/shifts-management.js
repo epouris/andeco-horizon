@@ -76,11 +76,28 @@
   function saveSettings(s) { var d = getData(); d.settings = Object.assign({}, defaultSettings, s); saveData(d); }
 
   function toYmd(val) {
+    if (window.AndecoDate) {
+      var iso = window.AndecoDate.toISODate(val);
+      if (iso) return iso;
+    }
     if (!val) return '';
-    if (val.length === 10 && val.indexOf('-') === 4) return val;
+    if (String(val).length === 10 && String(val).indexOf('-') === 4) return String(val);
     var d = new Date(val);
     if (isNaN(d.getTime())) return '';
     return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+
+  function formatShiftDate(val) {
+    if (window.AndecoDate) return window.AndecoDate.formatDate(val) || '';
+    var ymd = toYmd(val);
+    if (!ymd) return '';
+    var p = ymd.split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ymd;
+  }
+
+  function formatShiftTime(val) {
+    if (window.AndecoDate) return window.AndecoDate.formatTime(val) || String(val || '');
+    return String(val || '');
   }
 
   function parseTimeToMinutes(t) {
@@ -378,7 +395,7 @@
         ? pending.slice(0, 10).map(function (r) {
           var s = staffById(r.staffId);
           return '<li><strong>' + escapeHtml(s ? s.name : '?') + '</strong>: ' + escapeHtml(REQUEST_TYPES[r.type] || r.type) +
-            ' ' + escapeHtml(toYmd(r.startDate)) + (r.endDate && toYmd(r.endDate) !== toYmd(r.startDate) ? ' → ' + escapeHtml(toYmd(r.endDate)) : '') +
+            ' ' + escapeHtml(formatShiftDate(r.startDate)) + (r.endDate && toYmd(r.endDate) !== toYmd(r.startDate) ? ' → ' + escapeHtml(formatShiftDate(r.endDate)) : '') +
             ' <button type="button" class="btn btn-ghost btn-sm shifts-approve-btn" data-id="' + escapeHtml(r.id) + '">Approve</button>' +
             ' <button type="button" class="btn btn-ghost btn-sm shifts-reject-btn" data-id="' + escapeHtml(r.id) + '">Reject</button></li>';
         }).join('')
@@ -462,8 +479,8 @@
         });
         shiftsOnDate(ymd, st.id).forEach(function (sh) {
           events += '<span class="shifts-cal-event" style="background:' + escapeHtml(staffColor(st)) + '" title="' +
-            escapeHtml(st.name) + ' ' + escapeHtml(sh.startTime) + '–' + escapeHtml(sh.endTime) + '">' +
-            escapeHtml(st.name.split(' ')[0]) + ' ' + escapeHtml(sh.startTime) + '</span>';
+            escapeHtml(st.name) + ' ' + escapeHtml(formatShiftTime(sh.startTime)) + '–' + escapeHtml(formatShiftTime(sh.endTime)) + '">' +
+            escapeHtml(st.name.split(' ')[0]) + ' ' + escapeHtml(formatShiftTime(sh.startTime)) + '</span>';
         });
       });
 
@@ -504,7 +521,7 @@
       return '<tr class="' + (rowConflict ? 'shifts-conflict-row' : '') + '">' +
         '<td>' + escapeHtml(ymd) + '</td>' +
         '<td>' + escapeHtml(st ? st.name : '—') + '</td>' +
-        '<td>' + escapeHtml(sh.startTime || '') + ' – ' + escapeHtml(sh.endTime || '') + '</td>' +
+        '<td>' + escapeHtml(formatShiftTime(sh.startTime || '')) + ' – ' + escapeHtml(formatShiftTime(sh.endTime || '')) + '</td>' +
         '<td>' + formatHours(shiftDurationMinutes(sh)) + '</td>' +
         '<td>' + escapeHtml(sh.notes || '') + '</td>' +
         '<td><button type="button" class="btn btn-ghost btn-sm shifts-edit-shift" data-id="' + escapeHtml(sh.id) + '">Edit</button> ' +
@@ -541,8 +558,8 @@
         : '';
       return '<tr><td>' + escapeHtml(st ? st.name : '—') + '</td>' +
         '<td>' + escapeHtml(REQUEST_TYPES[r.type] || r.type) + '</td>' +
-        '<td>' + escapeHtml(toYmd(r.startDate)) + '</td>' +
-        '<td>' + escapeHtml(toYmd(r.endDate || r.startDate)) + '</td>' +
+        '<td>' + escapeHtml(formatShiftDate(r.startDate)) + '</td>' +
+        '<td>' + escapeHtml(formatShiftDate(r.endDate || r.startDate)) + '</td>' +
         '<td><span class="' + statusCls + '">' + escapeHtml(r.status || 'pending') + '</span></td>' +
         '<td>' + escapeHtml(r.notes || '') + '</td>' +
         '<td>' + adminBtns +

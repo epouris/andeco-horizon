@@ -67,7 +67,14 @@
   }
 
   function todayISO() {
+    if (window.AndecoDate) return window.AndecoDate.todayISO();
     return new Date().toISOString().slice(0, 10);
+  }
+
+  function formatDistDate(value) {
+    if (!value) return '—';
+    if (window.AndecoDate) return window.AndecoDate.formatDate(value) || '—';
+    return String(value);
   }
 
   function lineTotal(line) {
@@ -1681,7 +1688,7 @@
                 return `<tr>
                   <td><strong>${esc(q.number)}</strong></td>
                   <td>${esc(q.olrRef || '—')}</td>
-                  <td>${esc(q.date || '—')}</td>
+                  <td>${esc(formatDistDate(q.date))}</td>
                   <td>${esc(q.clientSnapshot?.name || '—')}</td>
                   <td>${esc(m?.name || '—')}</td>
                   <td>${money(q.total, q.currency)}</td>
@@ -2559,8 +2566,8 @@
             <div class="dist-quote-title">Quotation</div>
             <div class="dist-quote-number">${esc(q.number)}</div>
             <div class="dist-quote-title-meta">
-              <span>Issued ${esc(issued)}</span>
-              ${validUntil ? `<span>Valid until ${esc(validUntil)}</span>` : ''}
+              <span>Issued ${esc(formatDistDate(issued))}</span>
+              ${validUntil ? `<span>Valid until ${esc(formatDistDate(validUntil))}</span>` : ''}
               ${olrRef ? `<span class="dist-quote-olr">OLR Ref: ${esc(olrRef)}</span>` : ''}
             </div>
           </div>
@@ -2897,7 +2904,7 @@
                   <td>${esc(v.brandName || '')} ${esc(v.modelName || '')}</td>
                   <td>${esc(v.engineSummary || '—')}</td>
                   <td>${esc(v.ownerName || '—')}${v.ownerPhone ? `<div class="meta" style="font-size:.75rem">${esc(v.ownerPhone)}</div>` : ''}</td>
-                  <td>${esc(v.saleDate || '—')}</td>
+                  <td>${esc(formatDistDate(v.saleDate))}</td>
                   <td class="dist-actions">
                     <button type="button" class="btn btn-secondary btn-sm" data-dist-edit-vessel="${esc(v.id)}">Edit</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-dist-del-vessel="${esc(v.id)}">Delete</button>

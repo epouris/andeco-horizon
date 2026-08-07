@@ -286,7 +286,7 @@ function loadEmployees() {
         const row = document.createElement('tr');
         const eid = escapeEmployeeHtml(employee.employeeId);
         const ceasedStr = employee.ceasedDate
-            ? new Date(employee.ceasedDate).toLocaleDateString('en-GB')
+            ? (window.AndecoDate ? window.AndecoDate.formatDate(employee.ceasedDate) : new Date(employee.ceasedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))
             : '';
         row.innerHTML = `
             <td>${eid}</td>
@@ -296,7 +296,7 @@ function loadEmployees() {
             <td>${escapeEmployeeHtml(employee.taxCode || 'Not Set')}</td>
             <td>${escapeEmployeeHtml(employee.socialInsurance || 'Not Set')}</td>
             <td>${escapeEmployeeHtml(employee.taxId || 'Not Set')}</td>
-            <td>${employee.hireDate ? escapeEmployeeHtml(new Date(employee.hireDate).toLocaleDateString('en-GB')) : 'Not Set'}</td>
+            <td>${employee.hireDate ? escapeEmployeeHtml((window.AndecoDate ? window.AndecoDate.formatDate(employee.hireDate) : new Date(employee.hireDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))) : 'Not Set'}</td>
             <td>${ceasedStr ? escapeEmployeeHtml(ceasedStr) : '—'}</td>
             <td>${escapeEmployeeHtml(employee.paymentMethod || 'Not Set')}</td>
             <td>
@@ -956,11 +956,15 @@ function generatePayslip() {
     let payDateFormatted;
     
     if (payDate) {
-        const date = new Date(payDate);
-        const day = date.getDate().toString().padStart(2, '0');
-        const monthNum = (date.getMonth() + 1).toString().padStart(2, '0');
-        const yearNum = date.getFullYear();
-        payDateFormatted = `${day}/${monthNum}/${yearNum}`;
+        payDateFormatted = window.AndecoDate
+            ? (window.AndecoDate.formatDate(payDate) || '')
+            : (() => {
+                const date = new Date(payDate);
+                const day = date.getDate().toString().padStart(2, '0');
+                const monthNum = (date.getMonth() + 1).toString().padStart(2, '0');
+                const yearNum = date.getFullYear();
+                return `${day}/${monthNum}/${yearNum}`;
+            })();
     } else {
         payDateFormatted = `31/${month}/${year}`;
     }
@@ -1349,7 +1353,7 @@ function loadPayslips() {
     filteredPayslips.forEach(payslip => {
         const row = document.createElement('tr');
         const period = `${getMonthName(payslip.month)} ${payslip.year}`;
-        const payDate = payslip.payDate ? new Date(payslip.payDate).toLocaleDateString('en-GB') : 'N/A';
+        const payDate = payslip.payDate ? (window.AndecoDate ? window.AndecoDate.formatDate(payslip.payDate) : new Date(payslip.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : 'N/A';
         
         console.log('Creating row for payslip:', payslip.employeeId, payslip.year, payslip.month);
         
@@ -1649,7 +1653,7 @@ function populatePayslipDisplay(payslip) {
     // Handle pay date formatting
     let payDateDisplay;
     try {
-        payDateDisplay = payslip.payDate ? new Date(payslip.payDate).toLocaleDateString('en-GB') : 'N/A';
+        payDateDisplay = payslip.payDate ? (window.AndecoDate ? window.AndecoDate.formatDate(payslip.payDate) : new Date(payslip.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : 'N/A';
     } catch (error) {
         console.error('Error formatting pay date:', error);
         payDateDisplay = 'N/A';
@@ -1786,7 +1790,7 @@ function generatePayslipHTML(payslip) {
     
     // Format dates
     const monthName = getMonthName(parseInt(payslip.month)).toUpperCase();
-    const payDate = payslip.payDate ? new Date(payslip.payDate).toLocaleDateString('en-GB') : 'N/A';
+    const payDate = payslip.payDate ? (window.AndecoDate ? window.AndecoDate.formatDate(payslip.payDate) : new Date(payslip.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : 'N/A';
     
     // Calculate rates and hours
     const standardHours = payslip.standardHours || 170;
@@ -2055,7 +2059,7 @@ function populatePayslipInContainer(container, payslip) {
     
     // Format dates
     const monthName = getMonthName(parseInt(payslip.month)).toUpperCase();
-    const payDate = payslip.payDate ? new Date(payslip.payDate).toLocaleDateString('en-GB') : 'N/A';
+    const payDate = payslip.payDate ? (window.AndecoDate ? window.AndecoDate.formatDate(payslip.payDate) : new Date(payslip.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : 'N/A';
     
     // Calculate rates and hours
     const standardHours = payslip.standardHours || 170;
@@ -2957,11 +2961,11 @@ function generateIR63FormTemplate(employee, year, data) {
                         </div>
                         <div class="ir63-detail-row">
                             <label>Ημερ. Τερματισμού Υπηρεσιών / Employment Ceased on:</label>
-                            <div class="ir63-line">${employee.ceasedDate ? new Date(employee.ceasedDate).toLocaleDateString('en-GB') : ''}</div>
+                            <div class="ir63-line">${employee.ceasedDate ? (window.AndecoDate ? window.AndecoDate.formatDate(employee.ceasedDate) : new Date(employee.ceasedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : ''}</div>
                         </div>
                         <div class="ir63-detail-row">
                             <label>Ημερ. Πρόσληψης (για νεοπροσληφθέντες μόνο) / Commenced on (for new employees only):</label>
-                            <div class="ir63-line">${employee.hireDate && new Date(employee.hireDate).getFullYear() == year ? new Date(employee.hireDate).toLocaleDateString('en-GB') : ''}</div>
+                            <div class="ir63-line">${employee.hireDate && new Date(employee.hireDate).getFullYear() == year ? (window.AndecoDate ? window.AndecoDate.formatDate(employee.hireDate) : new Date(employee.hireDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : ''}</div>
                         </div>
                         <div class="ir63-detail-row">
                             <label>Αξιωματούχος (ΝΑΙ / ΟΧΙ) / Officer (YES / NOT):</label>
@@ -4155,7 +4159,7 @@ function generateEmployeeReport() {
     
     employees.forEach(employee => {
         const status = employee.ceasedDate ? 'Inactive' : 'Active';
-        const hireDate = employee.hireDate ? new Date(employee.hireDate).toLocaleDateString('en-GB') : 'Not Set';
+        const hireDate = employee.hireDate ? (window.AndecoDate ? window.AndecoDate.formatDate(employee.hireDate) : new Date(employee.hireDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : 'Not Set';
         
         reportHTML += `
             <tr>

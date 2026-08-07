@@ -24,6 +24,7 @@
   function escapeHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function id() { return 'c' + Date.now() + '-' + Math.random().toString(36).slice(2, 9); }
   function formatDateDDMMYYYY(dateString) {
+    if (window.AndecoDate) return window.AndecoDate.formatDate(dateString) || '';
     if (!dateString) return '';
     var d = new Date(dateString);
     if (isNaN(d.getTime())) return '';
@@ -32,6 +33,7 @@
     return day + '/' + month + '/' + d.getFullYear();
   }
   function toYyyyMmDd(val) {
+    if (window.AndecoDate) return window.AndecoDate.toISODate(val) || '';
     if (!val) return '';
     if (val.length === 10 && val.indexOf('-') === 4) return val;
     var d = new Date(val);

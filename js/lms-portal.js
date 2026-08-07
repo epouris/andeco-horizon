@@ -112,12 +112,15 @@
 
   function formatWhen(iso) {
     if (!iso) return '';
+    if (window.AndecoDate) return window.AndecoDate.formatDateTime(iso) || '';
     try {
       var d = new Date(iso);
       if (isNaN(d.getTime())) return String(iso).slice(0, 16);
-      return d.toLocaleString(undefined, {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
+      var day = ('0' + d.getDate()).slice(-2);
+      var month = ('0' + (d.getMonth() + 1)).slice(-2);
+      var hour = ('0' + d.getHours()).slice(-2);
+      var minute = ('0' + d.getMinutes()).slice(-2);
+      return day + '/' + month + '/' + d.getFullYear() + ' ' + hour + ':' + minute;
     } catch (e) {
       return String(iso).slice(0, 16);
     }
@@ -1712,6 +1715,7 @@
 
   function formatPortalCertDate(iso) {
     if (!iso) return '—';
+    if (window.AndecoDate) return window.AndecoDate.formatDate(iso) || '—';
     var d = new Date(iso);
     if (isNaN(d.getTime())) return String(iso).slice(0, 10);
     function p2(n) { return (n < 10 ? '0' : '') + n; }
@@ -2356,7 +2360,7 @@
             '<strong>Course completed</strong>' +
             '<span>Lessons and exams are closed. You can still view this summary' +
               (en.score != null ? ' · Score ' + escapeHtml(String(en.score)) + '%' : '') +
-              (en.completedAt ? ' · Completed ' + escapeHtml(String(en.completedAt).slice(0, 10)) : '') +
+              (en.completedAt ? ' · Completed ' + escapeHtml(formatWhen(en.completedAt)) : '') +
             '.</span>' +
             (cert
               ? '<div class="lp-form-actions" style="margin-top:0.75rem">' +
