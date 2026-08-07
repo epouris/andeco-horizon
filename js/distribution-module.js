@@ -1203,16 +1203,30 @@
               });
               return `<div class="dist-opt-group"><div class="dist-opt-group-title">${esc(cat.label)}</div>
                 ${Object.keys(groups).map((g) => `
-                  <div style="margin-bottom:.75rem">
-                    <div style="font-weight:700;font-size:.8rem;margin:.4rem 0;color:var(--accent)">${esc(g)}</div>
-                    <table class="dist-table"><thead><tr><th>Option</th><th>Price</th><th></th></tr></thead>
-                    <tbody>${groups[g].map((o) => optionRow(o)).join('')}</tbody></table>
+                  <div class="dist-opt-subgroup-block">
+                    <div class="dist-opt-subgroup-label">${esc(g)}</div>
+                    <table class="dist-table dist-options-table">
+                      <colgroup>
+                        <col class="dist-col-option">
+                        <col class="dist-col-price">
+                        <col class="dist-col-actions">
+                      </colgroup>
+                      <thead><tr><th>Option</th><th class="dist-col-price">Price</th><th class="dist-col-actions"></th></tr></thead>
+                      <tbody>${groups[g].map((o) => optionRow(o)).join('')}</tbody>
+                    </table>
                   </div>`).join('')}
               </div>`;
             }
             return `<div class="dist-opt-group"><div class="dist-opt-group-title">${esc(cat.label)}</div>
-              <table class="dist-table"><thead><tr><th>Option</th><th>Price</th><th></th></tr></thead>
-              <tbody>${opts.map((o) => optionRow(o)).join('')}</tbody></table></div>`;
+              <table class="dist-table dist-options-table">
+                <colgroup>
+                  <col class="dist-col-option">
+                  <col class="dist-col-price">
+                  <col class="dist-col-actions">
+                </colgroup>
+                <thead><tr><th>Option</th><th class="dist-col-price">Price</th><th class="dist-col-actions"></th></tr></thead>
+                <tbody>${opts.map((o) => optionRow(o)).join('')}</tbody>
+              </table></div>`;
           }).join('')}
         </div>` : '<div class="dist-empty">Add a boat model for this brand to manage options and prices.</div>'}`;
 
@@ -1242,11 +1256,16 @@
 
   function optionRow(o) {
     return `<tr>
-      <td>${esc(o.name)}${o.notes ? `<div class="meta" style="font-size:.75rem;color:var(--text-muted)">${esc(o.notes)}</div>` : ''}</td>
-      <td class="dist-price" style="font-size:.95rem">${money(o.price)}</td>
-      <td class="dist-actions">
-        <button type="button" class="btn btn-secondary btn-sm" data-dist-edit-opt="${esc(o.id)}">Edit</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-dist-del-opt="${esc(o.id)}">Remove</button>
+      <td class="dist-col-option">
+        <div class="dist-opt-name">${esc(o.name)}</div>
+        ${o.notes ? `<div class="dist-opt-notes">${esc(o.notes)}</div>` : ''}
+      </td>
+      <td class="dist-col-price dist-price">${money(o.price)}</td>
+      <td class="dist-col-actions">
+        <div class="dist-actions dist-opt-row-actions">
+          <button type="button" class="btn btn-secondary btn-sm" data-dist-edit-opt="${esc(o.id)}">Edit</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-dist-del-opt="${esc(o.id)}">Remove</button>
+        </div>
       </td>
     </tr>`;
   }

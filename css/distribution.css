@@ -176,6 +176,86 @@
   padding: 0.75rem 0.9rem;
 }
 
+.dist-opt-subgroup-block {
+  margin-bottom: 0.75rem;
+}
+
+.dist-opt-subgroup-label {
+  font-weight: 700;
+  font-size: 0.8rem;
+  margin: 0.4rem 0;
+  color: var(--dist-sea, #1f6f8b);
+}
+
+.dist-options-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.dist-options-table col.dist-col-option { width: auto; }
+.dist-options-table col.dist-col-price { width: 9.5rem; }
+.dist-options-table col.dist-col-actions { width: 10.5rem; }
+
+.dist-options-table th,
+.dist-options-table td {
+  vertical-align: middle;
+}
+
+.dist-options-table th.dist-col-price,
+.dist-options-table td.dist-col-price {
+  text-align: right;
+  padding-right: 0.85rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.dist-options-table th.dist-col-actions,
+.dist-options-table td.dist-col-actions {
+  text-align: right;
+  width: 10.5rem;
+}
+
+.dist-options-table .dist-opt-name {
+  font-weight: 600;
+  color: var(--dist-navy);
+  line-height: 1.3;
+}
+
+.dist-options-table .dist-opt-notes {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: #627d98;
+  line-height: 1.3;
+}
+
+.dist-options-table .dist-price {
+  font-size: 0.95rem;
+  display: block;
+  text-align: right;
+}
+
+.dist-options-table .dist-opt-row-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+}
+
+.dist-options-table .dist-opt-row-actions .btn {
+  min-width: 4.6rem;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .dist-options-table col.dist-col-price,
+  .dist-options-table col.dist-col-actions {
+    width: auto;
+  }
+  .dist-options-table .dist-opt-row-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
 .dist-opt-group-title {
   font-weight: 700;
   color: var(--dist-navy);
