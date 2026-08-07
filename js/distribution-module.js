@@ -2469,6 +2469,46 @@
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  /** Preferred display order — LOA always before BOA. */
+  const TECH_SPEC_ORDER = [
+    'loa',
+    'loaOutboards',
+    'loaSterndrives',
+    'boa',
+    'internalBeam',
+    'tubeDiam',
+    'maxHp',
+    'minHp',
+    'suggestedHp',
+    'dryWeight',
+    'fuelTank',
+    'waterTank',
+    'ceCategory',
+    'pax'
+  ];
+
+  function orderedTechSpecEntries(specs) {
+    const obj = specs && typeof specs === 'object' ? specs : {};
+    const keys = Object.keys(obj);
+    const rank = (key) => {
+      const i = TECH_SPEC_ORDER.indexOf(key);
+      if (i >= 0) return i;
+      // Any other LOA* key before BOA
+      if (/^loa/i.test(key)) return 0.5;
+      if (/^boa/i.test(key)) return TECH_SPEC_ORDER.indexOf('boa');
+      return 1000;
+    };
+    return keys
+      .slice()
+      .sort((a, b) => {
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        return String(a).localeCompare(String(b));
+      })
+      .map((k) => [k, obj[k]]);
+  }
+
   function getQuotationHeaderSettings() {
     try {
       if (window.DataStore && typeof window.DataStore.getQuotationHeader === 'function') {
@@ -2706,7 +2746,7 @@
               <span>${esc(model?.name || '')}</span>
             </div>
             <div class="dist-quote-spec-grid">
-              ${Object.entries(specs).map(([k, v]) => `
+              ${orderedTechSpecEntries(specs).map(([k, v]) => `
                 <div class="dist-quote-spec">
                   <div class="dist-quote-spec-label">${esc(formatSpecLabel(k))}</div>
                   <div class="dist-quote-spec-value">${esc(v)}</div>
