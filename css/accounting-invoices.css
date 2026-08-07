@@ -570,9 +570,11 @@
 .invoice-selection-status.status-overdue { background-color: rgba(239, 68, 68, 0.1); color: #dc2626; }
 
 @media print {
-  body * { visibility: hidden; }
-  #invoice-modal.modal,
-  #invoice-modal.modal * { visibility: visible; }
+  /* Keep invoice print isolation, but do not override Distribution quotes
+     (distribution.css sets visibility:visible !important on .dist-quote-sheet). */
+  body:not(.dist-quote-open) * { visibility: hidden; }
+  body:not(.dist-quote-open) #invoice-modal.modal,
+  body:not(.dist-quote-open) #invoice-modal.modal * { visibility: visible; }
   #invoice-modal.modal {
     position: absolute;
     left: 0; top: 0;
