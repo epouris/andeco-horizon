@@ -1797,6 +1797,7 @@
       if (q.olrRef == null) q.olrRef = '';
       if (q.vesselPhoto == null) q.vesselPhoto = '';
       if (q.paymentTerms == null) q.paymentTerms = s.settings.defaultPaymentTerms || '';
+      normalizeQuoteColors(q);
       normalizeQuoteFees(q);
       return q;
     });
@@ -2666,42 +2667,77 @@
     createQuote(prospectId);
   }
 
-  /* ─── Configurator PDF import (quote drafting aid) ─── */
-  function normalizeMatchText(value) {
-    return String(value || '')
-      .toLowerCase()
-      .replace(/[’’′]/g, "'")
-      .replace(/[“”″]/g, '"')
-      .replace(/(\d)[,.](\d{3})\b/g, '$1$2')
-      .replace(/(\d)\.(\d{3})\b/g, '$1$2')
-      .replace(/ltrs?\b/g, 'l')
-      .replace(/litres?\b/g, 'l')
-      .replace(/[^a-z0-9]+/g, ' ')
+  /* ─── Configurator PDF import (OLR Ref + Colors only) ─── */
+  const CONFIG_COLOUR_SECTIONS = [
+    { key: 'ENGINE COLOUR', area: 'Engine colour' },
+    { key: 'MAIN DECK', area: 'Main deck' },
+    { key: 'DECK OPTIONS', area: 'Deck finish' },
+    { key: 'FOAM DECK MAIN COLOUR', area: 'Foam deck main colour' },
+    { key: 'SECONDARY COLOUR', area: 'Secondary colour' },
+    { key: 'HULL', area: 'Hull' },
+    { key: 'TUBES', area: 'Tubes' },
+    { key: 'BIMINI TOP', area: 'Bimini top' },
+    { key: 'FENDER', area: 'Fender' },
+    { key: 'MAIN COLOUR', area: 'Main upholstery colour' }
+  ];
+
+  function emptyQuoteColor() {
+    return { id: uid('color'), area: '', value: '', code: '' };
+  }
+
+  function normalizeQuoteColors(q) {
+    if (!q || typeof q !== 'object') return q;
+    const src = Array.isArray(q.colors) ? q.colors : [];
+    q.colors = src
+      .map((c) => {
+        if (!c || typeof c !== 'object') return null;
+        const area = String(c.area || '').trim();
+        const value = String(c.value || '').trim();
+        const code = String(c.code || '').trim().toUpperCase();
+        if (!area && !value && !code) return null;
+        return {
+          id: c.id || uid('color'),
+          area,
+          value,
+          code
+        };
+      })
+      .filter(Boolean);
+    return q;
+  }
+
+  function isConfiguratorColourCode(code) {
+    const c = String(code || '').toUpperCase();
+    if (!c) return false;
+    if (c === 'DECKSYN') return true;
+    if (/COL\d*$/.test(c)) return true;
+    return /^(DECOL|MDCOL|MDSCOL|UPSTCOL|HUCOL|TUCOL|BMCOL|TUFCOL|UPMCOL|MERENGCOL)/.test(c);
+  }
+
+  function colourAreaFromCode(code, label, fallbackArea) {
+    const c = String(code || '').toUpperCase();
+    if (/^MERENGCOL/.test(c)) return 'Engine colour';
+    if (/^DECOL/.test(c)) return 'Main deck';
+    if (c === 'DECKSYN') return 'Deck finish';
+    if (/^MDCOL/.test(c)) return 'Foam deck main colour';
+    if (/^MDSCOL/.test(c)) return 'Secondary colour';
+    if (/^UPSTCOL/.test(c)) return 'Upholstery';
+    if (/^HUCOL/.test(c)) return 'Hull';
+    if (/^TUCOL/.test(c)) return 'Tubes';
+    if (/^BMCOL/.test(c)) return 'Bimini top';
+    if (/^TUFCOL/.test(c)) return 'Fender';
+    if (/^UPMCOL/.test(c)) return 'Main upholstery colour';
+    const l = String(label || '').trim();
+    if (/upholstery/i.test(l)) return 'Upholstery';
+    if (/engines?/i.test(l) && /cold fusion|pearl white|white|black/i.test(l)) return 'Engine colour';
+    return fallbackArea || 'Colour';
+  }
+
+  function cleanColourValue(label) {
+    return String(label || '')
+      .replace(/^(Colours?|Colors|Upholstery|Engines?)\s+/i, '')
       .replace(/\s+/g, ' ')
       .trim();
-  }
-
-  function significantTokens(value) {
-    const stop = {
-      a: 1, an: 1, and: 1, or: 1, the: 1, with: 1, for: 1, of: 1, to: 1, x: 1,
-      option: 1, options: 1, system: 1, package: 1, colour: 1, color: 1,
-      olympic: 1, ribs: 1, rib: 1
-    };
-    return normalizeMatchText(value)
-      .split(' ')
-      .filter((t) => t && t.length > 1 && !stop[t]);
-  }
-
-  function tokenScore(query, candidate) {
-    const q = significantTokens(query);
-    const c = significantTokens(candidate);
-    if (!q.length || !c.length) return 0;
-    let hits = 0;
-    q.forEach((t) => {
-      if (c.indexOf(t) !== -1) hits += 1;
-      else if (c.some((ct) => ct.indexOf(t) !== -1 || t.indexOf(ct) !== -1)) hits += 0.5;
-    });
-    return hits / q.length;
   }
 
   async function extractPdfText(file) {
@@ -2752,204 +2788,74 @@
     }
     modelName = modelName.replace(/\s+/g, ' ').trim();
 
-    const selections = [];
+    const sectionHits = [];
+    CONFIG_COLOUR_SECTIONS.forEach((sec) => {
+      const re = new RegExp(`\\b${sec.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      let m;
+      while ((m = re.exec(flat))) {
+        // Avoid matching "MAIN COLOUR" inside "FOAM DECK MAIN COLOUR".
+        if (sec.key === 'MAIN COLOUR') {
+          const before = flat.slice(Math.max(0, m.index - 10), m.index);
+          if (/FOAM DECK\s*$/i.test(before)) continue;
+        }
+        sectionHits.push({ index: m.index, area: sec.area, key: sec.key });
+      }
+    });
+    sectionHits.sort((a, b) => a.index - b.index);
+
+    function areaAt(index) {
+      let area = '';
+      for (let i = 0; i < sectionHits.length; i += 1) {
+        if (sectionHits[i].index <= index) area = sectionHits[i].area;
+        else break;
+      }
+      return area;
+    }
+
+    const colors = [];
     const codeRe = /\b([A-Z]{2,}[A-Z0-9]*(?:-\d{2,})?(?:-(?:45SRC(?:-S)?|40SRC|40SR-2S|40SR|30SR))?)\b/g;
     let m;
     while ((m = codeRe.exec(flat))) {
       const code = m[1];
-      if (!/\d/.test(code)) continue;
-      if (/^(CATEGORY|OPTION|CODE|CREATED)$/i.test(code)) continue;
-      const start = Math.max(0, m.index - 140);
+      if (!isConfiguratorColourCode(code)) continue;
+      const start = Math.max(0, m.index - 120);
       let label = flat.slice(start, m.index).trim();
       label = label
-        .replace(/.*\b(?:CATEGORY OPTION OPTION CODE|Layouts|Engines|Rigging|Colours|Colors|Upholstery|Cabin & Wetbar|Electronics & Lighting|Covers & Awning|Other|DRIVE|HELM|ENGINE COLOUR|ENGINES|JOYSTICKS & THRUSTERS|MAIN DECK|DECK OPTIONS|FOAM DECK MAIN COLOUR|SECONDARY COLOUR|HULL|TUBES|BIMINI TOP|FENDER|MAIN COLOUR|CABIN|WET BAR|TABLES|ELECTRICS & ELECTRONICS|LIGHTING|PLOTTERS|COMMUNICATION|SOUND|GENERATORS|COVERS & AWNING|OPTIONS)\b/gi, '')
+        .replace(/.*\b(?:CATEGORY OPTION OPTION CODE|Layouts|Engines|Rigging|Colours|Colors|Upholstery|DRIVE|HELM|ENGINE COLOUR|ENGINES|JOYSTICKS & THRUSTERS|MAIN DECK|DECK OPTIONS|FOAM DECK MAIN COLOUR|SECONDARY COLOUR|HULL|TUBES|BIMINI TOP|FENDER|MAIN COLOUR)\b/gi, '')
         .replace(/^[-–·|:]+/, '')
         .replace(/\s+/g, ' ')
         .trim();
-      if (!label || label.length < 2) continue;
-      if (/^this image is not representative/i.test(label)) continue;
-      selections.push({ label, code });
+      // Recover short colour names when section headers ate the label.
+      if (!label || label.length < 2) {
+        const near = flat.slice(Math.max(0, m.index - 40), m.index).trim();
+        const nearMatch = near.match(/([A-Za-z][A-Za-z0-9 /&'.-]{1,40})$/);
+        label = nearMatch ? nearMatch[1].trim() : code;
+      }
+      const area = colourAreaFromCode(code, label, areaAt(m.index));
+      const value = cleanColourValue(label) || code;
+      colors.push({
+        id: uid('color'),
+        area,
+        value,
+        code: String(code).toUpperCase()
+      });
     }
 
-    // Deduplicate by code
     const seen = {};
-    const unique = [];
-    selections.forEach((sel) => {
-      const key = String(sel.code || '').toUpperCase();
+    const uniqueColors = [];
+    colors.forEach((c) => {
+      const key = c.code || `${c.area}|${c.value}`.toUpperCase();
       if (!key || seen[key]) return;
       seen[key] = true;
-      unique.push(sel);
+      uniqueColors.push(c);
     });
 
     return {
       olrRef,
       modelName,
-      selections: unique,
+      colors: uniqueColors,
       createdOn: ((flat.match(/Created on:\s*([\d./-]+)/i) || [])[1] || '')
     };
-  }
-
-  function findModelFromConfiguratorName(modelName) {
-    const target = normalizeMatchText(modelName).replace(/\s+/g, '');
-    if (!target) return null;
-    const models = (state.models || []).filter((m) => m && m.active !== false);
-    let best = null;
-    let bestScore = 0;
-    models.forEach((m) => {
-      const name = normalizeMatchText(m.name).replace(/\s+/g, '');
-      if (!name) return;
-      let score = 0;
-      if (name === target) score = 1;
-      else if (name.indexOf(target) !== -1 || target.indexOf(name) !== -1) score = 0.92;
-      else score = tokenScore(modelName, m.name);
-      // Prefer exact cabin/outboard variants when present in target.
-      if (/src$/.test(target) && /src$/.test(name) && !/srcs?$/.test(name.replace(/src$/, 'src'))) {
-        /* keep */
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        best = m;
-      }
-    });
-    return bestScore >= 0.7 ? best : null;
-  }
-
-  function isColourOnlySelection(sel) {
-    const code = String(sel.code || '').toUpperCase();
-    const label = normalizeMatchText(sel.label);
-    if (/COL\d*$/.test(code) || /^(DECOL|MDCOL|MDSCOL|UPSTCOL|HUCOL|TUCOL|BMCOL|TUFCOL|UPMCOL|MERENGCOL)/.test(code)) {
-      return true;
-    }
-    if (/^(jet black|storm grey|anthracite|neptune grey|maglia|white|black|cold fusion|pearl white|ice white)/.test(label)) {
-      return true;
-    }
-    return false;
-  }
-
-  function matchEngineOption(label, model, colourHints) {
-    const opts = (state.options || []).filter(
-      (o) =>
-        o &&
-        o.active !== false &&
-        isEngineOption(o) &&
-        (!o.modelIds || !o.modelIds.length || o.modelIds.indexOf(model.id) !== -1)
-    );
-    const q = normalizeMatchText(label);
-    const wantsTwin = /\b(twin|dual|2 x|2x)\b/.test(q);
-    const wantsTriple = /\b(triple|3 x|3x)\b/.test(q);
-    const brand =
-      (/\byamaha\b/.test(q) && 'YAMAHA') ||
-      (/\bmercury\b/.test(q) && 'MERCURY') ||
-      (/\bhonda\b/.test(q) && 'HONDA') ||
-      (/\bsuzuki\b/.test(q) && 'SUZUKI') ||
-      '';
-    const nums = (q.match(/\b\d{2,4}\b/g) || []).filter((n) => Number(n) >= 90);
-    const hint = normalizeMatchText((colourHints || []).join(' '));
-    const wantsCf = /\bcold fusion\b|\bcf\b/.test(hint) || /\bcold fusion\b|\bcf\b/.test(q);
-    const wantsWhite = /\bpearl white\b|\bwhite\b/.test(hint) || /\bpearl white\b/.test(q);
-
-    let best = null;
-    let bestScore = 0;
-    opts.forEach((o) => {
-      const cand = normalizeMatchText(`${o.subgroup || ''} ${o.name || ''}`);
-      let score = tokenScore(label, `${o.subgroup || ''} ${o.name || ''}`);
-      if (brand && normalizeMatchText(o.subgroup) === normalizeMatchText(brand)) score += 0.35;
-      if (wantsTwin && /\b(twin|dual)\b/.test(cand)) score += 0.2;
-      if (wantsTriple && /\btriple\b/.test(cand)) score += 0.2;
-      nums.forEach((n) => {
-        if (cand.indexOf(n) !== -1) score += 0.15;
-      });
-      if (wantsCf && /\bcf\b|\bcold fusion\b/.test(cand)) score += 0.25;
-      if (wantsWhite && /\bwhite\b|\bpearl\b/.test(cand)) score += 0.1;
-      if (score > bestScore) {
-        bestScore = score;
-        best = o;
-      }
-    });
-    return bestScore >= 0.75 ? best : null;
-  }
-
-  function matchCatalogOption(label, model) {
-    const opts = (state.options || []).filter(
-      (o) =>
-        o &&
-        o.active !== false &&
-        !isEngineOption(o) &&
-        (!o.modelIds || !o.modelIds.length || o.modelIds.indexOf(model.id) !== -1)
-    );
-    const q = normalizeMatchText(label);
-    let best = null;
-    let bestScore = 0;
-    opts.forEach((o) => {
-      const cand = `${o.subgroup ? o.subgroup + ' ' : ''}${o.name || ''}`;
-      const cn = normalizeMatchText(cand);
-      let score = tokenScore(label, cand);
-      if (/\blumishore\b|\brgb\b|\bshadow\b/.test(q) && /\blumishore\b|\brgb\b|\bshadow\b/.test(cn)) {
-        score += 0.35;
-      }
-      if (/\bseadeck\b|\bfoam deck\b/.test(q) && /\bseadeck\b|\bfoam\b|\besthec\b|\bteak\b/.test(cn)) {
-        score += 0.2;
-      }
-      if (/\bjoystick\b/.test(q) && /\bjoystick\b/.test(cn)) score += 0.25;
-      if (score > bestScore) {
-        bestScore = score;
-        best = o;
-      }
-    });
-    return bestScore >= 0.55 ? best : null;
-  }
-
-  function matchConfiguratorToCatalog(parsed) {
-    const model = findModelFromConfiguratorName(parsed.modelName);
-    const colourHints = (parsed.selections || [])
-      .filter(isColourOnlySelection)
-      .map((s) => s.label);
-    const matched = [];
-    const unmatched = [];
-    const matchedIds = [];
-
-    (parsed.selections || []).forEach((sel) => {
-      if (isColourOnlySelection(sel)) {
-        unmatched.push({ ...sel, reason: 'colour/finish (not a priced catalog option)' });
-        return;
-      }
-      const isEngine =
-        /\b(mercury|yamaha|honda|suzuki)\b/i.test(sel.label) ||
-        /^ENG\d+/i.test(sel.code) ||
-        /\b(twin|dual|triple|f\d{2,3}|xto|v10|v12|bf\d+)/i.test(sel.label);
-      let opt = null;
-      if (model && isEngine) opt = matchEngineOption(sel.label, model, colourHints);
-      else if (model) opt = matchCatalogOption(sel.label, model);
-      // Skip layout-only codes that are not priced options.
-      if (!opt && /^LAY\d+/i.test(sel.code)) {
-        unmatched.push({ ...sel, reason: 'layout marker' });
-        return;
-      }
-      if (opt) {
-        if (matchedIds.indexOf(opt.id) === -1) matchedIds.push(opt.id);
-        matched.push({ ...sel, optionId: opt.id, optionName: `${opt.subgroup ? opt.subgroup + ' · ' : ''}${opt.name}` });
-      } else {
-        unmatched.push({ ...sel, reason: 'no catalog match' });
-      }
-    });
-
-    return { model, matched, unmatched, matchedIds, colourHints };
-  }
-
-  function buildImportSummaryNote(parsed, match) {
-    const lines = [
-      'Imported from OlympicRibs configurator PDF for quotation drafting help only (not a formal offer).',
-      parsed.olrRef ? `Configurator code: ${parsed.olrRef}` : '',
-      parsed.modelName ? `Configurator model: ${parsed.modelName}` : '',
-      match.matched.length ? `Matched options: ${match.matched.length}` : '',
-      match.unmatched.length
-        ? `Unmatched / review: ${match.unmatched
-            .slice(0, 12)
-            .map((u) => u.label)
-            .join('; ')}${match.unmatched.length > 12 ? '…' : ''}`
-        : ''
-    ].filter(Boolean);
-    return lines.join('\n');
   }
 
   async function importConfiguratorPdfFile(file, existingQuoteId) {
@@ -2957,14 +2863,8 @@
     toast('Reading configurator PDF…', 'info');
     const text = await extractPdfText(file);
     const parsed = parseOlympicRibsConfiguratorText(text);
-    if (!parsed.olrRef && !parsed.modelName && !(parsed.selections || []).length) {
-      throw new Error('Could not read configurator selections from this PDF.');
-    }
-    const match = matchConfiguratorToCatalog(parsed);
-    if (!match.model) {
-      throw new Error(
-        `Could not match model "${parsed.modelName || 'unknown'}" in the catalog. Create/select the model first.`
-      );
+    if (!parsed.olrRef && !(parsed.colors || []).length) {
+      throw new Error('Could not read OLR Ref or Colors from this configurator PDF.');
     }
 
     let q = existingQuoteId ? quoteById(existingQuoteId) : null;
@@ -2974,40 +2874,29 @@
     }
     if (!q) throw new Error('Could not open a quotation to import into.');
 
-    q.brandId = match.model.brandId;
-    q.modelId = match.model.id;
-    q.currency = match.model.currency || q.currency || 'EUR';
     if (parsed.olrRef) q.olrRef = parsed.olrRef;
-    if (!q.vesselPhoto && match.model.photo) q.vesselPhoto = match.model.photo;
-
-    // Keep any existing custom lines; replace catalog-driven selections with matched ones.
-    syncQuoteSelectedOptions(q, match.matchedIds);
-
-    const summary = buildImportSummaryNote(parsed, match);
-    const existingNotes = String(q.notes || '').trim();
-    if (!existingNotes) q.notes = summary;
-    else if (existingNotes.indexOf('Imported from OlympicRibs configurator PDF') === -1) {
-      q.notes = `${existingNotes}\n\n${summary}`;
-    } else {
-      q.notes = summary;
-    }
+    q.colors = (parsed.colors || []).map((c) => ({
+      id: c.id || uid('color'),
+      area: c.area || '',
+      value: c.value || '',
+      code: c.code || ''
+    }));
+    normalizeQuoteColors(q);
     q.configuratorImport = {
       code: parsed.olrRef || '',
       modelName: parsed.modelName || '',
-      matchedCount: match.matched.length,
-      unmatchedCount: match.unmatched.length,
-      unmatched: match.unmatched.slice(0, 40),
-      importedAt: new Date().toISOString()
+      colorsCount: q.colors.length,
+      importedAt: new Date().toISOString(),
+      mode: 'olr-colors'
     };
     q.updatedAt = new Date().toISOString();
-    recalcQuote(q);
     await persist(true);
     openQuoteEditor(q.id);
-    const msg = `Draft quote updated from configurator${parsed.olrRef ? ` (${parsed.olrRef})` : ''}: ${match.matched.length} option(s) matched${
-      match.unmatched.length ? `, ${match.unmatched.length} to review` : ''
-    }.`;
-    toast(msg, match.matched.length ? 'success' : 'info');
-    return { parsed, match, quote: q };
+    const bits = [];
+    if (parsed.olrRef) bits.push(`OLR Ref ${parsed.olrRef}`);
+    bits.push(`${q.colors.length} colour line(s)`);
+    toast(`Imported ${bits.join(' · ')}. Select options manually.`, 'success');
+    return { parsed, quote: q };
   }
 
   function bindConfiguratorPdfInput(root) {
@@ -3047,10 +2936,10 @@
     const list = [...state.quotations].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     el.innerHTML = `
       <div class="dist-toolbar">
-        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build quotations for potential clients from model options, apply line discounts, print, and convert to a proforma invoice. You can import an OlympicRibs configurator PDF to pre-fill OLR Ref, model, and matched options for drafting.</p>
+        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build quotations for potential clients from model options, apply line discounts, print, and convert to a proforma invoice. Import a configurator PDF to fill OLR Ref and the Colors section only — engines and options stay manual.</p>
         <div class="dist-actions">
           <input type="file" id="dist-config-pdf-file" accept="application/pdf,.pdf" hidden>
-          <button type="button" class="btn btn-secondary" id="dist-import-config-pdf">Import configurator PDF</button>
+          <button type="button" class="btn btn-secondary" id="dist-import-config-pdf">Import colors from PDF</button>
           <button type="button" class="btn btn-primary" id="dist-new-quote">New quotation</button>
         </div>
       </div>
@@ -3232,6 +3121,7 @@
       modelId: model.id,
       currency: model.currency || 'EUR',
       olrRef: '',
+      colors: [],
       vesselPhoto: model.photo || '',
       paymentTerms: defaultPaymentTerms(),
       transportPackagingFee: 0,
@@ -3277,6 +3167,7 @@
     }
     if (q.olrRef == null) q.olrRef = '';
     if (q.paymentTerms == null) q.paymentTerms = defaultPaymentTerms();
+    normalizeQuoteColors(q);
     normalizeQuoteFees(q);
     if (q.vesselPhoto == null) q.vesselPhoto = '';
     recalcQuote(q);
@@ -3289,12 +3180,13 @@
     );
 
     const importInfo = q.configuratorImport || null;
+    const colors = Array.isArray(q.colors) ? q.colors : [];
     el.innerHTML = `
       <div class="dist-toolbar">
         <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-back">← Back to list</button>
         <div class="dist-actions">
           <input type="file" id="dist-config-pdf-file" accept="application/pdf,.pdf" hidden>
-          <button type="button" class="btn btn-secondary btn-sm" id="dist-import-config-pdf">Import configurator PDF</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-import-config-pdf">Import colors from PDF</button>
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-print">Print / PDF</button>
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-proforma" ${q.convertedToProformaId ? 'disabled' : ''}>Convert to proforma</button>
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-sold">Mark as sold vessel</button>
@@ -3303,10 +3195,8 @@
       </div>
       ${importInfo ? `
         <div class="dist-import-banner">
-          <strong>Configurator draft assist</strong>
-          <span>Code ${esc(importInfo.code || q.olrRef || '—')} · matched ${esc(importInfo.matchedCount || 0)} option(s)${
-            importInfo.unmatchedCount ? ` · ${esc(importInfo.unmatchedCount)} to review` : ''
-          }. Review lines before sending.</span>
+          <strong>Configurator import</strong>
+          <span>OLR Ref ${esc(importInfo.code || q.olrRef || '—')} · ${esc(importInfo.colorsCount != null ? importInfo.colorsCount : colors.length)} colour line(s). Engines and options are selected manually.</span>
         </div>` : ''}
       <div class="dist-card">
         <div class="dist-card-header">
@@ -3318,7 +3208,7 @@
           <div class="dist-field"><label>Status</label>
             <select id="dq-status">${QUOTE_STATUSES.map((s) => `<option value="${s.value}" ${q.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
           </div>
-          <div class="dist-field"><label>OLR Ref:</label><input type="text" id="dq-olr" value="${esc(q.olrRef || '')}" placeholder="OlympicRibs configurator reference"></div>
+          <div class="dist-field"><label>OLR Ref:</label><input type="text" id="dq-olr" value="${esc(q.olrRef || '')}" placeholder="From configurator YOUR CODE"></div>
           <div class="dist-field"><label>Brand</label>
             <select id="dq-brand">${state.brands.map((b) => `<option value="${esc(b.id)}" ${b.id === q.brandId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
           </div>
@@ -3356,6 +3246,37 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="dist-card" style="margin-top:1rem">
+        <div class="dist-card-header">
+          <h3>Colors</h3>
+          <div class="dist-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="dq-color-add">Add colour</button>
+          </div>
+        </div>
+        <p class="dist-hint" style="margin:0 0 .75rem">
+          Fill from the configurator PDF (YOUR CODE → OLR Ref, colour/finish lines → here). Edit freely; other quote items stay manual.
+        </p>
+        <div style="overflow-x:auto">
+          <table class="dist-table dist-quote-colors">
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Colour / finish</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${colors.length ? colors.map((c, idx) => `
+                <tr data-color-idx="${idx}">
+                  <td><input type="text" data-cf="area" value="${esc(c.area || '')}" placeholder="e.g. Hull"></td>
+                  <td><input type="text" data-cf="value" value="${esc(c.value || '')}" placeholder="e.g. Anthracite"></td>
+                  <td><button type="button" class="btn btn-secondary btn-sm" data-del-color="${idx}">×</button></td>
+                </tr>`).join('') : '<tr><td colspan="3" class="dist-empty">No colours yet. Import a configurator PDF or add a row.</td></tr>'}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -3456,6 +3377,21 @@
       } else if (newModel) {
         q.modelId = newModel;
       }
+      const nextColors = [];
+      el.querySelectorAll('.dist-quote-colors tbody tr[data-color-idx]').forEach((tr) => {
+        const idx = Number(tr.getAttribute('data-color-idx'));
+        const prev = colors[idx] || {};
+        const area = String(tr.querySelector('[data-cf="area"]')?.value || '').trim();
+        const value = String(tr.querySelector('[data-cf="value"]')?.value || '').trim();
+        if (!area && !value) return;
+        nextColors.push({
+          id: prev.id || uid('color'),
+          area,
+          value,
+          code: prev.code || ''
+        });
+      });
+      q.colors = nextColors;
       el.querySelectorAll('.dist-quote-lines tbody tr').forEach((tr) => {
         const idx = Number(tr.getAttribute('data-line-idx'));
         const ln = q.lines[idx];
@@ -3490,6 +3426,25 @@
     el.querySelector('#dist-import-config-pdf')?.addEventListener('click', () => {
       saveFields();
       triggerConfiguratorPdfPicker(el);
+    });
+    el.querySelector('#dq-color-add')?.addEventListener('click', () => {
+      saveFields();
+      if (!Array.isArray(q.colors)) q.colors = [];
+      q.colors.push(emptyQuoteColor());
+      q.updatedAt = new Date().toISOString();
+      persist();
+      renderQuoteEditor(el);
+    });
+    el.querySelectorAll('[data-del-color]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        saveFields();
+        const idx = Number(btn.getAttribute('data-del-color'));
+        if (!Number.isFinite(idx)) return;
+        q.colors.splice(idx, 1);
+        q.updatedAt = new Date().toISOString();
+        persist();
+        renderQuoteEditor(el);
+      });
     });
     el.querySelector('#dist-quote-save')?.addEventListener('click', () => {
       saveFields();
@@ -3973,6 +3928,8 @@
     const transportPackaging = transportPackagingFeeAmount(q);
     const paymentTerms = String(q.paymentTerms || '').trim() || defaultPaymentTerms();
     const olrRef = String(q.olrRef || '').trim();
+    normalizeQuoteColors(q);
+    const colors = Array.isArray(q.colors) ? q.colors : [];
     const companyBits = getCompanyContactBits();
     const qh = getQuotationHeaderSettings();
     const company = qh.companyName || state.settings.companyName || companyBits.name || 'OlympicRibs Distribution';
@@ -4098,6 +4055,21 @@
                 <div class="dist-quote-std-group">
                   <div class="dist-quote-std-title">${esc(g.category)}</div>
                   <p class="dist-quote-std-items">${(g.items || []).map((i) => esc(i)).join(' · ')}</p>
+                </div>`).join('')}
+            </div>
+          </section>` : ''}
+
+        ${colors.length ? `
+          <section class="dist-quote-section dist-quote-section--colors">
+            <div class="dist-quote-section-head">
+              <h2>Colors</h2>
+              <span>${colors.length} selection${colors.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="dist-quote-colors-grid">
+              ${colors.map((c) => `
+                <div class="dist-quote-color">
+                  <div class="dist-quote-color-label">${esc(c.area || 'Colour')}</div>
+                  <div class="dist-quote-color-value">${esc(c.value || '—')}</div>
                 </div>`).join('')}
             </div>
           </section>` : ''}
