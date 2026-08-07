@@ -269,10 +269,17 @@ const app = {
                     }
                 }
                 if (data.distribution && typeof data.distribution === 'object') {
-                    try { localStorage.setItem('andeco_distribution_data', JSON.stringify(data.distribution)); } catch (e) {}
-                    if (typeof window.DistributionModule !== 'undefined') {
-                        if (window.DistributionModule.applyRemote) window.DistributionModule.applyRemote(data.distribution);
-                        else if (window.DistributionModule.render) window.DistributionModule.render();
+                    var distAcceptRemote = !(
+                        typeof window.DistributionModule !== 'undefined' &&
+                        window.DistributionModule.shouldAcceptRemote &&
+                        !window.DistributionModule.shouldAcceptRemote()
+                    );
+                    if (distAcceptRemote) {
+                        try { localStorage.setItem('andeco_distribution_data', JSON.stringify(data.distribution)); } catch (e) {}
+                        if (typeof window.DistributionModule !== 'undefined') {
+                            if (window.DistributionModule.applyRemote) window.DistributionModule.applyRemote(data.distribution);
+                            else if (window.DistributionModule.render) window.DistributionModule.render();
+                        }
                     }
                 }
                 if (data.payroll && typeof data.payroll === 'object') {
