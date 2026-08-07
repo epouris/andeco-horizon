@@ -990,7 +990,8 @@
   text-align: center;
 }
 
-@media (max-width: 800px) {
+/* Screen-only: keep print on the same desktop layout as the on-screen preview. */
+@media screen and (max-width: 800px) {
   .dist-quote-top,
   .dist-quote-parties,
   .dist-quote-intro,
@@ -1180,7 +1181,7 @@ body.dist-modal-open { overflow: hidden; }
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 8mm 10mm;
+    margin: 8mm;
   }
 
   html, body {
@@ -1240,18 +1241,62 @@ body.dist-modal-open { overflow: hidden; }
     margin: 0 !important;
   }
 
+  /* Keep the printed document the same layout/size as the on-screen preview. */
   body.dist-quote-open .dist-quote-doc,
   body.dist-quote-open .dist-quote-doc--portrait {
     box-shadow: none !important;
-    width: 100% !important;
-    max-width: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    padding: 0 0 1rem !important;
+    margin: 0 auto !important;
     overflow: visible !important;
     color: #12263a !important;
     background: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    font-size: 0.92rem !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.dist-quote-open .dist-quote-doc *,
+  body.dist-quote-open .dist-quote-doc--portrait * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Explicitly keep desktop grids (do not collapse like mobile). */
+  body.dist-quote-open .dist-quote-top {
+    grid-template-columns: 1.2fr 0.8fr !important;
+  }
+  body.dist-quote-open .dist-quote-intro {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  body.dist-quote-open .dist-quote-intro.has-photo {
+    grid-template-columns: 1fr 1fr 0.95fr !important;
+  }
+  body.dist-quote-open .dist-quote-terms-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  body.dist-quote-open .dist-quote-spec-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+  body.dist-quote-open .dist-quote-std-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  body.dist-quote-open .dist-quote-doc-footer {
+    grid-template-columns: 1fr auto !important;
+  }
+  body.dist-quote-open .dist-quote-titleblock {
+    text-align: right !important;
+  }
+
+  /* Same photo sizing as the preview card. */
+  body.dist-quote-open .dist-quote-vessel-photo {
+    max-height: 140px !important;
+  }
+  body.dist-quote-open .dist-quote-vessel-photo img {
+    max-height: 140px !important;
+    min-height: 110px !important;
+    height: 100% !important;
   }
 
   body.dist-quote-open .dist-quote-intro,
@@ -1269,13 +1314,6 @@ body.dist-modal-open { overflow: hidden; }
     page-break-inside: auto;
   }
 
-  body.dist-quote-open .dist-quote-vessel-photo,
-  body.dist-quote-open .dist-quote-vessel-photo img {
-    max-height: 110px !important;
-    min-height: 0 !important;
-    height: 110px !important;
-  }
-
   body.dist-quote-open .dist-quote-lines-print thead {
     display: table-header-group;
   }
@@ -1288,18 +1326,5 @@ body.dist-modal-open { overflow: hidden; }
   body.dist-quote-open .dist-quote-doc-footer {
     break-inside: avoid;
     page-break-inside: avoid;
-  }
-
-  body.dist-quote-open .dist-quote-top,
-  body.dist-quote-open .dist-quote-card,
-  body.dist-quote-open .dist-quote-card--model,
-  body.dist-quote-open .dist-quote-lines-print thead th,
-  body.dist-quote-open .dist-quote-totals-print .row.grand,
-  body.dist-quote-open .dist-quote-accent,
-  body.dist-quote-open .dist-quote-number,
-  body.dist-quote-open .dist-quote-mark,
-  body.dist-quote-open .dist-quote-vessel-photo {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 }
