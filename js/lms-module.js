@@ -1800,7 +1800,7 @@
           return '<article class="lms-announce-card">' +
             '<div class="lms-announce-head"><strong>' + escapeHtml(a.title) + '</strong>' +
             (a.pinned ? ' <span class="lms-badge lms-badge--published">Pinned</span>' : '') +
-            '<span class="lms-meta"> · ' + escapeHtml((a.createdAt || '').slice(0, 10)) +
+            '<span class="lms-meta"> · ' + escapeHtml(formatLmsDate(a.createdAt)) +
             ' · ' + escapeHtml(a.audience || 'employees') + '</span></div>' +
             '<p>' + escapeHtml(a.body) + '</p>' +
             (isAdmin() ? '<button type="button" class="btn btn-ghost btn-sm" data-lms-announce-delete="' + escapeHtml(a.id) + '">Delete</button>' : '') +
@@ -1937,7 +1937,7 @@
       var expired = isCertificateExpired(c, course);
       return '<div class="lms-cert-card">' +
         '<div><strong>' + escapeHtml(c.courseTitle) + '</strong>' +
-        '<div class="lms-meta">' + escapeHtml(c.userName) + ' · ' + escapeHtml((c.issuedAt || '').slice(0, 10)) +
+        '<div class="lms-meta">' + escapeHtml(c.userName) + ' · ' + escapeHtml(formatLmsDate(c.issuedAt)) +
         ' · No. ' + escapeHtml(c.certificateNo) +
         (c.score != null ? ' · Score ' + escapeHtml(String(c.score)) + '%' : '') +
         ' · Expires ' + escapeHtml(expiresAt ? formatCertDate(expiresAt) : 'Never') +
@@ -2012,6 +2012,10 @@
 
   function formatCertDate(iso) {
     if (!iso) return '—';
+    if (window.AndecoDate) {
+      var formatted = window.AndecoDate.formatDate(iso);
+      return formatted || '—';
+    }
     var d = new Date(iso);
     if (isNaN(d.getTime())) {
       var raw = String(iso).slice(0, 10);
@@ -2020,6 +2024,18 @@
       return raw;
     }
     return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear();
+  }
+
+  function formatLmsDate(iso) {
+    if (!iso) return '—';
+    if (window.AndecoDate) return window.AndecoDate.formatDate(iso) || '—';
+    return formatCertDate(iso);
+  }
+
+  function formatLmsDateTime(iso) {
+    if (!iso) return '—';
+    if (window.AndecoDate) return window.AndecoDate.formatDateTime(iso) || '—';
+    return formatCertDate(iso);
   }
 
   function performanceRating(score) {
@@ -2196,7 +2212,7 @@
       '</tr></thead><tbody>' +
       (data.purchases.length ? data.purchases.slice().reverse().map(function (p) {
         var course = data.courses.filter(function (c) { return c.id === p.courseId; })[0];
-        return '<tr><td>' + escapeHtml((p.createdAt || '').slice(0, 10)) + '</td>' +
+        return '<tr><td>' + escapeHtml(formatLmsDate(p.createdAt)) + '</td>' +
           '<td><strong>' + escapeHtml(p.buyerName) + '</strong><div class="lms-meta">' + escapeHtml(p.buyerEmail) +
           (p.buyerPhone ? ' · ' + escapeHtml(p.buyerPhone) : '') +
           (p.company ? '<br>' + escapeHtml(p.company) : '') + '</div></td>' +
@@ -2480,7 +2496,7 @@
             metricHtml('Status', 'Completed', 'ok') +
             metricHtml('Progress', (en.progressPercent || 100) + '%') +
             metricHtml('Score', en.score != null ? en.score + '%' : '—') +
-            metricHtml('Completed', (en.completedAt || '').slice(0, 10) || '—') +
+            metricHtml('Completed', formatLmsDate(en.completedAt)) +
           '</div>' +
           (cert
             ? '<div class="lms-actions" style="margin-bottom:1rem">' +

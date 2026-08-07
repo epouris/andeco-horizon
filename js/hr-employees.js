@@ -84,7 +84,7 @@
       return;
     }
     tbody.innerHTML = activeList.map(function (emp) {
-      var hire = emp.hireDate ? new Date(emp.hireDate).toLocaleDateString('en-GB') : '—';
+      var hire = emp.hireDate ? (window.AndecoDate ? window.AndecoDate.formatDate(emp.hireDate) : new Date(emp.hireDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : '—';
       return '<tr><td>' + escapeHtml((emp.firstName || '') + ' ' + (emp.lastName || '')) + '</td>' +
         '<td>' + escapeHtml(emp.employeeId || '—') + '</td>' +
         '<td>Active</td>' +

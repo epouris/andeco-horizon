@@ -189,7 +189,7 @@
       ? '<img src="' + logoSrc + '" alt="Logo" style="max-height:72px;max-width:180px;margin-bottom:10px;display:block;">'
       : '';
     var dateStr = order.date
-      ? new Date(order.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      ? (window.AndecoDate ? window.AndecoDate.formatDate(order.date) : new Date(order.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))
       : '';
     var amountStr = formatMoney(order.amount, order.currency || settings.currency);
     var banks = Array.isArray(settings.banks) ? settings.banks : [];

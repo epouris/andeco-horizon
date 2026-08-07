@@ -699,7 +699,7 @@ const app = {
         if (dateStr) {
             const d = new Date(dateStr + 'T00:00:00');
             if (!isNaN(d.getTime())) {
-                datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                datePart = (window.AndecoDate ? window.AndecoDate.formatDate(d) : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
             } else {
                 datePart = dateStr;
             }
@@ -1448,8 +1448,8 @@ const app = {
             // Format date for invoice display
             const invoiceDate = new Date(invoice.date);
             const dueDate = new Date(invoice.dueDate);
-            const formattedInvoiceDate = invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const formattedDueDate = dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const formattedInvoiceDate = (window.AndecoDate ? window.AndecoDate.formatDate(invoiceDate) : invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
+            const formattedDueDate = (window.AndecoDate ? window.AndecoDate.formatDate(dueDate) : dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
 
             const previewContent = document.getElementById('invoice-preview-content');
             const docLabel = this.getDocumentTypeLabel(invoice);
@@ -1649,8 +1649,8 @@ const app = {
         // Format dates
         const invoiceDate = new Date(invoice.date);
         const dueDate = new Date(invoice.dueDate);
-        const formattedInvoiceDate = invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const formattedDueDate = dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const formattedInvoiceDate = (window.AndecoDate ? window.AndecoDate.formatDate(invoiceDate) : invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
+        const formattedDueDate = (window.AndecoDate ? window.AndecoDate.formatDate(dueDate) : dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         
         // Create print window
         const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -2565,7 +2565,7 @@ const app = {
             ? DataStore.getDocumentLogoHtml('receipt')
             : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         const receiptDate = new Date(receipt.date);
-        const formattedReceiptDate = receiptDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const formattedReceiptDate = (window.AndecoDate ? window.AndecoDate.formatDate(receiptDate) : receiptDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
 
         const totalAmount = isOnAccount ? (parseFloat(receipt.amount) || 0) : invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
         const totalSubtotal = isOnAccount ? totalAmount : invoices.reduce((sum, inv) => sum + (parseFloat(inv.subtotal) || 0), 0);
@@ -2655,7 +2655,7 @@ const app = {
                             ${invoices.map(inv => `
                                 <tr>
                                     <td>${inv.invoiceNumber}</td>
-                                    <td>${new Date(inv.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                    <td>${this.formatDate(inv.date)}</td>
                                     <td class="text-right">${this.formatCurrency(inv.total)}</td>
                                 </tr>
                             `).join('')}
@@ -2780,7 +2780,7 @@ const app = {
             ? DataStore.getDocumentLogoHtml('receipt')
             : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
         const receiptDate = new Date(receipt.date);
-        const formattedReceiptDate = receiptDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const formattedReceiptDate = (window.AndecoDate ? window.AndecoDate.formatDate(receiptDate) : receiptDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         
         const totalAmount = isOnAccount ? (parseFloat(receipt.amount) || 0) : invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
         const totalSubtotal = isOnAccount ? totalAmount : invoices.reduce((sum, inv) => sum + (parseFloat(inv.subtotal) || 0), 0);
@@ -3115,7 +3115,7 @@ const app = {
                                 ${invoices.map(inv => `
                                     <tr>
                                         <td>${inv.invoiceNumber}</td>
-                                        <td>${new Date(inv.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                        <td>${this.formatDate(inv.date)}</td>
                                         <td class="text-right">${this.formatCurrency(inv.total)}</td>
                                     </tr>
                                 `).join('')}
@@ -3663,7 +3663,9 @@ const app = {
 
     formatDate(dateString) {
         if (!dateString) return '';
+        if (window.AndecoDate) return window.AndecoDate.formatDate(dateString) || '';
         const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
         return date.toLocaleDateString('en-GB', {
             day: '2-digit',
             month: '2-digit',
@@ -4124,10 +4126,13 @@ const app = {
         
         // Format dates as dd/mm/yyyy
         const formatDateDDMMYYYY = (dateString) => {
-            const date = new Date(dateString);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
+            if (window.AndecoDate) return window.AndecoDate.formatDate(dateString) || '';
+            if (!dateString) return '';
+            const d = new Date(dateString);
+            if (isNaN(d.getTime())) return '';
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
             return `${day}/${month}/${year}`;
         };
         
@@ -4194,9 +4199,9 @@ const app = {
                                     const transDate = new Date(trans.date);
                                     return `
                                         <tr>
-                                            <td>${transDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                            <td>${(window.AndecoDate ? window.AndecoDate.formatDate(transDate) : transDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))}</td>
                                             <td>${trans.reference}</td>
-                                            <td>${trans.description}${trans.type === 'invoice' && trans.dueDate ? ` (Due: ${new Date(trans.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })})` : ''}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
+                                            <td>${trans.description}${trans.type === 'invoice' && trans.dueDate ? ` (Due: ${(window.AndecoDate ? window.AndecoDate.formatDate(trans.dueDate) : this.formatDate(trans.dueDate))})` : ''}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
                                             <td class="text-right">${trans.amount > 0 ? this.formatCurrency(trans.amount) : '-'}</td>
                                             <td class="text-right">${trans.payment > 0 ? this.formatCurrency(trans.payment) : '-'}</td>
                                             <td class="text-right" style="font-weight: 600;">${this.formatCurrency(trans.balance)}</td>
@@ -4276,10 +4281,13 @@ const app = {
         
         // Format dates as dd/mm/yyyy
         const formatDateDDMMYYYY = (dateString) => {
-            const date = new Date(dateString);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
+            if (window.AndecoDate) return window.AndecoDate.formatDate(dateString) || '';
+            if (!dateString) return '';
+            const d = new Date(dateString);
+            if (isNaN(d.getTime())) return '';
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
             return `${day}/${month}/${year}`;
         };
         
@@ -4568,9 +4576,9 @@ const app = {
                                         const transDate = new Date(trans.date);
                                         return `
                                             <tr>
-                                                <td>${transDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                                                <td>${(window.AndecoDate ? window.AndecoDate.formatDate(transDate) : transDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))}</td>
                                                 <td>${trans.reference}</td>
-                                                <td>${trans.description}${trans.type === 'invoice' && trans.dueDate ? ` (Due: ${new Date(trans.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })})` : ''}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
+                                                <td>${trans.description}${trans.type === 'invoice' && trans.dueDate ? ` (Due: ${(window.AndecoDate ? window.AndecoDate.formatDate(trans.dueDate) : this.formatDate(trans.dueDate))})` : ''}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
                                                 <td class="text-right">${trans.amount > 0 ? this.formatCurrency(trans.amount) : '-'}</td>
                                                 <td class="text-right">${trans.payment > 0 ? this.formatCurrency(trans.payment) : '-'}</td>
                                                 <td class="text-right" style="font-weight: 600;">${this.formatCurrency(trans.balance)}</td>
