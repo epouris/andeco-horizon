@@ -2694,6 +2694,36 @@
             </div>` : ''}
         </section>
 
+        ${Object.keys(specs).length ? `
+          <section class="dist-quote-section dist-quote-section--specs">
+            <div class="dist-quote-section-head">
+              <h2>Technical specifications</h2>
+              <span>${esc(model?.name || '')}</span>
+            </div>
+            <div class="dist-quote-spec-grid">
+              ${orderedTechSpecEntries(specs).map(([k, v]) => `
+                <div class="dist-quote-spec">
+                  <div class="dist-quote-spec-label">${esc(formatSpecLabel(k))}</div>
+                  <div class="dist-quote-spec-value">${esc(v)}</div>
+                </div>`).join('')}
+            </div>
+          </section>` : ''}
+
+        ${std.length ? `
+          <section class="dist-quote-section dist-quote-section--std">
+            <div class="dist-quote-section-head">
+              <h2>Standard equipment</h2>
+              <span>Included in base configuration</span>
+            </div>
+            <div class="dist-quote-std-grid">
+              ${std.map((g) => `
+                <div class="dist-quote-std-group">
+                  <div class="dist-quote-std-title">${esc(g.category)}</div>
+                  <p class="dist-quote-std-items">${(g.items || []).map((i) => esc(i)).join(' · ')}</p>
+                </div>`).join('')}
+            </div>
+          </section>` : ''}
+
         <section class="dist-quote-section dist-quote-section--pricing">
           <div class="dist-quote-section-head">
             <h2>Pricing</h2>
@@ -2738,36 +2768,6 @@
             </div>
           </div>
         </section>
-
-        ${Object.keys(specs).length ? `
-          <section class="dist-quote-section dist-quote-section--specs">
-            <div class="dist-quote-section-head">
-              <h2>Technical specifications</h2>
-              <span>${esc(model?.name || '')}</span>
-            </div>
-            <div class="dist-quote-spec-grid">
-              ${orderedTechSpecEntries(specs).map(([k, v]) => `
-                <div class="dist-quote-spec">
-                  <div class="dist-quote-spec-label">${esc(formatSpecLabel(k))}</div>
-                  <div class="dist-quote-spec-value">${esc(v)}</div>
-                </div>`).join('')}
-            </div>
-          </section>` : ''}
-
-        ${std.length ? `
-          <section class="dist-quote-section dist-quote-section--std">
-            <div class="dist-quote-section-head">
-              <h2>Standard equipment</h2>
-              <span>Included in base configuration</span>
-            </div>
-            <div class="dist-quote-std-grid">
-              ${std.map((g) => `
-                <div class="dist-quote-std-group">
-                  <div class="dist-quote-std-title">${esc(g.category)}</div>
-                  <p class="dist-quote-std-items">${(g.items || []).map((i) => esc(i)).join(' · ')}</p>
-                </div>`).join('')}
-            </div>
-          </section>` : ''}
 
         <section class="dist-quote-section dist-quote-section--terms">
           <div class="dist-quote-terms-grid">
