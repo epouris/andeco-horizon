@@ -1176,7 +1176,6 @@ body.dist-modal-open { overflow: hidden; }
     margin: 8mm 8mm 10mm;
   }
 
-  /* Prefer display:none over visibility:hidden — avoids blank trailing pages. */
   html, body {
     height: auto !important;
     overflow: visible !important;
@@ -1187,8 +1186,19 @@ body.dist-modal-open { overflow: hidden; }
     background: #fff !important;
   }
 
+  /* Hide the rest of the app while printing a quotation. */
   body.dist-quote-open > *:not(.dist-quote-sheet) {
     display: none !important;
+    visibility: hidden !important;
+  }
+
+  /*
+   * Force quote content visible. Other modules (LMS/Accounting) use global
+   * print visibility:hidden rules that would otherwise produce blank pages.
+   */
+  body.dist-quote-open .dist-quote-sheet,
+  body.dist-quote-open .dist-quote-sheet * {
+    visibility: visible !important;
   }
 
   body.dist-quote-open .dist-quote-sheet {
@@ -1201,12 +1211,26 @@ body.dist-modal-open { overflow: hidden; }
     display: block !important;
     width: auto !important;
     min-height: 0 !important;
+    height: auto !important;
     gap: 0 !important;
   }
 
   body.dist-quote-open .dist-quote-toolbar,
-  body.dist-quote-open .no-print {
+  body.dist-quote-open .dist-quote-toolbar *,
+  body.dist-quote-open .no-print,
+  body.dist-quote-open .no-print * {
     display: none !important;
+    visibility: hidden !important;
+  }
+
+  body.dist-quote-open .dist-quote-scroll {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   body.dist-quote-open .dist-quote-doc,
@@ -1215,7 +1239,10 @@ body.dist-modal-open { overflow: hidden; }
     width: 100% !important;
     max-width: none !important;
     padding: 0 !important;
+    margin: 0 !important;
     overflow: visible !important;
+    color: #12263a !important;
+    background: #fff !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

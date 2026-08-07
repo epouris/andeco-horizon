@@ -1137,13 +1137,18 @@ body.lms-cert-open {
     display: none !important;
   }
 
-  body * {
+  /* Only hide the app while printing certificates — do not blank other modules (e.g. Distribution quotes). */
+  body.lms-cert-open *,
+  html.lms-printing-cert body * {
     visibility: hidden !important;
   }
 
-  .lms-certificate-sheet,
-  .lms-certificate-sheet .lms-certificate,
-  .lms-certificate-sheet .lms-certificate * {
+  body.lms-cert-open .lms-certificate-sheet,
+  body.lms-cert-open .lms-certificate-sheet .lms-certificate,
+  body.lms-cert-open .lms-certificate-sheet .lms-certificate *,
+  html.lms-printing-cert .lms-certificate-sheet,
+  html.lms-printing-cert .lms-certificate-sheet .lms-certificate,
+  html.lms-printing-cert .lms-certificate-sheet .lms-certificate * {
     visibility: visible !important;
   }
 
