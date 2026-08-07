@@ -428,6 +428,7 @@ const app = {
             });
         }
         this.initDocumentLogoUploads();
+        this.initQuotationHeaderUploads();
 
         // Invoice search
         const invoiceSearch = document.getElementById('invoice-search');
@@ -3443,6 +3444,170 @@ const app = {
             document.getElementById('remove-logo').style.display = 'none';
         }
         this.loadDocumentLogosForm(settings);
+        this.loadQuotationHeaderForm(settings);
+    },
+
+    setQuoteHeaderLogoCard(kind, dataUrl) {
+        const img = document.getElementById(kind === 'brand' ? 'quote-header-brand-logo-img' : 'quote-header-company-logo-img');
+        const removeBtn = document.getElementById(kind === 'brand' ? 'quote-header-brand-logo-remove' : 'quote-header-company-logo-remove');
+        const card = img ? img.closest('.doc-logo-card') : null;
+        const placeholder = card ? card.querySelector('.doc-logo-placeholder') : null;
+        if (dataUrl && String(dataUrl).indexOf('data:') === 0) {
+            if (img) {
+                img.src = dataUrl;
+                img.style.display = 'block';
+            }
+            if (placeholder) placeholder.style.display = 'none';
+            if (removeBtn) removeBtn.style.display = 'inline-block';
+        } else {
+            if (img) {
+                img.removeAttribute('src');
+                img.style.display = 'none';
+            }
+            if (placeholder) placeholder.style.display = 'block';
+            if (removeBtn) removeBtn.style.display = 'none';
+        }
+        this.updateQuotationHeaderPreview();
+    },
+
+    loadQuotationHeaderForm(settings) {
+        const qh = (settings && settings.quotationHeader && typeof settings.quotationHeader === 'object')
+            ? settings.quotationHeader
+            : {};
+        const companyNameEl = document.getElementById('quote-header-company-name');
+        if (!companyNameEl) return;
+        companyNameEl.value = qh.companyName || settings.companyName || '';
+        const detailsEl = document.getElementById('quote-header-company-details');
+        if (detailsEl) detailsEl.value = qh.companyDetails || '';
+        const kickerEl = document.getElementById('quote-header-kicker');
+        if (kickerEl) kickerEl.value = qh.headerKicker || 'Commercial offer';
+        const titleEl = document.getElementById('quote-header-title');
+        if (titleEl) titleEl.value = qh.headerTitle || 'Quotation';
+        const brandSubEl = document.getElementById('quote-header-brand-subtitle');
+        if (brandSubEl) brandSubEl.value = qh.brandSubtitle || '';
+        const footerEl = document.getElementById('quote-header-footer');
+        if (footerEl) footerEl.value = qh.quoteFooter || '';
+        this.setQuoteHeaderLogoCard('company', qh.companyLogo || '');
+        this.setQuoteHeaderLogoCard('brand', qh.brandLogo || '');
+        this.updateQuotationHeaderPreview();
+    },
+
+    getQuotationHeaderFromForm() {
+        const companyImg = document.getElementById('quote-header-company-logo-img');
+        const brandImg = document.getElementById('quote-header-brand-logo-img');
+        const companySrc = companyImg ? (companyImg.getAttribute('src') || '') : '';
+        const brandSrc = brandImg ? (brandImg.getAttribute('src') || '') : '';
+        return {
+            companyName: (document.getElementById('quote-header-company-name')?.value || '').trim(),
+            companyDetails: (document.getElementById('quote-header-company-details')?.value || '').trim(),
+            headerKicker: (document.getElementById('quote-header-kicker')?.value || '').trim() || 'Commercial offer',
+            headerTitle: (document.getElementById('quote-header-title')?.value || '').trim() || 'Quotation',
+            brandSubtitle: (document.getElementById('quote-header-brand-subtitle')?.value || '').trim(),
+            quoteFooter: (document.getElementById('quote-header-footer')?.value || '').trim(),
+            companyLogo: companySrc.indexOf('data:') === 0 ? companySrc : '',
+            brandLogo: brandSrc.indexOf('data:') === 0 ? brandSrc : ''
+        };
+    },
+
+    updateQuotationHeaderPreview() {
+        const qh = this.getQuotationHeaderFromForm();
+        const companyName = qh.companyName || document.getElementById('company-name')?.value || 'Company name';
+        const nameEl = document.getElementById('quote-header-preview-company-name');
+        if (nameEl) nameEl.textContent = companyName;
+        const brandLineEl = document.getElementById('quote-header-preview-brand-line');
+        if (brandLineEl) {
+            brandLineEl.textContent = qh.brandSubtitle || 'Brand · Official quotation';
+        }
+        const detailsEl = document.getElementById('quote-header-preview-details');
+        if (detailsEl) {
+            detailsEl.textContent = qh.companyDetails || 'Company details';
+            detailsEl.style.display = qh.companyDetails ? 'block' : 'none';
+        }
+        const kickerEl = document.getElementById('quote-header-preview-kicker');
+        if (kickerEl) kickerEl.textContent = qh.headerKicker || 'Commercial offer';
+        const titleEl = document.getElementById('quote-header-preview-title');
+        if (titleEl) titleEl.textContent = qh.headerTitle || 'Quotation';
+
+        const prevCompany = document.getElementById('quote-header-preview-company');
+        const prevBrand = document.getElementById('quote-header-preview-brand');
+        const prevMark = document.getElementById('quote-header-preview-mark');
+        if (prevCompany) {
+            if (qh.companyLogo) {
+                prevCompany.src = qh.companyLogo;
+                prevCompany.style.display = 'block';
+            } else {
+                prevCompany.removeAttribute('src');
+                prevCompany.style.display = 'none';
+            }
+        }
+        if (prevBrand) {
+            if (qh.brandLogo) {
+                prevBrand.src = qh.brandLogo;
+                prevBrand.style.display = 'block';
+            } else {
+                prevBrand.removeAttribute('src');
+                prevBrand.style.display = 'none';
+            }
+        }
+        if (prevMark) {
+            prevMark.style.display = (qh.companyLogo || qh.brandLogo) ? 'none' : 'grid';
+        }
+    },
+
+    initQuotationHeaderUploads() {
+        if (document.getElementById('quote-header-logos-grid')?._quoteHeaderBound) return;
+        const root = document.getElementById('quote-header-logos-grid');
+        if (!root) return;
+        root._quoteHeaderBound = true;
+        const self = this;
+
+        const bindLogo = (kind, uploadId, fileId, removeId) => {
+            document.getElementById(uploadId)?.addEventListener('click', () => {
+                document.getElementById(fileId)?.click();
+            });
+            document.getElementById(removeId)?.addEventListener('click', () => {
+                self.setQuoteHeaderLogoCard(kind, '');
+                const fileInput = document.getElementById(fileId);
+                if (fileInput) fileInput.value = '';
+            });
+            document.getElementById(fileId)?.addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    alert('Please select an image file');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (ev) => self.setQuoteHeaderLogoCard(kind, ev.target.result);
+                reader.readAsDataURL(file);
+            });
+        };
+
+        bindLogo('company', 'quote-header-company-logo-upload', 'quote-header-company-logo-file', 'quote-header-company-logo-remove');
+        bindLogo('brand', 'quote-header-brand-logo-upload', 'quote-header-brand-logo-file', 'quote-header-brand-logo-remove');
+
+        ['quote-header-company-name', 'quote-header-company-details', 'quote-header-kicker', 'quote-header-title', 'quote-header-brand-subtitle', 'quote-header-footer'].forEach((id) => {
+            document.getElementById(id)?.addEventListener('input', () => self.updateQuotationHeaderPreview());
+        });
+    },
+
+    syncQuotationHeaderToDistribution(qh) {
+        try {
+            if (!window.DistributionModule || typeof window.DistributionModule.getState !== 'function') return;
+            const st = window.DistributionModule.getState();
+            if (!st || !st.settings) return;
+            if (qh.companyName) st.settings.companyName = qh.companyName;
+            st.settings.companyDetails = qh.companyDetails || '';
+            if (qh.quoteFooter) st.settings.quoteFooter = qh.quoteFooter;
+            st.settings.companyLogo = qh.companyLogo || '';
+            st.settings.brandLogo = qh.brandLogo || '';
+            st.settings.headerKicker = qh.headerKicker || 'Commercial offer';
+            st.settings.headerTitle = qh.headerTitle || 'Quotation';
+            st.settings.brandSubtitle = qh.brandSubtitle || '';
+            if (typeof window.DistributionModule.persist === 'function') {
+                window.DistributionModule.persist(true);
+            }
+        } catch (_) { /* ignore */ }
     },
 
     getDocumentLogosFromForm() {
@@ -3589,15 +3754,17 @@ const app = {
             defaultTaxRate: parseFloat(document.getElementById('default-tax-rate').value) || 0,
             defaultPaymentTerms: parseInt(document.getElementById('default-payment-terms').value) || 30,
             defaultInvoiceNotes: document.getElementById('default-invoice-notes').value,
-            documentLogos: this.getDocumentLogosFromForm()
+            documentLogos: this.getDocumentLogosFromForm(),
+            quotationHeader: this.getQuotationHeaderFromForm()
         };
+
+        const existingSettings = DataStore.getCompanySettings() || {};
 
         // Only save logo if it's a data URL (not empty)
         if (!settings.logo.startsWith('data:')) {
-            const existingSettings = DataStore.getCompanySettings();
             settings.logo = existingSettings.logo || '';
         }
-        const existingLogos = (DataStore.getCompanySettings().documentLogos) || {};
+        const existingLogos = existingSettings.documentLogos || {};
         Object.keys(settings.documentLogos).forEach(function (key) {
             if (!settings.documentLogos[key] && existingLogos[key] && String(existingLogos[key]).indexOf('data:') === 0) {
                 // Keep existing if form card was empty because section wasn't visited — only when img had no data
@@ -3607,8 +3774,14 @@ const app = {
         // Merge: if a card exists and shows empty, '' is intentional. If keys missing, keep existing.
         settings.documentLogos = Object.assign({}, existingLogos, settings.documentLogos);
 
+        const existingQh = (existingSettings.quotationHeader && typeof existingSettings.quotationHeader === 'object')
+            ? existingSettings.quotationHeader
+            : {};
+        settings.quotationHeader = Object.assign({}, existingQh, settings.quotationHeader);
+
         DataStore.saveCompanySettings(settings);
         this.syncCompanySettingsToPayroll(settings);
+        this.syncQuotationHeaderToDistribution(settings.quotationHeader);
         alert('Settings saved successfully!');
         this.refreshCurrencyDisplay();
     },

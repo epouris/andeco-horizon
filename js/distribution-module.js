@@ -2469,14 +2469,60 @@
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
-  function getQuoteLogoHtml() {
+  function getQuotationHeaderSettings() {
     try {
-      if (window.DataStore && typeof window.DataStore.getDocumentLogoHtml === 'function') {
-        return window.DataStore.getDocumentLogoHtml('proforma', 'dist-quote-logo') ||
-          window.DataStore.getDocumentLogoHtml('invoice', 'dist-quote-logo') || '';
+      if (window.DataStore && typeof window.DataStore.getQuotationHeader === 'function') {
+        return window.DataStore.getQuotationHeader() || {};
       }
     } catch (_) { /* ignore */ }
+    return {};
+  }
+
+  function logoImgHtml(src, className, alt) {
+    if (!src || String(src).indexOf('data:') !== 0) return '';
+    // Do not HTML-escape data URLs (can contain &). Sanitize attribute wrappers only.
+    const cls = String(className || 'dist-quote-logo').replace(/"/g, '');
+    const a = String(alt || 'Logo').replace(/"/g, '');
+    return '<img src="' + src + '" alt="' + a + '" class="' + cls + '">';
+  }
+
+  function getQuoteLogosHtml(brand) {
+    const qh = getQuotationHeaderSettings();
+    let companyLogo = qh.companyLogo || state.settings.companyLogo || '';
+    let brandLogo = qh.brandLogo || state.settings.brandLogo || (brand && brand.logo) || '';
+
+    if (!companyLogo) {
+      try {
+        if (window.DataStore && typeof window.DataStore.getDocumentLogo === 'function') {
+          companyLogo = window.DataStore.getDocumentLogo('proforma') ||
+            window.DataStore.getDocumentLogo('invoice') || '';
+        } else if (window.DataStore && typeof window.DataStore.getDocumentLogoHtml === 'function') {
+          // Legacy fallback path handled below via HTML
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    const companyHtml = logoImgHtml(companyLogo, 'dist-quote-logo dist-quote-logo--company', 'Company logo');
+    const brandHtml = logoImgHtml(brandLogo, 'dist-quote-logo dist-quote-logo--brand', 'Brand logo');
+
+    if (companyHtml || brandHtml) {
+      return `<div class="dist-quote-logos">${companyHtml}${brandHtml}</div>`;
+    }
+
+    try {
+      if (window.DataStore && typeof window.DataStore.getDocumentLogoHtml === 'function') {
+        const legacy = window.DataStore.getDocumentLogoHtml('proforma', 'dist-quote-logo') ||
+          window.DataStore.getDocumentLogoHtml('invoice', 'dist-quote-logo') || '';
+        if (legacy) return `<div class="dist-quote-logos">${legacy}</div>`;
+      }
+    } catch (_) { /* ignore */ }
+
     return '';
+  }
+
+  /** @deprecated use getQuoteLogosHtml */
+  function getQuoteLogoHtml() {
+    return getQuoteLogosHtml(null);
   }
 
   function getCompanyContactBits() {
@@ -2510,15 +2556,20 @@
     const paymentTerms = String(q.paymentTerms || '').trim() || defaultPaymentTerms();
     const olrRef = String(q.olrRef || '').trim();
     const companyBits = getCompanyContactBits();
-    const company = state.settings.companyName || companyBits.name || 'OlympicRibs Distribution';
-    const footer = state.settings.quoteFooter ||
+    const qh = getQuotationHeaderSettings();
+    const company = qh.companyName || state.settings.companyName || companyBits.name || 'OlympicRibs Distribution';
+    const footer = qh.quoteFooter || state.settings.quoteFooter ||
       'Prices in EUR. Quotation valid for 30 days unless otherwise stated. Technical specifications subject to manufacturer updates.';
+    const headerKicker = qh.headerKicker || state.settings.headerKicker || 'Commercial offer';
+    const headerTitle = qh.headerTitle || state.settings.headerTitle || 'Quotation';
+    const brandSubtitle = (qh.brandSubtitle || state.settings.brandSubtitle || '').trim() ||
+      `${brand?.name || 'Distribution'} · Official quotation`;
     const specs = model?.techSpecs || {};
     const std = model?.standardEquipment || [];
     const lines = Array.isArray(q.lines) ? q.lines : [];
     const optionLines = lines.filter((ln) => ln.kind === 'option');
     const optionalCount = optionLines.length;
-    const logoHtml = getQuoteLogoHtml();
+    const logoHtml = getQuoteLogosHtml(brand);
     const issued = q.date || todayISO();
     const validUntil = (() => {
       try {
@@ -2536,7 +2587,7 @@
       companyBits.email,
       companyBits.website
     ].filter(Boolean).join(' · ');
-    const detailsText = (state.settings.companyDetails || '').trim() || companyContact;
+    const detailsText = (qh.companyDetails || state.settings.companyDetails || '').trim() || companyContact;
 
     closeQuotePrintSheet();
 
@@ -2568,13 +2619,13 @@
             ${logoHtml || `<div class="dist-quote-mark">${esc((brand?.name || 'OR').slice(0, 2).toUpperCase())}</div>`}
             <div>
               <div class="dist-quote-company">${esc(company)}</div>
-              <div class="dist-quote-brand-sub">${esc(brand?.name || 'Distribution')} · Official quotation</div>
+              <div class="dist-quote-brand-sub">${esc(brandSubtitle)}</div>
               ${detailsText ? `<div class="dist-quote-company-details">${esc(detailsText)}</div>` : ''}
             </div>
           </div>
           <div class="dist-quote-titleblock">
-            <div class="dist-quote-kicker">Commercial offer</div>
-            <div class="dist-quote-title">Quotation</div>
+            <div class="dist-quote-kicker">${esc(headerKicker)}</div>
+            <div class="dist-quote-title">${esc(headerTitle)}</div>
             <div class="dist-quote-number">${esc(q.number)}</div>
             <div class="dist-quote-title-meta">
               <span>Issued ${esc(formatDistDate(issued))}</span>

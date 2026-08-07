@@ -202,6 +202,7 @@
     settings: [
       { id: 'company', label: 'Company Information' },
       { id: 'document-logos', label: 'Document logos' },
+      { id: 'quotation-header', label: 'Quotation Header' },
       { id: 'payroll', label: 'Payroll Settings' },
       { id: 'accounting', label: 'Accounting Settings' }
     ],
