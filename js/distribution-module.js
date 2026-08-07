@@ -790,6 +790,301 @@
     return { models, options, modelId };
   }
 
+  /** OlympicRibs 40SR (40SR-2S sheet) — from manufacturer price / equipment sheets. */
+  function build40SrCatalog(brandId, byKey) {
+    const modelId = uid('model');
+    const now = new Date().toISOString();
+    const only = [modelId];
+
+    const techSpecs = {
+      loa: '12 m',
+      boa: '3.25 m',
+      internalBeam: '2.1 m',
+      tubeDiam: '45 - 55 cm',
+      maxHp: '3 x 500 HP',
+      minHp: '2 x 300 HP',
+      suggestedHp: '2 x 400 HP',
+      dryWeight: '4350 Kg (incl. engines twin V10)',
+      fuelTank: '660 ltrs',
+      waterTank: '130 ltrs',
+      ceCategory: 'B',
+      pax: '12'
+    };
+
+    const standardEquipment = [
+      { category: 'Seats', items: ['Ullman Echelon (2) — 40SR-2S base; optional second row available'] },
+      { category: 'Decking', items: ['Foam SeaDeck'] },
+      {
+        category: 'Tanks',
+        items: [
+          'Fuel tanks 2 × 350 ltrs',
+          'Fresh water tank 1 × 150 ltrs',
+          'Black water tank 1 × 40 ltrs'
+        ]
+      },
+      {
+        category: 'Deck',
+        items: [
+          'Exterior upholstery with Silvertex fabrics',
+          'Aft shower',
+          'Automatic bilge pumps',
+          'Custom scuppers',
+          'Retractable swimming ladder',
+          'Custom handrails',
+          'Retractable cleats',
+          'Water and fuel fillers',
+          'Black water certified extraction point'
+        ]
+      },
+      {
+        category: 'Windlass system',
+        items: [
+          'Electric windlass 800W',
+          'Ultra Marine anchor 5kg',
+          'Stainless steel chain 6mm 50m',
+          'Custom bow stainless steel cover with roller and “U” bolt',
+          'Windlass control at console',
+          'Windlass remote control'
+        ]
+      },
+      {
+        category: 'T-Top',
+        items: [
+          'T-Top with full glass windshield and wiper',
+          'Navigation light',
+          'Anchor light',
+          'LED spot lights',
+          'Ambient LED lights'
+        ]
+      },
+      {
+        category: 'WC area',
+        items: [
+          'Electrics access hatches',
+          'Electric toilet',
+          'Sink with tap',
+          'Shower with grey water system',
+          'Bathroom accessories',
+          'LED lighting',
+          'USB charging socket'
+        ]
+      },
+      {
+        category: 'Wet bar',
+        items: ['LED cup holders', 'USB charging sockets']
+      },
+      {
+        category: 'Electric and electronic equipment — Batteries',
+        items: [
+          'Service batteries (2)',
+          'Main battery switch panel with ACR and remote switching',
+          'Batteries remote control',
+          'Shore power charger 16A with cable'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Navigation & communications',
+        items: [
+          'Raymarine Axiom Pro 12″ plotter',
+          'Map',
+          'Sonar',
+          'VHF RAY 90 with black box'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Boat controls',
+        items: [
+          'Digital switching with Czone',
+          'Touch keypad',
+          'Custom Olympic RIBS interface'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Sound',
+        items: [
+          'JL Audio sound source MM105',
+          '4× JL Audio M3 7.7″ speakers',
+          '1× JL Audio subwoofer 10″',
+          'Amplifier JL Audio 600W'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Lights',
+        items: ['Single colour deck lights package']
+      }
+    ];
+
+    const models = [
+      {
+        id: modelId,
+        brandId,
+        name: '40SR',
+        basePrice: 253212,
+        currency: 'EUR',
+        active: true,
+        techSpecs: Object.assign({}, techSpecs),
+        standardEquipment: standardEquipment.slice(),
+        photo: '',
+        notes:
+          '40SR-2S — 2 Ullman seats, “U” shape sofa, wetbar or reverse sofa (standard equipment without engines). Engine lines are package prices (vessel + engines).',
+        createdAt: now
+      }
+    ];
+
+    const mk = (categoryKey, subgroup, name, price, modelIds, notes) => ({
+      id: uid('opt'),
+      categoryId: byKey[categoryKey],
+      brandId,
+      modelIds: modelIds || only,
+      subgroup: subgroup || '',
+      name,
+      price,
+      unit: 'pcs',
+      notes: notes || '',
+      active: true
+    });
+
+    const options = [
+      // Yamaha / Mercury / Honda packages (vessel + engines) — 40SR-2S sheet.
+      // Sheet OCR confirmed these package totals; remaining Yamaha/Mercury colour variants can be added from the full engine block.
+      mk('engines', 'YAMAHA', 'Twin F350NSA', 335091),
+      mk('engines', 'YAMAHA', 'Twin XTO 450NSA', 389363),
+      mk('engines', 'MERCURY', 'Dual 350 V10', 346270),
+      mk('engines', 'MERCURY', 'Triple R500 V8', 496679),
+      mk('engines', 'HONDA', 'Dual BF350 XDU & XCDU EPS (electric steering)', 338035),
+
+      // Layout
+      mk(
+        'other',
+        '',
+        'Layout option +2S NOU — addition of second row of Ullman Echelon seats (“U” shape aft sofa N/A)',
+        19964
+      ),
+
+      // Rigging — Mercury V10
+      mk(
+        'engine_options',
+        'MERCURY V10',
+        'Twin — rigging for standard steering (VV, VVmobile, tilt steering, mounting plates; no steering cylinders)',
+        16560
+      ),
+      mk(
+        'engine_options',
+        'MERCURY V10',
+        'Twin — rigging for E-Steering with joystick & AP (VV, VVmobile, tilt steering, mounting plates; no steering cylinders)',
+        21654
+      ),
+      mk('engine_options', 'MERCURY V10', 'Upgrade with Premier throttles', 1050),
+      mk('engine_options', 'MERCURY V10', 'Steering upgrade to fully electric', 23400),
+      mk(
+        'engine_options',
+        'MERCURY V10',
+        'Joystick system with dynamic positioning (includes electric steering)',
+        28350
+      ),
+
+      // Rigging — Mercury V8
+      mk(
+        'engine_options',
+        'MERCURY V8',
+        'Triple — rigging for standard steering (VV, VVmobile, tilt steering, mounting plates; no steering cylinders / no tie bar)',
+        21240
+      ),
+      mk('engine_options', 'MERCURY V8', 'Upgrade with Premier throttles', 1050),
+      mk(
+        'engine_options',
+        'MERCURY V8',
+        'Joystick system with dynamic positioning (includes electric steering)',
+        20250
+      ),
+
+      // Rigging — Yamaha / Honda
+      mk('engine_options', 'YAMAHA', 'Joystick & Autopilot — twin installation', 10200),
+      mk('engine_options', 'YAMAHA', 'Joystick & Autopilot — triple installation', 13600),
+      mk('engine_options', 'HONDA', 'Joystick — twin installation', 15225),
+
+      // Bow thruster / decking
+      mk('other', '', 'Bow thruster 50kgf with console control', 5815),
+      mk('decking', '', 'Decking upgrade with Burma Teak wood', 19200),
+
+      // Covers, upholstery, awnings
+      mk('covers', '', 'Full parking cover for winterising', 3570),
+      mk('covers', '', 'Console & upholstery covers', 3200),
+      mk('covers', '', 'Bow awning system with carbon poles', 4073),
+      mk('covers', '', 'Aft awning system with carbon poles', 2334),
+      mk('covers', '', 'Ullman seats full carbon upgrade (per seat)', 3700),
+      mk('covers', '', 'Alcantara upholstery upgrade', 8325),
+
+      // Plotters & telecom
+      mk('electronics', '', 'Main screen upgrade to Raymarine Axiom Pro 16″', 3570),
+      mk('electronics', '', 'Second screen Raymarine Axiom Pro 12″', 5897),
+      mk('electronics', '', 'AIS Raymarine', 2617),
+      mk('electronics', '', 'Radar Raymarine HD colour dome 4kW 24″', 4505),
+      mk('electronics', '', 'FLIR night vision thermal camera', 6200),
+
+      // Sound
+      mk(
+        'sound',
+        '',
+        'Standard sound package upgrade M3 (8× speakers 7.7″, 2× subwoofer 10″ & 2× amplifiers)',
+        3330
+      ),
+      mk('sound', '', 'Lighted speakers additional charge', 1266),
+      mk(
+        'sound',
+        '',
+        'Premium sound package JL Audio M6 (10× speakers 7.7″, 2× subwoofer 10″ & 2× digital amplifiers) with lighting',
+        9139
+      ),
+
+      // Lights
+      mk('lights', '', 'Underwater lights (single colour — white or blue)', 2400),
+      mk(
+        'lights',
+        '',
+        'Premium RGB package with underwater lights and Sound to light module (SHADOW CASTER)',
+        9886
+      ),
+
+      // Charging
+      mk('electronics', '', 'Inverter 3000W combi with charger 16A', 2407),
+      mk('electronics', '', 'Solar panel 8A', 1360),
+
+      // Fridges / stoves (wetbar)
+      mk('wetbar', '', 'Freezer drawer 35 ltrs', 1544),
+      mk('wetbar', '', 'Freezer drawer 60 ltrs (not available with reverse sofa)', 2400),
+      mk('wetbar', '', 'Fridge drawer 90 ltrs (not available with reverse sofa)', 2160),
+      mk(
+        'wetbar',
+        '',
+        'Induction electric dual stove 220V — mandatory inverter selection (not available with reverse sofa)',
+        1755
+      ),
+
+      // Tables / wet bar sink
+      mk('other', '', 'Electric bow table 12V', 4347),
+      mk('other', '', 'Removable bow table', 2500),
+      mk('other', '', 'Removable aft table', 2500),
+      mk('wetbar', '', 'Sink with tap at wet bar (not available with reverse sofa)', 1260),
+
+      // Windlass / towing
+      mk(
+        'other',
+        '',
+        'Aft windlass with 5 kg Ultramarine anchor, 20m chain, chain counter & remote',
+        7500
+      ),
+      mk('other', '', 'Chain counter', 854),
+      mk('other', '', 'Towing points', 2500),
+
+      // Trailer / exclusives
+      mk('trailer', '', 'Triple axel trailer', 10500),
+      mk('exclusives', '', 'Corto Maltese Limited Edition Customization', 25000)
+    ].filter((o) => !!o.categoryId);
+
+    return { models, options, modelId };
+  }
+
   function seedOlympicRibs() {
     const brandId = uid('brand');
     const cats = defaultCategories(brandId);
@@ -868,6 +1163,7 @@
 
     const src45 = build45SrcCatalog(brandId, byKey);
     const src30 = build30SrCatalog(brandId, byKey);
+    const src40 = build40SrCatalog(brandId, byKey);
 
     return {
       brands: [
@@ -943,10 +1239,11 @@
           createdAt: new Date().toISOString()
         },
         ...src45.models,
-        ...src30.models
+        ...src30.models,
+        ...src40.models
       ],
       optionCategories: cats,
-      options: options.concat(more, src45.options, src30.options),
+      options: options.concat(more, src45.options, src30.options, src40.options),
       quotations: [],
       soldVessels: [],
       potentialClients: [],
@@ -1020,6 +1317,36 @@
       byKey[key] = fallback.id;
     });
     const built = build30SrCatalog(brand.id, byKey);
+    state.models = models.concat(built.models);
+    state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
+    pendingCatalogPersist = true;
+    return true;
+  }
+
+  function ensure40SrCatalog(state) {
+    if (!state || !Array.isArray(state.brands) || !state.brands.length) return false;
+    const brand =
+      state.brands.find((b) => String(b.slug || '').toLowerCase() === 'olympicribs') ||
+      state.brands.find((b) => /olympic\s*ribs/i.test(String(b.name || ''))) ||
+      state.brands[0];
+    if (!brand) return false;
+    const models = Array.isArray(state.models) ? state.models : [];
+    const already = models.some((m) => /^40\s*sr\b/i.test(String(m.name || '').trim()));
+    if (already) {
+      const beforeCats = (state.optionCategories || []).length;
+      ensureBrandCategories(state, brand.id);
+      if ((state.optionCategories || []).length > beforeCats) pendingCatalogPersist = true;
+      return false;
+    }
+    const byKey = ensureBrandCategories(state, brand.id);
+    ['engines', 'engine_options', 'covers', 'electronics', 'lights', 'sound', 'wetbar', 'other', 'decking', 'trailer', 'exclusives'].forEach((key) => {
+      if (byKey[key]) return;
+      const fallback = defaultCategories(brand.id).find((c) => c.key === key);
+      if (!fallback) return;
+      state.optionCategories.push(fallback);
+      byKey[key] = fallback.id;
+    });
+    const built = build40SrCatalog(brand.id, byKey);
     state.models = models.concat(built.models);
     state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
     pendingCatalogPersist = true;
@@ -1138,6 +1465,7 @@
     } else {
       ensure45SrcCatalog(s);
       ensure30SrCatalog(s);
+      ensure40SrCatalog(s);
     }
     return s;
   }
