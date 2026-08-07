@@ -2699,23 +2699,6 @@
           </div>
         </section>
 
-        <section class="dist-quote-section dist-quote-section--terms">
-          <div class="dist-quote-terms-grid">
-            <div>
-              <div class="dist-quote-section-head"><h2>Payment terms</h2></div>
-              <div class="dist-quote-notes dist-quote-payment-terms">${esc(paymentTerms)}</div>
-            </div>
-            <div>
-              <div class="dist-quote-section-head"><h2>Validity</h2></div>
-              <div class="dist-quote-notes">
-                Valid for 30 days from issue date${validUntil ? ` (until ${esc(validUntil)})` : ''}.
-                Prices and availability are subject to confirmation at order.
-                ${q.notes ? `\n\nNotes: ${esc(q.notes)}` : ''}
-              </div>
-            </div>
-          </div>
-        </section>
-
         ${Object.keys(specs).length ? `
           <section class="dist-quote-section dist-quote-section--specs">
             <div class="dist-quote-section-head">
@@ -2745,6 +2728,23 @@
                 </div>`).join('')}
             </div>
           </section>` : ''}
+
+        <section class="dist-quote-section dist-quote-section--terms">
+          <div class="dist-quote-terms-grid">
+            <div>
+              <div class="dist-quote-section-head"><h2>Payment terms</h2></div>
+              <div class="dist-quote-notes dist-quote-payment-terms">${esc(paymentTerms)}</div>
+            </div>
+            <div>
+              <div class="dist-quote-section-head"><h2>Validity</h2></div>
+              <div class="dist-quote-notes">
+                Valid for 30 days from issue date${validUntil ? ` (until ${esc(formatDistDate(validUntil))})` : ''}.
+                Prices and availability are subject to confirmation at order.
+                ${q.notes ? `\n\nNotes: ${esc(q.notes)}` : ''}
+              </div>
+            </div>
+          </div>
+        </section>
 
         <footer class="dist-quote-doc-footer">
           <div class="dist-quote-footer-note">${esc(footer)}</div>
