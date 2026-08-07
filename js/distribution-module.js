@@ -2514,9 +2514,13 @@
     sheet.className = 'dist-quote-sheet';
     sheet.innerHTML = `
       <div class="dist-quote-toolbar no-print">
-        <button type="button" class="btn btn-primary btn-sm" data-dist-print-run>Print / Save PDF</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-dist-print-close>Close</button>
+        <div class="dist-quote-toolbar-hint">Full quotation preview — scroll to see everything</div>
+        <div class="dist-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-dist-print-run>Print / Save PDF</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-dist-print-close>Close</button>
+        </div>
       </div>
+      <div class="dist-quote-scroll">
       <article class="dist-quote-doc dist-quote-doc--portrait dist-quote-doc--compact">
         <div class="dist-quote-accent"></div>
 
@@ -2659,10 +2663,14 @@
             <div class="dist-quote-sign-caption">Authorized signature / stamp</div>
           </div>
         </footer>
-      </article>`;
+      </article>
+      </div>`;
 
     document.body.appendChild(sheet);
     document.body.classList.add('dist-quote-open');
+
+    const scrollEl = sheet.querySelector('.dist-quote-scroll');
+    if (scrollEl) scrollEl.scrollTop = 0;
 
     sheet.querySelector('[data-dist-print-close]')?.addEventListener('click', closeQuotePrintSheet);
     sheet.querySelector('[data-dist-print-run]')?.addEventListener('click', () => {
