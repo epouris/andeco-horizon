@@ -955,6 +955,38 @@
   padding-left: 0.85rem;
 }
 
+.dist-quote-colors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.65rem 0.85rem;
+}
+
+.dist-quote-color {
+  padding: 0.55rem 0.65rem 0.6rem;
+  border-top: 2px solid var(--dist-accent, #1f6f8b);
+  background: linear-gradient(180deg, #f7fafc 0%, #fff 100%);
+}
+
+.dist-quote-color-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #627d98;
+  margin-bottom: 0.2rem;
+}
+
+.dist-quote-color-value {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--dist-navy, #0b2545);
+  line-height: 1.25;
+}
+
+.dist-quote-colors input[type="text"] {
+  width: 100%;
+  min-width: 140px;
+}
+
 .dist-quote-doc table.dist-quote-lines-print {
   width: 100%;
   border-collapse: collapse;
