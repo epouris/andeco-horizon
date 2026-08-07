@@ -384,14 +384,19 @@
 }
 .quote-header-preview-logos {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
   margin-bottom: 0.55rem;
 }
 .quote-header-preview-logos img {
   max-height: 48px;
   max-width: 110px;
   object-fit: contain;
+}
+.quote-header-preview-logos img#quote-header-preview-brand {
+  max-height: 40px;
+  max-width: 100px;
 }
 .quote-header-preview-mark {
   display: grid;
