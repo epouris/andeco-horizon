@@ -2666,6 +2666,367 @@
     createQuote(prospectId);
   }
 
+  /* ─── Configurator PDF import (quote drafting aid) ─── */
+  function normalizeMatchText(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[’’′]/g, "'")
+      .replace(/[“”″]/g, '"')
+      .replace(/(\d)[,.](\d{3})\b/g, '$1$2')
+      .replace(/(\d)\.(\d{3})\b/g, '$1$2')
+      .replace(/ltrs?\b/g, 'l')
+      .replace(/litres?\b/g, 'l')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function significantTokens(value) {
+    const stop = {
+      a: 1, an: 1, and: 1, or: 1, the: 1, with: 1, for: 1, of: 1, to: 1, x: 1,
+      option: 1, options: 1, system: 1, package: 1, colour: 1, color: 1,
+      olympic: 1, ribs: 1, rib: 1
+    };
+    return normalizeMatchText(value)
+      .split(' ')
+      .filter((t) => t && t.length > 1 && !stop[t]);
+  }
+
+  function tokenScore(query, candidate) {
+    const q = significantTokens(query);
+    const c = significantTokens(candidate);
+    if (!q.length || !c.length) return 0;
+    let hits = 0;
+    q.forEach((t) => {
+      if (c.indexOf(t) !== -1) hits += 1;
+      else if (c.some((ct) => ct.indexOf(t) !== -1 || t.indexOf(ct) !== -1)) hits += 0.5;
+    });
+    return hits / q.length;
+  }
+
+  async function extractPdfText(file) {
+    const pdfjs = window.pdfjsLib;
+    if (!pdfjs || typeof pdfjs.getDocument !== 'function') {
+      throw new Error('PDF reader is not available. Refresh the page and try again.');
+    }
+    if (pdfjs.GlobalWorkerOptions) {
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+    const data = new Uint8Array(await file.arrayBuffer());
+    const doc = await pdfjs.getDocument({ data }).promise;
+    const chunks = [];
+    for (let i = 1; i <= doc.numPages; i += 1) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      const lines = [];
+      let lastY = null;
+      let buf = [];
+      content.items.forEach((item) => {
+        const str = item && item.str != null ? String(item.str) : '';
+        if (!str) return;
+        const y = item.transform ? item.transform[5] : null;
+        if (lastY != null && y != null && Math.abs(lastY - y) > 6) {
+          lines.push(buf.join(' ').replace(/\s+/g, ' ').trim());
+          buf = [];
+        }
+        buf.push(str);
+        if (y != null) lastY = y;
+      });
+      if (buf.length) lines.push(buf.join(' ').replace(/\s+/g, ' ').trim());
+      chunks.push(lines.filter(Boolean).join('\n'));
+    }
+    return chunks.join('\n');
+  }
+
+  function parseOlympicRibsConfiguratorText(text) {
+    const raw = String(text || '');
+    const flat = raw.replace(/\s+/g, ' ').trim();
+    const olrRef = ((flat.match(/YOUR CODE:\s*([A-Z0-9]+)/i) || [])[1] || '').toUpperCase();
+    let modelName = '';
+    const modelNearCode = flat.match(/Created on:\s*[\d./-]+\s+([A-Z0-9][A-Z0-9 /-]{1,24}?)\s+YOUR CODE/i);
+    if (modelNearCode) modelName = modelNearCode[1].trim();
+    if (!modelName) {
+      const lineModel = raw.match(/Created on:[^\n]*\n+\s*([A-Z0-9][A-Z0-9 /-]{1,24})/i);
+      if (lineModel) modelName = lineModel[1].trim();
+    }
+    modelName = modelName.replace(/\s+/g, ' ').trim();
+
+    const selections = [];
+    const codeRe = /\b([A-Z]{2,}[A-Z0-9]*(?:-\d{2,})?(?:-(?:45SRC(?:-S)?|40SRC|40SR-2S|40SR|30SR))?)\b/g;
+    let m;
+    while ((m = codeRe.exec(flat))) {
+      const code = m[1];
+      if (!/\d/.test(code)) continue;
+      if (/^(CATEGORY|OPTION|CODE|CREATED)$/i.test(code)) continue;
+      const start = Math.max(0, m.index - 140);
+      let label = flat.slice(start, m.index).trim();
+      label = label
+        .replace(/.*\b(?:CATEGORY OPTION OPTION CODE|Layouts|Engines|Rigging|Colours|Colors|Upholstery|Cabin & Wetbar|Electronics & Lighting|Covers & Awning|Other|DRIVE|HELM|ENGINE COLOUR|ENGINES|JOYSTICKS & THRUSTERS|MAIN DECK|DECK OPTIONS|FOAM DECK MAIN COLOUR|SECONDARY COLOUR|HULL|TUBES|BIMINI TOP|FENDER|MAIN COLOUR|CABIN|WET BAR|TABLES|ELECTRICS & ELECTRONICS|LIGHTING|PLOTTERS|COMMUNICATION|SOUND|GENERATORS|COVERS & AWNING|OPTIONS)\b/gi, '')
+        .replace(/^[-–·|:]+/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!label || label.length < 2) continue;
+      if (/^this image is not representative/i.test(label)) continue;
+      selections.push({ label, code });
+    }
+
+    // Deduplicate by code
+    const seen = {};
+    const unique = [];
+    selections.forEach((sel) => {
+      const key = String(sel.code || '').toUpperCase();
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      unique.push(sel);
+    });
+
+    return {
+      olrRef,
+      modelName,
+      selections: unique,
+      createdOn: ((flat.match(/Created on:\s*([\d./-]+)/i) || [])[1] || '')
+    };
+  }
+
+  function findModelFromConfiguratorName(modelName) {
+    const target = normalizeMatchText(modelName).replace(/\s+/g, '');
+    if (!target) return null;
+    const models = (state.models || []).filter((m) => m && m.active !== false);
+    let best = null;
+    let bestScore = 0;
+    models.forEach((m) => {
+      const name = normalizeMatchText(m.name).replace(/\s+/g, '');
+      if (!name) return;
+      let score = 0;
+      if (name === target) score = 1;
+      else if (name.indexOf(target) !== -1 || target.indexOf(name) !== -1) score = 0.92;
+      else score = tokenScore(modelName, m.name);
+      // Prefer exact cabin/outboard variants when present in target.
+      if (/src$/.test(target) && /src$/.test(name) && !/srcs?$/.test(name.replace(/src$/, 'src'))) {
+        /* keep */
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = m;
+      }
+    });
+    return bestScore >= 0.7 ? best : null;
+  }
+
+  function isColourOnlySelection(sel) {
+    const code = String(sel.code || '').toUpperCase();
+    const label = normalizeMatchText(sel.label);
+    if (/COL\d*$/.test(code) || /^(DECOL|MDCOL|MDSCOL|UPSTCOL|HUCOL|TUCOL|BMCOL|TUFCOL|UPMCOL|MERENGCOL)/.test(code)) {
+      return true;
+    }
+    if (/^(jet black|storm grey|anthracite|neptune grey|maglia|white|black|cold fusion|pearl white|ice white)/.test(label)) {
+      return true;
+    }
+    return false;
+  }
+
+  function matchEngineOption(label, model, colourHints) {
+    const opts = (state.options || []).filter(
+      (o) =>
+        o &&
+        o.active !== false &&
+        isEngineOption(o) &&
+        (!o.modelIds || !o.modelIds.length || o.modelIds.indexOf(model.id) !== -1)
+    );
+    const q = normalizeMatchText(label);
+    const wantsTwin = /\b(twin|dual|2 x|2x)\b/.test(q);
+    const wantsTriple = /\b(triple|3 x|3x)\b/.test(q);
+    const brand =
+      (/\byamaha\b/.test(q) && 'YAMAHA') ||
+      (/\bmercury\b/.test(q) && 'MERCURY') ||
+      (/\bhonda\b/.test(q) && 'HONDA') ||
+      (/\bsuzuki\b/.test(q) && 'SUZUKI') ||
+      '';
+    const nums = (q.match(/\b\d{2,4}\b/g) || []).filter((n) => Number(n) >= 90);
+    const hint = normalizeMatchText((colourHints || []).join(' '));
+    const wantsCf = /\bcold fusion\b|\bcf\b/.test(hint) || /\bcold fusion\b|\bcf\b/.test(q);
+    const wantsWhite = /\bpearl white\b|\bwhite\b/.test(hint) || /\bpearl white\b/.test(q);
+
+    let best = null;
+    let bestScore = 0;
+    opts.forEach((o) => {
+      const cand = normalizeMatchText(`${o.subgroup || ''} ${o.name || ''}`);
+      let score = tokenScore(label, `${o.subgroup || ''} ${o.name || ''}`);
+      if (brand && normalizeMatchText(o.subgroup) === normalizeMatchText(brand)) score += 0.35;
+      if (wantsTwin && /\b(twin|dual)\b/.test(cand)) score += 0.2;
+      if (wantsTriple && /\btriple\b/.test(cand)) score += 0.2;
+      nums.forEach((n) => {
+        if (cand.indexOf(n) !== -1) score += 0.15;
+      });
+      if (wantsCf && /\bcf\b|\bcold fusion\b/.test(cand)) score += 0.25;
+      if (wantsWhite && /\bwhite\b|\bpearl\b/.test(cand)) score += 0.1;
+      if (score > bestScore) {
+        bestScore = score;
+        best = o;
+      }
+    });
+    return bestScore >= 0.75 ? best : null;
+  }
+
+  function matchCatalogOption(label, model) {
+    const opts = (state.options || []).filter(
+      (o) =>
+        o &&
+        o.active !== false &&
+        !isEngineOption(o) &&
+        (!o.modelIds || !o.modelIds.length || o.modelIds.indexOf(model.id) !== -1)
+    );
+    let best = null;
+    let bestScore = 0;
+    opts.forEach((o) => {
+      const cand = `${o.subgroup ? o.subgroup + ' ' : ''}${o.name || ''}`;
+      const score = tokenScore(label, cand);
+      if (score > bestScore) {
+        bestScore = score;
+        best = o;
+      }
+    });
+    return bestScore >= 0.55 ? best : null;
+  }
+
+  function matchConfiguratorToCatalog(parsed) {
+    const model = findModelFromConfiguratorName(parsed.modelName);
+    const colourHints = (parsed.selections || [])
+      .filter(isColourOnlySelection)
+      .map((s) => s.label);
+    const matched = [];
+    const unmatched = [];
+    const matchedIds = [];
+
+    (parsed.selections || []).forEach((sel) => {
+      if (isColourOnlySelection(sel)) {
+        unmatched.push({ ...sel, reason: 'colour/finish (not a priced catalog option)' });
+        return;
+      }
+      const isEngine =
+        /\b(mercury|yamaha|honda|suzuki)\b/i.test(sel.label) ||
+        /^ENG\d+/i.test(sel.code) ||
+        /\b(twin|dual|triple|f\d{2,3}|xto|v10|v12|bf\d+)/i.test(sel.label);
+      let opt = null;
+      if (model && isEngine) opt = matchEngineOption(sel.label, model, colourHints);
+      else if (model) opt = matchCatalogOption(sel.label, model);
+      // Skip layout-only codes that are not priced options.
+      if (!opt && /^LAY\d+/i.test(sel.code)) {
+        unmatched.push({ ...sel, reason: 'layout marker' });
+        return;
+      }
+      if (opt) {
+        if (matchedIds.indexOf(opt.id) === -1) matchedIds.push(opt.id);
+        matched.push({ ...sel, optionId: opt.id, optionName: `${opt.subgroup ? opt.subgroup + ' · ' : ''}${opt.name}` });
+      } else {
+        unmatched.push({ ...sel, reason: 'no catalog match' });
+      }
+    });
+
+    return { model, matched, unmatched, matchedIds, colourHints };
+  }
+
+  function buildImportSummaryNote(parsed, match) {
+    const lines = [
+      'Imported from OlympicRibs configurator PDF for quotation drafting help only (not a formal offer).',
+      parsed.olrRef ? `Configurator code: ${parsed.olrRef}` : '',
+      parsed.modelName ? `Configurator model: ${parsed.modelName}` : '',
+      match.matched.length ? `Matched options: ${match.matched.length}` : '',
+      match.unmatched.length
+        ? `Unmatched / review: ${match.unmatched
+            .slice(0, 12)
+            .map((u) => u.label)
+            .join('; ')}${match.unmatched.length > 12 ? '…' : ''}`
+        : ''
+    ].filter(Boolean);
+    return lines.join('\n');
+  }
+
+  async function importConfiguratorPdfFile(file, existingQuoteId) {
+    if (!file) return;
+    toast('Reading configurator PDF…', 'info');
+    const text = await extractPdfText(file);
+    const parsed = parseOlympicRibsConfiguratorText(text);
+    if (!parsed.olrRef && !parsed.modelName && !(parsed.selections || []).length) {
+      throw new Error('Could not read configurator selections from this PDF.');
+    }
+    const match = matchConfiguratorToCatalog(parsed);
+    if (!match.model) {
+      throw new Error(
+        `Could not match model "${parsed.modelName || 'unknown'}" in the catalog. Create/select the model first.`
+      );
+    }
+
+    let q = existingQuoteId ? quoteById(existingQuoteId) : null;
+    if (!q) {
+      createQuote();
+      q = quoteById(quoteEditorId);
+    }
+    if (!q) throw new Error('Could not open a quotation to import into.');
+
+    q.brandId = match.model.brandId;
+    q.modelId = match.model.id;
+    q.currency = match.model.currency || q.currency || 'EUR';
+    if (parsed.olrRef) q.olrRef = parsed.olrRef;
+    if (!q.vesselPhoto && match.model.photo) q.vesselPhoto = match.model.photo;
+
+    // Keep any existing custom lines; replace catalog-driven selections with matched ones.
+    syncQuoteSelectedOptions(q, match.matchedIds);
+
+    const summary = buildImportSummaryNote(parsed, match);
+    const existingNotes = String(q.notes || '').trim();
+    if (!existingNotes) q.notes = summary;
+    else if (existingNotes.indexOf('Imported from OlympicRibs configurator PDF') === -1) {
+      q.notes = `${existingNotes}\n\n${summary}`;
+    } else {
+      q.notes = summary;
+    }
+    q.configuratorImport = {
+      code: parsed.olrRef || '',
+      modelName: parsed.modelName || '',
+      matchedCount: match.matched.length,
+      unmatchedCount: match.unmatched.length,
+      unmatched: match.unmatched.slice(0, 40),
+      importedAt: new Date().toISOString()
+    };
+    q.updatedAt = new Date().toISOString();
+    recalcQuote(q);
+    await persist(true);
+    openQuoteEditor(q.id);
+    const msg = `Draft quote updated from configurator${parsed.olrRef ? ` (${parsed.olrRef})` : ''}: ${match.matched.length} option(s) matched${
+      match.unmatched.length ? `, ${match.unmatched.length} to review` : ''
+    }.`;
+    toast(msg, match.matched.length ? 'success' : 'info');
+    return { parsed, match, quote: q };
+  }
+
+  function bindConfiguratorPdfInput(root) {
+    const input = root.querySelector('#dist-config-pdf-file');
+    if (!input || input._bound) return;
+    input._bound = true;
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      try {
+        await importConfiguratorPdfFile(file, quoteEditorId || null);
+      } catch (err) {
+        console.error(err);
+        toast(err && err.message ? err.message : 'Failed to import configurator PDF', 'error');
+      }
+    });
+  }
+
+  function triggerConfiguratorPdfPicker(root) {
+    const input = root.querySelector('#dist-config-pdf-file');
+    if (!input) {
+      toast('Import control not available', 'error');
+      return;
+    }
+    input.click();
+  }
+
   /* ─── Quotations ─── */
   function renderQuotations() {
     const el = document.getElementById('dist-quotations');
@@ -2677,8 +3038,12 @@
     const list = [...state.quotations].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     el.innerHTML = `
       <div class="dist-toolbar">
-        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build quotations for potential clients from model options, apply line discounts, print, and convert to a proforma invoice.</p>
-        <button type="button" class="btn btn-primary" id="dist-new-quote">New quotation</button>
+        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build quotations for potential clients from model options, apply line discounts, print, and convert to a proforma invoice. You can import an OlympicRibs configurator PDF to pre-fill OLR Ref, model, and matched options for drafting.</p>
+        <div class="dist-actions">
+          <input type="file" id="dist-config-pdf-file" accept="application/pdf,.pdf" hidden>
+          <button type="button" class="btn btn-secondary" id="dist-import-config-pdf">Import configurator PDF</button>
+          <button type="button" class="btn btn-primary" id="dist-new-quote">New quotation</button>
+        </div>
       </div>
       <div class="dist-card">
         ${list.length ? `
@@ -2706,7 +3071,9 @@
             </tbody>
           </table>` : '<div class="dist-empty">No quotations yet.</div>'}
       </div>`;
+    bindConfiguratorPdfInput(el);
     el.querySelector('#dist-new-quote')?.addEventListener('click', () => createQuote());
+    el.querySelector('#dist-import-config-pdf')?.addEventListener('click', () => triggerConfiguratorPdfPicker(el));
     el.querySelectorAll('[data-dist-open-quote]').forEach((btn) => {
       btn.addEventListener('click', () => openQuoteEditor(btn.getAttribute('data-dist-open-quote')));
     });
@@ -2912,16 +3279,26 @@
       prospectLabel(a).localeCompare(prospectLabel(b))
     );
 
+    const importInfo = q.configuratorImport || null;
     el.innerHTML = `
       <div class="dist-toolbar">
         <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-back">← Back to list</button>
         <div class="dist-actions">
+          <input type="file" id="dist-config-pdf-file" accept="application/pdf,.pdf" hidden>
+          <button type="button" class="btn btn-secondary btn-sm" id="dist-import-config-pdf">Import configurator PDF</button>
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-print">Print / PDF</button>
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-proforma" ${q.convertedToProformaId ? 'disabled' : ''}>Convert to proforma</button>
           <button type="button" class="btn btn-secondary btn-sm" id="dist-quote-sold">Mark as sold vessel</button>
           <button type="button" class="btn btn-primary btn-sm" id="dist-quote-save">Save</button>
         </div>
       </div>
+      ${importInfo ? `
+        <div class="dist-import-banner">
+          <strong>Configurator draft assist</strong>
+          <span>Code ${esc(importInfo.code || q.olrRef || '—')} · matched ${esc(importInfo.matchedCount || 0)} option(s)${
+            importInfo.unmatchedCount ? ` · ${esc(importInfo.unmatchedCount)} to review` : ''
+          }. Review lines before sending.</span>
+        </div>` : ''}
       <div class="dist-card">
         <div class="dist-card-header">
           <h3>Quotation ${esc(q.number)}</h3>
@@ -3094,11 +3471,16 @@
       q.clientSnapshot = snap;
     };
 
+    bindConfiguratorPdfInput(el);
     el.querySelector('#dist-quote-back')?.addEventListener('click', () => {
       saveFields();
       persist(true);
       quoteEditorId = null;
       renderQuotations();
+    });
+    el.querySelector('#dist-import-config-pdf')?.addEventListener('click', () => {
+      saveFields();
+      triggerConfiguratorPdfPicker(el);
     });
     el.querySelector('#dist-quote-save')?.addEventListener('click', () => {
       saveFields();
