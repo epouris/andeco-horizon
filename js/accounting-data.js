@@ -62,6 +62,16 @@ window.AccountingData = (function () {
       socialInsurance: '',
       statement: '',
       proforma: ''
+    },
+    quotationHeader: {
+      companyName: '',
+      companyDetails: '',
+      headerKicker: 'Commercial offer',
+      headerTitle: 'Quotation',
+      companyLogo: '',
+      brandLogo: '',
+      brandSubtitle: '',
+      quoteFooter: ''
     }
   };
 
@@ -798,6 +808,43 @@ window.AccountingData = (function () {
     return '<img src="' + src + '" alt="Logo" class="' + cls + '">';
   }
 
+  function getQuotationHeader() {
+    var settings = getCompanySettings() || {};
+    var qh = settings.quotationHeader && typeof settings.quotationHeader === 'object'
+      ? settings.quotationHeader
+      : {};
+    var defaults = defaultSettings.quotationHeader || {};
+    return {
+      companyName: qh.companyName != null ? String(qh.companyName) : (defaults.companyName || ''),
+      companyDetails: qh.companyDetails != null ? String(qh.companyDetails) : (defaults.companyDetails || ''),
+      headerKicker: qh.headerKicker != null && String(qh.headerKicker).trim()
+        ? String(qh.headerKicker)
+        : (defaults.headerKicker || 'Commercial offer'),
+      headerTitle: qh.headerTitle != null && String(qh.headerTitle).trim()
+        ? String(qh.headerTitle)
+        : (defaults.headerTitle || 'Quotation'),
+      companyLogo: qh.companyLogo && String(qh.companyLogo).indexOf('data:') === 0 ? qh.companyLogo : '',
+      brandLogo: qh.brandLogo && String(qh.brandLogo).indexOf('data:') === 0 ? qh.brandLogo : '',
+      brandSubtitle: qh.brandSubtitle != null ? String(qh.brandSubtitle) : (defaults.brandSubtitle || ''),
+      quoteFooter: qh.quoteFooter != null ? String(qh.quoteFooter) : (defaults.quoteFooter || '')
+    };
+  }
+
+  function getQuotationLogoHtml(kind, className) {
+    var qh = getQuotationHeader();
+    var src = '';
+    if (kind === 'brand') src = qh.brandLogo || '';
+    else src = qh.companyLogo || '';
+    if (!src && kind !== 'brand') {
+      // Fall back to proforma / invoice / company logo for company slot only
+      src = getDocumentLogo('proforma') || getDocumentLogo('invoice') || '';
+    }
+    if (!src) return '';
+    var cls = className || 'dist-quote-logo';
+    var alt = kind === 'brand' ? 'Brand logo' : 'Company logo';
+    return '<img src="' + src + '" alt="' + alt + '" class="' + cls + '">';
+  }
+
   function getNextPaymentOrderNumber() {
     var settings = getCompanySettings();
     var start = settings.paymentOrderSequenceNumber || 1000;
@@ -1049,6 +1096,8 @@ window.AccountingData = (function () {
     getNextCustomerId: getNextCustomerId,
     getDocumentLogo: getDocumentLogo,
     getDocumentLogoHtml: getDocumentLogoHtml,
+    getQuotationHeader: getQuotationHeader,
+    getQuotationLogoHtml: getQuotationLogoHtml,
     getSubcontractors: getSubcontractors,
     saveSubcontractors: saveSubcontractors,
     getPaymentOrders: getPaymentOrders,
