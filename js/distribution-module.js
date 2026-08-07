@@ -100,6 +100,26 @@
     return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
   }
 
+  /** Single fee covering transportation and packaging (migrates legacy split fields). */
+  function transportPackagingFeeAmount(q) {
+    if (!q || typeof q !== 'object') return 0;
+    if (Object.prototype.hasOwnProperty.call(q, 'transportPackagingFee')) {
+      return feeAmount(q, 'transportPackagingFee');
+    }
+    return Math.round((feeAmount(q, 'transportFee') + feeAmount(q, 'packagingFee')) * 100) / 100;
+  }
+
+  function normalizeQuoteFees(q) {
+    if (!q || typeof q !== 'object') return q;
+    const combined = transportPackagingFeeAmount(q);
+    q.transportPackagingFee = combined;
+    // Keep legacy keys aligned so older data stays consistent.
+    q.transportFee = combined;
+    q.packagingFee = 0;
+    q.feesTotal = combined;
+    return q;
+  }
+
   function recalcQuote(q) {
     const lines = Array.isArray(q.lines) ? q.lines : [];
     let subtotal = 0;
@@ -110,11 +130,7 @@
       subtotal += ln.lineSubtotal;
       total += ln.lineTotal;
     });
-    const transport = feeAmount(q, 'transportFee');
-    const packaging = feeAmount(q, 'packagingFee');
-    q.transportFee = transport;
-    q.packagingFee = packaging;
-    q.feesTotal = Math.round((transport + packaging) * 100) / 100;
+    normalizeQuoteFees(q);
     q.subtotal = Math.round(subtotal * 100) / 100;
     q.discountAmount = Math.round((q.subtotal - total) * 100) / 100;
     q.linesTotal = Math.round(total * 100) / 100;
@@ -797,8 +813,7 @@
       if (q.olrRef == null) q.olrRef = '';
       if (q.vesselPhoto == null) q.vesselPhoto = '';
       if (q.paymentTerms == null) q.paymentTerms = s.settings.defaultPaymentTerms || '';
-      if (q.transportFee == null) q.transportFee = 0;
-      if (q.packagingFee == null) q.packagingFee = 0;
+      normalizeQuoteFees(q);
       return q;
     });
     // Discount is opt-in only. Clear the old Excel-seeded 25% default.
@@ -1856,6 +1871,7 @@
       olrRef: '',
       vesselPhoto: model.photo || '',
       paymentTerms: defaultPaymentTerms(),
+      transportPackagingFee: 0,
       transportFee: 0,
       packagingFee: 0,
       lines: [
@@ -1898,8 +1914,7 @@
     }
     if (q.olrRef == null) q.olrRef = '';
     if (q.paymentTerms == null) q.paymentTerms = defaultPaymentTerms();
-    if (q.transportFee == null) q.transportFee = 0;
-    if (q.packagingFee == null) q.packagingFee = 0;
+    normalizeQuoteFees(q);
     if (q.vesselPhoto == null) q.vesselPhoto = '';
     recalcQuote(q);
     if (!q.prospectId && q.clientId) q.prospectId = '';
@@ -1952,8 +1967,7 @@
           <div class="dist-field"><label>Email</label><input type="email" id="dq-cemail" value="${esc(q.clientSnapshot?.email || '')}"></div>
           <div class="dist-field"><label>Phone</label><input type="text" id="dq-cphone" value="${esc(q.clientSnapshot?.phone || '')}"></div>
           <div class="dist-field full"><label>Address</label><input type="text" id="dq-caddress" value="${esc(q.clientSnapshot?.address || '')}"></div>
-          <div class="dist-field"><label>Transportation fee (€)</label><input type="number" min="0" step="0.01" id="dq-transport" value="${esc(q.transportFee || 0)}"></div>
-          <div class="dist-field"><label>Packaging fee (€)</label><input type="number" min="0" step="0.01" id="dq-packaging" value="${esc(q.packagingFee || 0)}"></div>
+          <div class="dist-field"><label>Transportation &amp; packaging fee (€)</label><input type="number" min="0" step="0.01" id="dq-transport-packaging" value="${esc(q.transportPackagingFee || 0)}"></div>
           <div class="dist-field full"><label>Payment terms</label><textarea id="dq-payment" rows="3" placeholder="e.g. deposit / balance schedule">${esc(q.paymentTerms || '')}</textarea></div>
           <div class="dist-field full"><label>Notes (shown on quote)</label>
             <textarea id="dq-notes" rows="2">${esc(q.notes || '')}</textarea>
@@ -2029,8 +2043,7 @@
           <div class="row"><span>Quote total (list)</span><strong>${money(q.subtotal, q.currency)}</strong></div>
           <div class="row"><span>Discounts</span><strong>− ${money(q.discountAmount, q.currency)}</strong></div>
           <div class="row"><span>Lines after discount</span><strong>${money(q.linesTotal != null ? q.linesTotal : (q.subtotal - q.discountAmount), q.currency)}</strong></div>
-          <div class="row"><span>Transportation</span><strong>${money(feeAmount(q, 'transportFee'), q.currency)}</strong></div>
-          <div class="row"><span>Packaging</span><strong>${money(feeAmount(q, 'packagingFee'), q.currency)}</strong></div>
+          <div class="row"><span>Transportation &amp; packaging</span><strong>${money(transportPackagingFeeAmount(q), q.currency)}</strong></div>
           <div class="row grand"><span>Final quote total</span><strong>${money(q.total, q.currency)}</strong></div>
           ${q.convertedToProformaId ? `<div class="row"><span>Proforma</span><strong>${esc(q.convertedToProformaNumber || q.convertedToProformaId)}</strong></div>` : ''}
         </div>
@@ -2042,8 +2055,9 @@
       q.olrRef = String(el.querySelector('#dq-olr')?.value || '').trim();
       q.notes = el.querySelector('#dq-notes')?.value || '';
       q.paymentTerms = String(el.querySelector('#dq-payment')?.value || '').trim();
-      q.transportFee = Number(el.querySelector('#dq-transport')?.value) || 0;
-      q.packagingFee = Number(el.querySelector('#dq-packaging')?.value) || 0;
+      q.transportPackagingFee = Number(el.querySelector('#dq-transport-packaging')?.value) || 0;
+      q.transportFee = q.transportPackagingFee;
+      q.packagingFee = 0;
       const photoUrl = String(el.querySelector('#dq-photo-url')?.value || '').trim();
       if (photoUrl) q.vesselPhoto = photoUrl;
       q.prospectId = el.querySelector('#dq-prospect')?.value || '';
@@ -2182,17 +2196,15 @@
       persist();
       renderQuoteEditor(el);
     });
-    ['#dq-olr', '#dq-payment', '#dq-transport', '#dq-packaging', '#dq-notes', '#dq-date', '#dq-status'].forEach((sel) => {
+    ['#dq-olr', '#dq-payment', '#dq-transport-packaging', '#dq-notes', '#dq-date', '#dq-status'].forEach((sel) => {
       el.querySelector(sel)?.addEventListener('change', () => {
         saveFields();
         persist();
-        if (sel === '#dq-transport' || sel === '#dq-packaging') renderQuoteEditor(el);
+        if (sel === '#dq-transport-packaging') renderQuoteEditor(el);
       });
     });
-    ['#dq-transport', '#dq-packaging'].forEach((sel) => {
-      el.querySelector(sel)?.addEventListener('input', () => {
-        saveFields();
-      });
+    el.querySelector('#dq-transport-packaging')?.addEventListener('input', () => {
+      saveFields();
     });
     el.querySelector('#dq-photo-file')?.addEventListener('change', async (e) => {
       const file = e.target.files && e.target.files[0];
@@ -2494,8 +2506,7 @@
     const brand = brandById(q.brandId);
     const model = modelById(q.modelId);
     const vesselPhoto = resolveQuoteVesselPhoto(q, model);
-    const transport = feeAmount(q, 'transportFee');
-    const packaging = feeAmount(q, 'packagingFee');
+    const transportPackaging = transportPackagingFeeAmount(q);
     const paymentTerms = String(q.paymentTerms || '').trim() || defaultPaymentTerms();
     const olrRef = String(q.olrRef || '').trim();
     const companyBits = getCompanyContactBits();
@@ -2628,8 +2639,7 @@
               <div class="row"><span>List total</span><span>${money(q.subtotal, q.currency)}</span></div>
               ${hasDiscount ? `<div class="row"><span>Discounts</span><span>− ${money(q.discountAmount, q.currency)}</span></div>
               <div class="row"><span>After discount</span><span>${money(linesAfterDisc, q.currency)}</span></div>` : ''}
-              ${transport > 0 ? `<div class="row"><span>Transportation</span><span>${money(transport, q.currency)}</span></div>` : ''}
-              ${packaging > 0 ? `<div class="row"><span>Packaging</span><span>${money(packaging, q.currency)}</span></div>` : ''}
+              ${transportPackaging > 0 ? `<div class="row"><span>Transportation &amp; packaging</span><span>${money(transportPackaging, q.currency)}</span></div>` : ''}
               <div class="row grand">
                 <span>Final total</span>
                 <span>${money(q.total, q.currency)}</span>
@@ -2740,24 +2750,14 @@
         price: unitAfterDisc
       };
     });
-    const transport = feeAmount(q, 'transportFee');
-    const packaging = feeAmount(q, 'packagingFee');
-    if (transport > 0) {
+    const transportPackaging = transportPackagingFeeAmount(q);
+    if (transportPackaging > 0) {
       items.push({
-        description: 'Transportation',
+        description: 'Transportation & packaging',
         quantity: 1,
         persons: 1,
         hours: 0,
-        price: transport
-      });
-    }
-    if (packaging > 0) {
-      items.push({
-        description: 'Packaging',
-        quantity: 1,
-        persons: 1,
-        hours: 0,
-        price: packaging
+        price: transportPackaging
       });
     }
 
