@@ -521,6 +521,275 @@
     return { models, options, outboardId, sternId };
   }
 
+  /** OlympicRibs 30SR — from manufacturer price / equipment sheets. */
+  function build30SrCatalog(brandId, byKey) {
+    const modelId = uid('model');
+    const now = new Date().toISOString();
+    const only = [modelId];
+
+    const techSpecs = {
+      loa: '9.45 m',
+      boa: '2.92 m',
+      internalBeam: '1.8 m',
+      tubeDiam: '40 - 50 cm',
+      maxHp: '2 x 400 HP',
+      minHp: '2 x 200 HP',
+      suggestedHp: '2 x 300 HP',
+      dryWeight: '3100 Kg (incl. engines)',
+      fuelTank: '500 ltrs',
+      waterTank: '150 ltrs',
+      ceCategory: 'B',
+      pax: '10'
+    };
+
+    const standardEquipment = [
+      {
+        category: 'Decking',
+        items: ['Foam SeaDeck']
+      },
+      {
+        category: 'Tanks',
+        items: ['Fuel tanks 2 × 250 ltrs', 'Fresh water tank 1 × 150 ltrs']
+      },
+      {
+        category: 'Deck',
+        items: [
+          'Exterior upholstery with Silvertex fabrics',
+          'Aft shower',
+          'Automatic bilge pumps',
+          'Custom scuppers',
+          'Retractable swimming ladder',
+          'Custom handrails',
+          'Retractable cleats',
+          'Water and fuel fillers'
+        ]
+      },
+      {
+        category: 'Windlass system',
+        items: [
+          'Electric windlass 800W',
+          'Ultra Marine anchor 6kg',
+          'Stainless steel chain 35m 6mm',
+          'Custom bow stainless steel cover with roller and “U” bolt',
+          'Windlass control at console',
+          'Windlass remote control'
+        ]
+      },
+      {
+        category: 'T-Top',
+        items: [
+          'Powder coated INOX T-Top with skylight',
+          'Navigation light',
+          'Anchor light',
+          'LED spot lights',
+          'Ambient LED lights'
+        ]
+      },
+      {
+        category: 'Console interior area',
+        items: ['Electrics access hatches', 'LED lighting', 'USB charging socket']
+      },
+      {
+        category: 'Wet bar',
+        items: [
+          'LED cup holders',
+          'Sink with faucet (wet bar version)',
+          'Fridge 90 ltrs (wet bar version)',
+          'Freezer 35 ltrs (reverse sofa set-up)'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Batteries',
+        items: [
+          'Service batteries (2)',
+          'Main battery switch panel with ACR and remote switching',
+          'Batteries remote control',
+          'Shore power charger 16A with cable 15m'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Navigation & communications',
+        items: [
+          'Raymarine Axiom RV+ 12″ plotter',
+          'Map',
+          'Sonar',
+          'VHF RAY m90 with black box'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Boat control',
+        items: [
+          'Digital switching with Czone',
+          'Touch keypad',
+          'Custom Olympic RIBS interface'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Sound',
+        items: [
+          'JL Audio sound source MM105',
+          '4× JL Audio M3 7.7″ speakers',
+          '1× JL Audio subwoofer 10″',
+          'Amplifier JL Audio 600W'
+        ]
+      },
+      {
+        category: 'Electric and electronic equipment — Lights',
+        items: ['Single colour deck lights package', 'LED cupholders']
+      }
+    ];
+
+    const models = [
+      {
+        id: modelId,
+        brandId,
+        name: '30SR',
+        basePrice: 165349,
+        currency: 'EUR',
+        active: true,
+        techSpecs: Object.assign({}, techSpecs),
+        standardEquipment: standardEquipment.slice(),
+        photo: '',
+        notes:
+          '30SR with wet bar — standard equipment without engines. Engine lines are package prices (vessel + engines). Reverse sofa layout available as an option.',
+        createdAt: now
+      }
+    ];
+
+    const mk = (categoryKey, subgroup, name, price, modelIds, notes) => ({
+      id: uid('opt'),
+      categoryId: byKey[categoryKey],
+      brandId,
+      modelIds: modelIds || only,
+      subgroup: subgroup || '',
+      name,
+      price,
+      unit: 'pcs',
+      notes: notes || '',
+      active: true
+    });
+
+    const options = [
+      // Yamaha packages (vessel + engines)
+      mk(
+        'engines',
+        'YAMAHA',
+        'Single F350NSA — Light Grey Metallic (LCD 5″ / El. Throttles / El. Steering)',
+        208057
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Single F350NSA2 — Pearl White (LCD 5″ / El. Throttles / El. Steering)',
+        209894
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F200XSA — Light Grey Metallic (LCD 5″ / El. Throttles / El.Hy. Steering)',
+        221691
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F200XSA — Pearl White (LCD 5″ / El. Throttles / El.Hy. Steering)',
+        224730
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F250NSB — Light Grey Metallic (LCD 5″ / El. Throttles / El. Steering)',
+        238587
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F250NSB2 — Pearl White (LCD 5″ / El. Throttles / El. Steering)',
+        241749
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F300NSB — Light Grey Metallic (LCD 5″ / El. Throttles / El. Steering)',
+        242611
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F300NSB2 — Pearl White (LCD 5″ / El. Throttles / El. Steering)',
+        246060
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F350NSA — Light Grey Metallic (LCD 5″ / El. Throttles / El. Steering)',
+        247227
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'Twin F350NSA2 — Pearl White (LCD 5″ / El. Throttles / El. Steering)',
+        250903
+      ),
+
+      // Mercury packages
+      mk('engines', 'MERCURY', 'Twin 200 V6 CMS DTS (El.Hy. Steering)', 222065),
+      mk('engines', 'MERCURY', 'Twin 200 V6 CMS DTS CF (El.Hy. Steering)', 223923),
+      mk('engines', 'MERCURY', 'Twin 250 V8 CMS DTS (El.Hy. Steering)', 242076),
+      mk('engines', 'MERCURY', 'Twin 250 V8 CMS DTS CF (El.Hy. Steering)', 244160),
+      mk('engines', 'MERCURY', 'Twin 300 V8 CMS DTS (El.Hy. Steering)', 247061),
+      mk('engines', 'MERCURY', 'Twin 300 V8 CMS DTS CF (El.Hy. Steering)', 249146),
+
+      // Honda packages
+      mk('engines', 'HONDA', 'Single BF350 XDU (Dometic El. Steering)', 200935),
+      mk('engines', 'HONDA', 'Twin BF250 XDU/XCDZ NEW (Dometic El. Steering)', 222373),
+      mk('engines', 'HONDA', 'Twin BF250 XDU/XCDZ NEW WHITE (Dometic El. Steering)', 223389),
+      mk('engines', 'HONDA', 'Twin BF300 XDU/XCDZ NEW (Dometic El. Steering)', 231857),
+      mk('engines', 'HONDA', 'Twin BF350 XDU/XCDZ NEW (Dometic El. Steering)', 235921),
+
+      // Engine-specific upgrades
+      mk(
+        'engine_options',
+        '',
+        'Engine throttles upgrade with Premier (Mercury engines only)',
+        1050
+      ),
+      mk('engine_options', '', 'Yamaha Joystick & Auto Pilot (Yamaha engines only)', 7400),
+
+      // Layout
+      mk('other', '', 'Reverse sofa layout option', 3000),
+
+      // Covers & canopies
+      mk('covers', '', 'Full parking cover for winterising', 2800),
+      mk('covers', '', 'Console cover', 800),
+      mk('covers', '', 'Bow awning system with carbon poles', 2700),
+      mk('covers', '', 'Aft awning system with carbon poles', 4752),
+
+      // Electronics
+      mk('electronics', '', 'Second Raymarine plotter AXIOM 12″ RV+', 4286),
+      mk('electronics', '', 'Raymarine AIS', 4505),
+      mk('electronics', '', 'Solar panel 8A', 960),
+
+      // Lights / related packages
+      mk('lights', '', 'Underwater lights', 1342),
+      mk('lights', '', 'Deck & underwater lights upgrade full RGBW Shadowcaster', 7200),
+      mk('other', '', 'Electric toilet package', 2984),
+
+      // Decking
+      mk('decking', '', 'Burma teak decking upgrade', 10260),
+      mk('decking', '', 'Esthec decking upgrade', 9310),
+
+      // Exclusives
+      mk('exclusives', '', 'Corto Maltese Limited Edition Customization', 15000),
+
+      // Other / trailer
+      mk('other', '', 'Towing points', 2500),
+      mk('trailer', '', 'Trailer with brakes and EU CE', 1400)
+    ].filter((o) => !!o.categoryId);
+
+    return { models, options, modelId };
+  }
+
   function seedOlympicRibs() {
     const brandId = uid('brand');
     const cats = defaultCategories(brandId);
@@ -598,6 +867,7 @@
     }));
 
     const src45 = build45SrcCatalog(brandId, byKey);
+    const src30 = build30SrCatalog(brandId, byKey);
 
     return {
       brands: [
@@ -672,10 +942,11 @@
           notes: '',
           createdAt: new Date().toISOString()
         },
-        ...src45.models
+        ...src45.models,
+        ...src30.models
       ],
       optionCategories: cats,
-      options: options.concat(more, src45.options),
+      options: options.concat(more, src45.options, src30.options),
       quotations: [],
       soldVessels: [],
       potentialClients: [],
@@ -719,6 +990,36 @@
       byKey[key] = fallback.id;
     });
     const built = build45SrcCatalog(brand.id, byKey);
+    state.models = models.concat(built.models);
+    state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
+    pendingCatalogPersist = true;
+    return true;
+  }
+
+  function ensure30SrCatalog(state) {
+    if (!state || !Array.isArray(state.brands) || !state.brands.length) return false;
+    const brand =
+      state.brands.find((b) => String(b.slug || '').toLowerCase() === 'olympicribs') ||
+      state.brands.find((b) => /olympic\s*ribs/i.test(String(b.name || ''))) ||
+      state.brands[0];
+    if (!brand) return false;
+    const models = Array.isArray(state.models) ? state.models : [];
+    const already = models.some((m) => /^30\s*sr\b/i.test(String(m.name || '').trim()));
+    if (already) {
+      const beforeCats = (state.optionCategories || []).length;
+      ensureBrandCategories(state, brand.id);
+      if ((state.optionCategories || []).length > beforeCats) pendingCatalogPersist = true;
+      return false;
+    }
+    const byKey = ensureBrandCategories(state, brand.id);
+    ['engines', 'engine_options', 'covers', 'electronics', 'lights', 'other', 'decking', 'trailer', 'exclusives'].forEach((key) => {
+      if (byKey[key]) return;
+      const fallback = defaultCategories(brand.id).find((c) => c.key === key);
+      if (!fallback) return;
+      state.optionCategories.push(fallback);
+      byKey[key] = fallback.id;
+    });
+    const built = build30SrCatalog(brand.id, byKey);
     state.models = models.concat(built.models);
     state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
     pendingCatalogPersist = true;
@@ -836,6 +1137,7 @@
       });
     } else {
       ensure45SrcCatalog(s);
+      ensure30SrCatalog(s);
     }
     return s;
   }
