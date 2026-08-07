@@ -2877,11 +2877,20 @@
         !isEngineOption(o) &&
         (!o.modelIds || !o.modelIds.length || o.modelIds.indexOf(model.id) !== -1)
     );
+    const q = normalizeMatchText(label);
     let best = null;
     let bestScore = 0;
     opts.forEach((o) => {
       const cand = `${o.subgroup ? o.subgroup + ' ' : ''}${o.name || ''}`;
-      const score = tokenScore(label, cand);
+      const cn = normalizeMatchText(cand);
+      let score = tokenScore(label, cand);
+      if (/\blumishore\b|\brgb\b|\bshadow\b/.test(q) && /\blumishore\b|\brgb\b|\bshadow\b/.test(cn)) {
+        score += 0.35;
+      }
+      if (/\bseadeck\b|\bfoam deck\b/.test(q) && /\bseadeck\b|\bfoam\b|\besthec\b|\bteak\b/.test(cn)) {
+        score += 0.2;
+      }
+      if (/\bjoystick\b/.test(q) && /\bjoystick\b/.test(cn)) score += 0.25;
       if (score > bestScore) {
         bestScore = score;
         best = o;
