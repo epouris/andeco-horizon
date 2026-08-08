@@ -3577,8 +3577,22 @@ const app = {
                     alert('Please select an image file');
                     return;
                 }
+                // Compress logos so settings save does not fail on large camera files.
+                const finish = (dataUrl) => self.setQuoteHeaderLogoCard(kind, dataUrl);
+                if (typeof window !== 'undefined' &&
+                    window.DistributionModule &&
+                    typeof window.DistributionModule.compressImageFile === 'function') {
+                    window.DistributionModule.compressImageFile(file, { maxEdge: 900, maxBytes: 450 * 1024, quality: 0.86 })
+                        .then(finish)
+                        .catch(() => {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => finish(ev.target.result);
+                            reader.readAsDataURL(file);
+                        });
+                    return;
+                }
                 const reader = new FileReader();
-                reader.onload = (ev) => self.setQuoteHeaderLogoCard(kind, ev.target.result);
+                reader.onload = (ev) => finish(ev.target.result);
                 reader.readAsDataURL(file);
             });
         };
