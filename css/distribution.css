@@ -638,6 +638,66 @@
   display: block;
 }
 
+.dist-detail-photos-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.dist-detail-photo-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dist-detail-photo-slot-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dist-navy, #0b2545);
+}
+
+.dist-detail-photo-slot .dist-photo-preview {
+  aspect-ratio: 4 / 3;
+}
+
+.dist-detail-photo-slot input[type="url"],
+.dist-detail-photo-slot input[type="file"] {
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+.dist-quote-detail-photos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.dist-quote-detail-photo {
+  margin: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.dist-quote-detail-photo img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  border: 1px solid #d9e6ef;
+  background: #f7fafc;
+}
+
+.dist-quote-detail-photo figcaption {
+  margin-top: 0.28rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #627d98;
+  text-align: center;
+}
+
 .dist-quote-accent {
   height: 5px;
   background: linear-gradient(90deg, #0b2545 0%, #1f6f8b 55%, #c45c26 100%);
@@ -1154,6 +1214,7 @@
   }
   .dist-quote-titleblock { text-align: left; }
   .dist-quote-spec-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dist-quote-detail-photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dist-quote-vessel-photo,
   .dist-quote-vessel-photo img {
     max-height: 160px;
