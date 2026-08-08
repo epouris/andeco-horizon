@@ -729,21 +729,15 @@
   width: var(--dist-quote-logo-width);
 }
 
-.dist-quote-logo,
-.dist-quote-mark {
-  width: var(--dist-quote-logo-width);
-  max-width: var(--dist-quote-logo-width);
+.dist-quote-logos .dist-quote-logo,
+.dist-quote-logos .dist-quote-logo--company,
+.dist-quote-logos .dist-quote-logo--brand {
+  width: 100%;
+  max-width: 100%;
   max-height: 48px;
   height: auto;
   object-fit: contain;
   object-position: left center;
-}
-
-.dist-quote-logo--company,
-.dist-quote-logo--brand {
-  width: var(--dist-quote-logo-width);
-  max-width: var(--dist-quote-logo-width);
-  max-height: 48px;
 }
 
 .dist-quote-mark {
@@ -751,6 +745,9 @@
   place-items: center;
   width: 48px;
   height: 48px;
+  max-width: 120px;
+  max-height: 48px;
+  object-fit: contain;
   border-radius: 12px;
   background: linear-gradient(145deg, #0b2545, #1f6f8b);
   color: #fff;
