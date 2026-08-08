@@ -195,6 +195,16 @@ window.AccountingData = (function () {
         };
       })(),
       distribution: (function () {
+        // Prefer live module state so freshly uploaded quote photos are included
+        // even if localStorage quota prevented a local write.
+        try {
+          if (typeof window !== 'undefined' &&
+              window.DistributionModule &&
+              typeof window.DistributionModule.getState === 'function') {
+            var live = window.DistributionModule.getState();
+            if (live && typeof live === 'object') return live;
+          }
+        } catch (e0) {}
         try {
           var r = localStorage.getItem('andeco_distribution_data');
           if (r) return JSON.parse(r);

@@ -138,19 +138,98 @@
     return q;
   }
 
+  /** Escape text for HTML; keep data-image URLs intact (base64 can be large / contain +). */
+  function safeImgSrcAttr(src) {
+    const s = String(src || '');
+    if (!s) return '';
+    if (s.indexOf('data:image/') === 0) {
+      // Attribute-safe: no quotes/newlines in data URLs we produce.
+      return s.replace(/"/g, '').replace(/</g, '').replace(/\s+/g, '');
+    }
+    return esc(s);
+  }
+
   function readImageAsDataUrl(file, maxBytes) {
+    return compressImageFile(file, { maxBytes: maxBytes || 900 * 1024 });
+  }
+
+  /**
+   * Resize/compress uploads so quotation photos fit localStorage + shared save payload.
+   * Large camera images were failing save silently (QuotaExceeded), so photos looked lost.
+   */
+  function compressImageFile(file, opts) {
+    opts = opts || {};
+    const maxEdge = opts.maxEdge || 1400;
+    const maxBytes = opts.maxBytes || 900 * 1024;
+    const startQuality = opts.quality != null ? opts.quality : 0.82;
+
     return new Promise((resolve, reject) => {
       if (!file) {
         reject(new Error('No file selected'));
         return;
       }
-      if (maxBytes && file.size > maxBytes) {
-        reject(new Error('Image is too large (max 1.5 MB)'));
+      if (!String(file.type || '').startsWith('image/')) {
+        reject(new Error('Please select an image file'));
         return;
       }
+      // Allow large source files; we compress before storing.
+      if (file.size > 25 * 1024 * 1024) {
+        reject(new Error('Image is too large (max 25 MB source file)'));
+        return;
+      }
+
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
       reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Could not decode that image'));
+        img.onload = () => {
+          try {
+            let w = img.naturalWidth || img.width || 1;
+            let h = img.naturalHeight || img.height || 1;
+            const scale = Math.min(1, maxEdge / Math.max(w, h));
+            w = Math.max(1, Math.round(w * scale));
+            h = Math.max(1, Math.round(h * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Could not process image'));
+              return;
+            }
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+
+            // Prefer JPEG for photos; keep PNG only for small graphics with transparency.
+            const preferPng =
+              /png/i.test(file.type || '') && file.size < 400 * 1024 && Math.max(w, h) <= 900;
+            let dataUrl = '';
+            if (preferPng) {
+              dataUrl = canvas.toDataURL('image/png');
+              if (dataUrl.length <= maxBytes * 1.37) {
+                resolve(dataUrl);
+                return;
+              }
+            }
+            let q = startQuality;
+            dataUrl = canvas.toDataURL('image/jpeg', q);
+            while (dataUrl.length > maxBytes * 1.37 && q > 0.42) {
+              q = Math.round((q - 0.08) * 100) / 100;
+              dataUrl = canvas.toDataURL('image/jpeg', q);
+            }
+            if (dataUrl.length > maxBytes * 1.8) {
+              reject(new Error('Image is still too large after compression. Try a smaller photo.'));
+              return;
+            }
+            resolve(dataUrl);
+          } catch (err) {
+            reject(err && err.message ? err : new Error('Could not process image'));
+          }
+        };
+        img.src = String(reader.result || '');
+      };
       reader.readAsDataURL(file);
     });
   }
@@ -1915,12 +1994,17 @@
 
   function persist(immediate) {
     const ok = saveLocal();
-    touchLocalWriteGuard(immediate ? 10000 : 8000);
+    touchLocalWriteGuard(immediate ? 12000 : 8000);
+    // Always push shared save from live module state (via AccountingData buildFullPayload),
+    // even if localStorage quota failed — otherwise photo uploads are lost on reload/poll.
     const run = () => persistAllIfFile();
     if (immediate) {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = null;
       run();
+      if (!ok) {
+        toast('Photo may not stay saved locally (storage full). Shared save was still attempted — use a smaller image if it disappears.', 'error');
+      }
       return ok;
     }
     if (saveTimer) clearTimeout(saveTimer);
@@ -3366,7 +3450,7 @@
           <div class="dist-field full">
             <label>Vessel photo</label>
             <div class="dist-photo-row">
-              <div class="dist-photo-preview">${vesselPhoto ? `<img src="${esc(vesselPhoto)}" alt="Vessel">` : '<span>No photo yet</span>'}</div>
+              <div class="dist-photo-preview">${vesselPhoto ? `<img src="${safeImgSrcAttr(vesselPhoto)}" alt="Vessel">` : '<span>No photo yet</span>'}</div>
               <div class="dist-actions" style="flex-direction:column;align-items:stretch">
                 <input type="file" id="dq-photo-file" accept="image/*">
                 <input type="url" id="dq-photo-url" value="${esc(q.vesselPhoto && String(q.vesselPhoto).indexOf('data:') === 0 ? '' : (q.vesselPhoto || ''))}" placeholder="Or paste image URL">
@@ -3416,7 +3500,7 @@
             return `
               <div class="dist-detail-photo-slot" data-photo-slot="${esc(slot.key)}">
                 <div class="dist-detail-photo-slot-label">${esc(slot.label)}</div>
-                <div class="dist-photo-preview">${src ? `<img src="${esc(src)}" alt="${esc(slot.label)}">` : '<span>No photo</span>'}</div>
+                <div class="dist-photo-preview">${src ? `<img src="${safeImgSrcAttr(src)}" alt="${esc(slot.label)}">` : '<span>No photo</span>'}</div>
                 <div class="dist-actions" style="flex-direction:column;align-items:stretch;gap:.35rem">
                   <input type="file" accept="image/*" data-photo-file="${esc(slot.key)}">
                   <input type="url" data-photo-url="${esc(slot.key)}" value="${esc(urlValue)}" placeholder="Or paste image URL">
@@ -3501,6 +3585,14 @@
       q.packagingFee = 0;
       const photoUrl = String(el.querySelector('#dq-photo-url')?.value || '').trim();
       if (photoUrl) q.vesselPhoto = photoUrl;
+      normalizeQuoteDetailPhotos(q);
+      el.querySelectorAll('[data-photo-url]').forEach((input) => {
+        const key = input.getAttribute('data-photo-url');
+        if (!key) return;
+        const typed = String(input.value || '').trim();
+        // Keep an uploaded data-URL when the URL field is left blank.
+        if (typed) q.detailPhotos[key] = typed;
+      });
       q.prospectId = el.querySelector('#dq-prospect')?.value || '';
       q.clientId = '';
       q.clientSnapshot = {
@@ -3693,10 +3785,12 @@
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       try {
-        q.vesselPhoto = await readImageAsDataUrl(file, 1.5 * 1024 * 1024);
+        toast('Saving vessel photo…', 'info');
+        q.vesselPhoto = await readImageAsDataUrl(file, 900 * 1024);
         q.updatedAt = new Date().toISOString();
-        await persist(true);
+        const ok = persist(true);
         renderQuoteEditor(el);
+        if (ok) toast('Vessel photo saved');
       } catch (err) {
         console.error(err);
         toast(err?.message || 'Could not read that image', 'error');
@@ -3721,11 +3815,14 @@
         const file = e.target.files && e.target.files[0];
         if (!key || !file) return;
         try {
+          const slot = QUOTE_PHOTO_SLOTS.find((s) => s.key === key);
+          toast(`Saving ${slot ? slot.label : 'photo'}…`, 'info');
           normalizeQuoteDetailPhotos(q);
-          q.detailPhotos[key] = await readImageAsDataUrl(file, 1.5 * 1024 * 1024);
+          q.detailPhotos[key] = await readImageAsDataUrl(file, 900 * 1024);
           q.updatedAt = new Date().toISOString();
-          await persist(true);
+          const ok = persist(true);
           renderQuoteEditor(el);
+          if (ok) toast(`${slot ? slot.label : 'Photo'} saved`);
         } catch (err) {
           console.error(err);
           toast(err?.message || 'Could not read that image', 'error');
@@ -4216,7 +4313,7 @@
           </div>
           ${vesselPhoto ? `
             <div class="dist-quote-vessel-photo">
-              <img src="${esc(vesselPhoto)}" alt="${esc((brand?.name || '') + ' ' + (model?.name || 'Vessel'))}">
+              <img src="${safeImgSrcAttr(vesselPhoto)}" alt="${esc((brand?.name || '') + ' ' + (model?.name || 'Vessel'))}">
             </div>` : ''}
         </section>
 
@@ -4274,7 +4371,7 @@
             <div class="dist-quote-detail-photos">
               ${detailPhotoList.map((p) => `
                 <figure class="dist-quote-detail-photo">
-                  <img src="${esc(p.src)}" alt="${esc(p.label)}">
+                  <img src="${safeImgSrcAttr(p.src)}" alt="${esc(p.label)}">
                   <figcaption>${esc(p.label)}</figcaption>
                 </figure>`).join('')}
             </div>
@@ -4687,6 +4784,7 @@
     persist,
     isBusy,
     shouldAcceptRemote,
+    compressImageFile,
     SECTIONS
   };
 
