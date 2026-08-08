@@ -161,6 +161,43 @@
     return '';
   }
 
+  const QUOTE_PHOTO_SLOTS = [
+    { key: 'hull', label: 'Hull' },
+    { key: 'fore', label: 'Fore' },
+    { key: 'aft', label: 'Aft' },
+    { key: 'tubes', label: 'Tubes' },
+    { key: 'interior', label: 'Interior' },
+    { key: 'electronics', label: 'Electronics' }
+  ];
+
+  function emptyDetailPhotos() {
+    const photos = {};
+    QUOTE_PHOTO_SLOTS.forEach((slot) => {
+      photos[slot.key] = '';
+    });
+    return photos;
+  }
+
+  function normalizeQuoteDetailPhotos(q) {
+    if (!q || typeof q !== 'object') return q;
+    const src = q.detailPhotos && typeof q.detailPhotos === 'object' ? q.detailPhotos : {};
+    const next = emptyDetailPhotos();
+    QUOTE_PHOTO_SLOTS.forEach((slot) => {
+      next[slot.key] = String(src[slot.key] || '').trim();
+    });
+    q.detailPhotos = next;
+    return q;
+  }
+
+  function quoteDetailPhotosList(q) {
+    normalizeQuoteDetailPhotos(q);
+    return QUOTE_PHOTO_SLOTS.map((slot) => ({
+      key: slot.key,
+      label: slot.label,
+      src: q.detailPhotos[slot.key] || ''
+    })).filter((p) => p.src);
+  }
+
   function defaultCategories(brandId) {
     return [
       { id: uid('cat'), brandId, key: 'engines', label: 'Main engines', sortOrder: 10, subgroupBy: true },
@@ -1798,6 +1835,7 @@
       if (q.vesselPhoto == null) q.vesselPhoto = '';
       if (q.paymentTerms == null) q.paymentTerms = s.settings.defaultPaymentTerms || '';
       normalizeQuoteColors(q);
+      normalizeQuoteDetailPhotos(q);
       normalizeQuoteFees(q);
       return q;
     });
@@ -3189,6 +3227,7 @@
       currency: model.currency || 'EUR',
       olrRef: '',
       colors: [],
+      detailPhotos: emptyDetailPhotos(),
       vesselPhoto: model.photo || '',
       paymentTerms: defaultPaymentTerms(),
       transportPackagingFee: 0,
@@ -3254,6 +3293,7 @@
     if (q.olrRef == null) q.olrRef = '';
     if (q.paymentTerms == null) q.paymentTerms = defaultPaymentTerms();
     normalizeQuoteColors(q);
+    normalizeQuoteDetailPhotos(q);
     normalizeQuoteFees(q);
     if (q.vesselPhoto == null) q.vesselPhoto = '';
     recalcQuote(q);
@@ -3261,6 +3301,7 @@
     const brand = brandById(q.brandId);
     const model = modelById(q.modelId);
     const vesselPhoto = resolveQuoteVesselPhoto(q, model);
+    const detailPhotos = q.detailPhotos || emptyDetailPhotos();
     const prospects = [...(state.potentialClients || [])].sort((a, b) =>
       prospectLabel(a).localeCompare(prospectLabel(b))
     );
@@ -3361,6 +3402,28 @@
                 </tr>`).join('') : '<tr><td colspan="3" class="dist-empty">No colours yet. Import a configurator PDF or add a row.</td></tr>'}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="dist-card" style="margin-top:1rem">
+        <div class="dist-card-header">
+          <h3>Detail photos</h3>
+        </div>
+        <div class="dist-detail-photos-editor">
+          ${QUOTE_PHOTO_SLOTS.map((slot) => {
+            const src = detailPhotos[slot.key] || '';
+            const urlValue = src && String(src).indexOf('data:') === 0 ? '' : src;
+            return `
+              <div class="dist-detail-photo-slot" data-photo-slot="${esc(slot.key)}">
+                <div class="dist-detail-photo-slot-label">${esc(slot.label)}</div>
+                <div class="dist-photo-preview">${src ? `<img src="${esc(src)}" alt="${esc(slot.label)}">` : '<span>No photo</span>'}</div>
+                <div class="dist-actions" style="flex-direction:column;align-items:stretch;gap:.35rem">
+                  <input type="file" accept="image/*" data-photo-file="${esc(slot.key)}">
+                  <input type="url" data-photo-url="${esc(slot.key)}" value="${esc(urlValue)}" placeholder="Or paste image URL">
+                  <button type="button" class="btn btn-secondary btn-sm" data-photo-clear="${esc(slot.key)}" ${src ? '' : 'disabled'}>Remove</button>
+                </div>
+              </div>`;
+          }).join('')}
         </div>
       </div>
 
@@ -3651,6 +3714,45 @@
       q.updatedAt = new Date().toISOString();
       persist(true);
       renderQuoteEditor(el);
+    });
+    el.querySelectorAll('[data-photo-file]').forEach((input) => {
+      input.addEventListener('change', async (e) => {
+        const key = input.getAttribute('data-photo-file');
+        const file = e.target.files && e.target.files[0];
+        if (!key || !file) return;
+        try {
+          normalizeQuoteDetailPhotos(q);
+          q.detailPhotos[key] = await readImageAsDataUrl(file, 1.5 * 1024 * 1024);
+          q.updatedAt = new Date().toISOString();
+          await persist(true);
+          renderQuoteEditor(el);
+        } catch (err) {
+          console.error(err);
+          toast(err?.message || 'Could not read that image', 'error');
+        }
+      });
+    });
+    el.querySelectorAll('[data-photo-url]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const key = input.getAttribute('data-photo-url');
+        if (!key) return;
+        normalizeQuoteDetailPhotos(q);
+        q.detailPhotos[key] = String(input.value || '').trim();
+        q.updatedAt = new Date().toISOString();
+        persist(true);
+        renderQuoteEditor(el);
+      });
+    });
+    el.querySelectorAll('[data-photo-clear]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-photo-clear');
+        if (!key) return;
+        normalizeQuoteDetailPhotos(q);
+        q.detailPhotos[key] = '';
+        q.updatedAt = new Date().toISOString();
+        persist(true);
+        renderQuoteEditor(el);
+      });
     });
     el.querySelector('#dq-open-options')?.addEventListener('click', () => {
       saveFields();
@@ -4016,7 +4118,9 @@
     const paymentTerms = String(q.paymentTerms || '').trim() || defaultPaymentTerms();
     const olrRef = String(q.olrRef || '').trim();
     normalizeQuoteColors(q);
+    normalizeQuoteDetailPhotos(q);
     const colors = Array.isArray(q.colors) ? q.colors : [];
+    const detailPhotoList = quoteDetailPhotosList(q);
     const companyBits = getCompanyContactBits();
     const qh = getQuotationHeaderSettings();
     const company = qh.companyName || state.settings.companyName || companyBits.name || 'OlympicRibs Distribution';
@@ -4158,6 +4262,21 @@
                   <div class="dist-quote-color-label">${esc(c.area || 'Colour')}</div>
                   <div class="dist-quote-color-value">${esc(c.value || '—')}</div>
                 </div>`).join('')}
+            </div>
+          </section>` : ''}
+
+        ${detailPhotoList.length ? `
+          <section class="dist-quote-section dist-quote-section--detail-photos">
+            <div class="dist-quote-section-head">
+              <h2>Photos</h2>
+              <span>${detailPhotoList.length} view${detailPhotoList.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="dist-quote-detail-photos">
+              ${detailPhotoList.map((p) => `
+                <figure class="dist-quote-detail-photo">
+                  <img src="${esc(p.src)}" alt="${esc(p.label)}">
+                  <figcaption>${esc(p.label)}</figcaption>
+                </figure>`).join('')}
             </div>
           </section>` : ''}
 
