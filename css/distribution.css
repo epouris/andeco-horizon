@@ -1489,6 +1489,9 @@ body.dist-modal-open { overflow: hidden; }
   body.dist-quote-open .dist-quote-spec-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
   }
+  body.dist-quote-open .dist-quote-detail-photos {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
   body.dist-quote-open .dist-quote-std-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
