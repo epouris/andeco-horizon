@@ -3343,9 +3343,6 @@
             <button type="button" class="btn btn-secondary btn-sm" id="dq-color-add">Add colour</button>
           </div>
         </div>
-        <p class="dist-hint" style="margin:0 0 .75rem">
-          Fill from the configurator PDF (YOUR CODE → OLR Ref, colour/finish lines → here). Edit freely; other quote items stay manual.
-        </p>
         <div style="overflow-x:auto">
           <table class="dist-table dist-quote-colors">
             <thead>
