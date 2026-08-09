@@ -3409,42 +3409,58 @@ const app = {
     // Settings
     loadSettingsForm() {
         const settings = DataStore.getCompanySettings();
-        
-        document.getElementById('company-name').value = settings.companyName || '';
-        document.getElementById('company-address').value = settings.companyAddress || '';
-        document.getElementById('company-email').value = settings.companyEmail || '';
-        document.getElementById('company-phone').value = settings.companyPhone || '';
-        document.getElementById('company-tax-id').value = settings.companyTaxId || '';
-        document.getElementById('company-registration').value = settings.companyRegistration || '';
-        document.getElementById('company-website').value = settings.companyWebsite || '';
-        document.getElementById('company-currency').value = settings.currency || 'EUR';
-        
-        // Load banks and products
-        this.renderBanksList(settings.banks || []);
-        this.renderProductsList();
-        document.getElementById('invoice-sequence-number').value = settings.invoiceSequenceNumber || 1000;
-        document.getElementById('receipt-sequence-number').value = settings.receiptSequenceNumber || 1000;
-        var poSeq = document.getElementById('payment-order-sequence-number');
-        if (poSeq) poSeq.value = settings.paymentOrderSequenceNumber || 1000;
-        var pfSeq = document.getElementById('proforma-sequence-number');
-        if (pfSeq) pfSeq.value = settings.proformaSequenceNumber || 1000;
-        document.getElementById('default-tax-rate').value = settings.defaultTaxRate || 0;
-        document.getElementById('default-payment-terms').value = settings.defaultPaymentTerms || 30;
-        document.getElementById('default-invoice-notes').value = settings.defaultInvoiceNotes || '';
+        const setVal = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.value = value;
+        };
 
-        // Load logo
-        if (settings.logo) {
-            document.getElementById('logo-image').src = settings.logo;
-            document.getElementById('logo-image').style.display = 'block';
-            document.getElementById('logo-placeholder').style.display = 'none';
-            document.getElementById('remove-logo').style.display = 'inline-block';
-        } else {
-            document.getElementById('logo-image').style.display = 'none';
-            document.getElementById('logo-placeholder').style.display = 'block';
-            document.getElementById('remove-logo').style.display = 'none';
+        try {
+            setVal('company-name', settings.companyName || '');
+            setVal('company-address', settings.companyAddress || '');
+            setVal('company-email', settings.companyEmail || '');
+            setVal('company-phone', settings.companyPhone || '');
+            setVal('company-tax-id', settings.companyTaxId || '');
+            setVal('company-registration', settings.companyRegistration || '');
+            setVal('company-website', settings.companyWebsite || '');
+            setVal('company-currency', settings.currency || 'EUR');
+
+            // Load banks and products
+            this.renderBanksList(settings.banks || []);
+            this.renderProductsList();
+            setVal('invoice-sequence-number', settings.invoiceSequenceNumber || 1000);
+            setVal('receipt-sequence-number', settings.receiptSequenceNumber || 1000);
+            setVal('payment-order-sequence-number', settings.paymentOrderSequenceNumber || 1000);
+            setVal('proforma-sequence-number', settings.proformaSequenceNumber || 1000);
+            setVal('default-tax-rate', settings.defaultTaxRate || 0);
+            setVal('default-payment-terms', settings.defaultPaymentTerms || 30);
+            setVal('default-invoice-notes', settings.defaultInvoiceNotes || '');
+
+            // Load logo
+            const logoImage = document.getElementById('logo-image');
+            const logoPlaceholder = document.getElementById('logo-placeholder');
+            const removeLogo = document.getElementById('remove-logo');
+            if (settings.logo && logoImage) {
+                logoImage.src = settings.logo;
+                logoImage.style.display = 'block';
+                if (logoPlaceholder) logoPlaceholder.style.display = 'none';
+                if (removeLogo) removeLogo.style.display = 'inline-block';
+            } else {
+                if (logoImage) logoImage.style.display = 'none';
+                if (logoPlaceholder) logoPlaceholder.style.display = 'block';
+                if (removeLogo) removeLogo.style.display = 'none';
+            }
+            this.loadDocumentLogosForm(settings);
+        } catch (err) {
+            console.error('Settings form load failed', err);
         }
-        this.loadDocumentLogosForm(settings);
-        this.loadQuotationHeaderForm(settings);
+
+        // Always load quotation header logos even if earlier fields failed.
+        try {
+            this.initQuotationHeaderUploads();
+            this.loadQuotationHeaderForm(settings);
+        } catch (err2) {
+            console.error('Quotation header form load failed', err2);
+        }
     },
 
     setQuoteHeaderLogoCard(kind, dataUrl) {
@@ -3555,53 +3571,67 @@ const app = {
     },
 
     initQuotationHeaderUploads() {
-        if (document.getElementById('quote-header-logos-grid')?._quoteHeaderBound) return;
         const root = document.getElementById('quote-header-logos-grid');
         if (!root) return;
+        if (root._quoteHeaderBound) return;
         root._quoteHeaderBound = true;
         const self = this;
 
         const bindLogo = (kind, uploadId, fileId, removeId) => {
-            document.getElementById(uploadId)?.addEventListener('click', () => {
-                document.getElementById(fileId)?.click();
-            });
-            document.getElementById(removeId)?.addEventListener('click', () => {
-                self.setQuoteHeaderLogoCard(kind, '');
-                const fileInput = document.getElementById(fileId);
-                if (fileInput) fileInput.value = '';
-            });
-            document.getElementById(fileId)?.addEventListener('change', (e) => {
-                const file = e.target.files && e.target.files[0];
-                if (!file) return;
-                if (!file.type.startsWith('image/')) {
-                    alert('Please select an image file');
-                    return;
-                }
-                // Compress logos so settings save does not fail on large camera files.
-                const finish = (dataUrl) => self.setQuoteHeaderLogoCard(kind, dataUrl);
-                if (typeof window !== 'undefined' &&
-                    window.DistributionModule &&
-                    typeof window.DistributionModule.compressImageFile === 'function') {
-                    window.DistributionModule.compressImageFile(file, { maxEdge: 900, maxBytes: 450 * 1024, quality: 0.86 })
-                        .then(finish)
-                        .catch(() => {
-                            const reader = new FileReader();
-                            reader.onload = (ev) => finish(ev.target.result);
-                            reader.readAsDataURL(file);
-                        });
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onload = (ev) => finish(ev.target.result);
-                reader.readAsDataURL(file);
-            });
+            const uploadBtn = document.getElementById(uploadId);
+            const fileInput = document.getElementById(fileId);
+            const removeBtn = document.getElementById(removeId);
+            if (uploadBtn && fileInput) {
+                uploadBtn.addEventListener('click', () => {
+                    fileInput.disabled = false;
+                    fileInput.click();
+                });
+            }
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    self.setQuoteHeaderLogoCard(kind, '');
+                    if (fileInput) fileInput.value = '';
+                    self.updateQuotationHeaderPreview();
+                });
+            }
+            if (fileInput) {
+                fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) return;
+                    if (!file.type.startsWith('image/')) {
+                        alert('Please select an image file');
+                        return;
+                    }
+                    // Compress logos so settings save does not fail on large camera files.
+                    const finish = (dataUrl) => {
+                        self.setQuoteHeaderLogoCard(kind, dataUrl);
+                        self.updateQuotationHeaderPreview();
+                    };
+                    if (typeof window !== 'undefined' &&
+                        window.DistributionModule &&
+                        typeof window.DistributionModule.compressImageFile === 'function') {
+                        window.DistributionModule.compressImageFile(file, { maxEdge: 900, maxBytes: 450 * 1024, quality: 0.86 })
+                            .then(finish)
+                            .catch(() => {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => finish(ev.target.result);
+                                reader.readAsDataURL(file);
+                            });
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (ev) => finish(ev.target.result);
+                    reader.readAsDataURL(file);
+                });
+            }
         };
 
         bindLogo('company', 'quote-header-company-logo-upload', 'quote-header-company-logo-file', 'quote-header-company-logo-remove');
         bindLogo('brand', 'quote-header-brand-logo-upload', 'quote-header-brand-logo-file', 'quote-header-brand-logo-remove');
 
         ['quote-header-company-name', 'quote-header-company-details', 'quote-header-kicker', 'quote-header-title', 'quote-header-brand-subtitle', 'quote-header-footer'].forEach((id) => {
-            document.getElementById(id)?.addEventListener('input', () => self.updateQuotationHeaderPreview());
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => self.updateQuotationHeaderPreview());
         });
     },
 

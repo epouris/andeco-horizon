@@ -194,11 +194,13 @@
     },
     settings: {
       company: [
-        { id: 'profile', label: 'Company profile' },
-        { id: 'branding', label: 'Branding' }
+        { id: 'profile', label: 'Company profile' }
       ],
       'document-logos': [
         { id: 'prints', label: 'Print logos' }
+      ],
+      'quotation-header': [
+        { id: 'header', label: 'Header & logos' }
       ],
       accounting: [
         { id: 'defaults', label: 'Defaults' },

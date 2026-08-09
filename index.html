@@ -1243,8 +1243,35 @@
                 <div class="settings-section-panel" data-section="quotation-header" style="display: none;">
                   <div class="form-section">
                     <h3>Quotation Header</h3>
-                    <p class="module-meta" style="margin-bottom: 1rem;">Controls the header shown on Distribution quotations (print / PDF). Upload both a company logo and a brand logo to appear side by side.</p>
-                    <div class="form-row">
+                    <p class="module-meta" style="margin-bottom: 1rem;">Controls the header shown on Distribution quotations (print / PDF). Upload company and brand logos below, then save settings.</p>
+                    <h4 class="quote-header-logos-heading">Logos</h4>
+                    <div class="doc-logos-grid quote-header-logos-grid" id="quote-header-logos-grid">
+                      <div class="doc-logo-card" data-quote-logo="companyLogo">
+                        <h4>Company Logo</h4>
+                        <div class="doc-logo-preview quote-header-logo-preview">
+                          <img id="quote-header-company-logo-img" class="doc-logo-image" alt="Company logo" style="display:none;">
+                          <span class="doc-logo-placeholder">No company logo</span>
+                        </div>
+                        <input type="file" id="quote-header-company-logo-file" class="doc-logo-file" accept="image/*" hidden>
+                        <div class="logo-upload-controls">
+                          <button type="button" class="btn btn-secondary btn-sm" id="quote-header-company-logo-upload">Upload</button>
+                          <button type="button" class="btn btn-danger btn-sm" id="quote-header-company-logo-remove" style="display:none;">Remove</button>
+                        </div>
+                      </div>
+                      <div class="doc-logo-card" data-quote-logo="brandLogo">
+                        <h4>Brand Logo</h4>
+                        <div class="doc-logo-preview quote-header-logo-preview">
+                          <img id="quote-header-brand-logo-img" class="doc-logo-image" alt="Brand logo" style="display:none;">
+                          <span class="doc-logo-placeholder">No brand logo</span>
+                        </div>
+                        <input type="file" id="quote-header-brand-logo-file" class="doc-logo-file" accept="image/*" hidden>
+                        <div class="logo-upload-controls">
+                          <button type="button" class="btn btn-secondary btn-sm" id="quote-header-brand-logo-upload">Upload</button>
+                          <button type="button" class="btn btn-danger btn-sm" id="quote-header-brand-logo-remove" style="display:none;">Remove</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="form-row" style="margin-top: 1.25rem;">
                       <div class="form-group full-width">
                         <label for="quote-header-company-name">Company name on quotation</label>
                         <input type="text" id="quote-header-company-name" placeholder="e.g. Andeco / OlympicRibs Distribution">
@@ -1277,32 +1304,6 @@
                       <div class="form-group full-width">
                         <label for="quote-header-footer">Quotation footer note</label>
                         <textarea id="quote-header-footer" rows="2" placeholder="Prices in EUR. Quotation valid for 30 days…"></textarea>
-                      </div>
-                    </div>
-                    <div class="doc-logos-grid" id="quote-header-logos-grid" style="margin-top: 0.5rem;">
-                      <div class="doc-logo-card" data-quote-logo="companyLogo">
-                        <h4>Company Logo</h4>
-                        <div class="logo-preview doc-logo-preview">
-                          <img id="quote-header-company-logo-img" class="doc-logo-image" alt="Company logo" style="display:none;">
-                          <span class="doc-logo-placeholder">No company logo</span>
-                        </div>
-                        <input type="file" id="quote-header-company-logo-file" class="doc-logo-file" accept="image/*" style="display:none;">
-                        <div class="logo-upload-controls">
-                          <button type="button" class="btn btn-secondary btn-sm" id="quote-header-company-logo-upload">Upload</button>
-                          <button type="button" class="btn btn-danger btn-sm" id="quote-header-company-logo-remove" style="display:none;">Remove</button>
-                        </div>
-                      </div>
-                      <div class="doc-logo-card" data-quote-logo="brandLogo">
-                        <h4>Brand Logo</h4>
-                        <div class="logo-preview doc-logo-preview">
-                          <img id="quote-header-brand-logo-img" class="doc-logo-image" alt="Brand logo" style="display:none;">
-                          <span class="doc-logo-placeholder">No brand logo</span>
-                        </div>
-                        <input type="file" id="quote-header-brand-logo-file" class="doc-logo-file" accept="image/*" style="display:none;">
-                        <div class="logo-upload-controls">
-                          <button type="button" class="btn btn-secondary btn-sm" id="quote-header-brand-logo-upload">Upload</button>
-                          <button type="button" class="btn btn-danger btn-sm" id="quote-header-brand-logo-remove" style="display:none;">Remove</button>
-                        </div>
                       </div>
                     </div>
                     <div class="form-section" style="margin-top: 1.5rem; padding-top: 0;">
