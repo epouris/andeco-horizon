@@ -383,20 +383,26 @@
   background: linear-gradient(180deg, #f7fafc 0%, #ffffff 70%);
 }
 .quote-header-preview-logos {
+  --dist-quote-logo-width: 130px;
+  --dist-quote-logo-height: 56px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4rem;
+  align-items: stretch;
+  gap: 0.45rem;
   margin-bottom: 0.55rem;
+  width: var(--dist-quote-logo-width);
 }
-.quote-header-preview-logos img {
-  max-height: 48px;
-  max-width: 110px;
-  object-fit: contain;
-}
+.quote-header-preview-logos img,
+.quote-header-preview-logos img#quote-header-preview-company,
 .quote-header-preview-logos img#quote-header-preview-brand {
-  max-height: 40px;
-  max-width: 100px;
+  display: block;
+  box-sizing: border-box;
+  width: var(--dist-quote-logo-width) !important;
+  max-width: var(--dist-quote-logo-width) !important;
+  height: var(--dist-quote-logo-height) !important;
+  max-height: var(--dist-quote-logo-height) !important;
+  object-fit: contain;
+  object-position: center center;
 }
 .quote-header-preview-mark {
   display: grid;
