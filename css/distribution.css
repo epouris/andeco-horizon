@@ -44,6 +44,7 @@
   border: 1px solid var(--dist-line);
   border-radius: 14px;
   padding: 1rem 1.1rem;
+  min-width: 0;
 }
 
 .dist-metric strong,
@@ -53,12 +54,42 @@
   color: var(--dist-navy);
   line-height: 1.1;
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dist-metric span,
 .dist-metric .label {
   color: #627d98;
   font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .dist-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+  .dist-metric { padding: 0.85rem 0.9rem; }
+  .dist-metric strong,
+  .dist-metric .value { font-size: 1.2rem; }
+  .dist-metric span,
+  .dist-metric .label { font-size: 0.75rem; }
+  .dist-card-header {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+  .dist-card-header h3,
+  .dist-card-header h2 {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .dist-card {
