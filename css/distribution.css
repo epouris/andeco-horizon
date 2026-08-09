@@ -732,13 +732,15 @@
   width: var(--dist-quote-company-logo-width);
 }
 
-.dist-quote-logos .dist-quote-logo,
-.dist-quote-logos .dist-quote-logo--company,
-.dist-quote-logos .dist-quote-logo--brand {
+.dist-quote-logos .dist-quote-logo {
   display: block;
   box-sizing: border-box;
   object-fit: contain;
   object-position: left center;
+  width: var(--dist-quote-company-logo-width) !important;
+  max-width: var(--dist-quote-company-logo-width) !important;
+  height: var(--dist-quote-company-logo-height) !important;
+  max-height: var(--dist-quote-company-logo-height) !important;
 }
 
 .dist-quote-logos .dist-quote-logo--company {
