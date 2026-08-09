@@ -157,6 +157,18 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 1rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fleet-module .fleet-toolbar > * { flex-shrink: 0; }
+
+@media (max-width: 768px) {
+  .fleet-module .fleet-toolbar { gap: 0.65rem; }
+  .fleet-metrics { flex-wrap: nowrap; overflow-x: auto; }
+  .fleet-metric { white-space: nowrap; flex-shrink: 0; }
 }
 
 .fleet-metrics {

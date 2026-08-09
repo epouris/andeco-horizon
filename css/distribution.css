@@ -10,15 +10,20 @@
 
 .distribution-module .page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.25rem;
+  min-width: 0;
 }
 
 .distribution-module .page-header h2 {
   margin: 0;
   color: var(--dist-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .distribution-module .dist-hint {
@@ -335,16 +340,22 @@
 
 .dist-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.65rem;
   align-items: center;
   margin-bottom: 1rem;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dist-toolbar .search-input,
 .dist-toolbar select {
-  min-width: 180px;
+  min-width: 160px;
+  flex-shrink: 0;
 }
+
+.dist-toolbar > * { flex-shrink: 0; }
 
 .dist-import-banner {
   display: flex;

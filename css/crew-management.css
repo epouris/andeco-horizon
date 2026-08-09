@@ -9,6 +9,18 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 1rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.crew-toolbar > * { flex-shrink: 0; }
+
+@media (max-width: 768px) {
+  .crew-toolbar { gap: 0.65rem; }
+  .crew-metrics { flex-wrap: nowrap; overflow-x: auto; }
+  .crew-metric { white-space: nowrap; flex-shrink: 0; }
 }
 
 .crew-metrics {
