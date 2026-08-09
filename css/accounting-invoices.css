@@ -372,6 +372,51 @@
 }
 .logo-upload-section { display: flex; flex-direction: column; gap: 1rem; }
 
+.quote-header-logos-heading {
+  margin: 0 0 0.65rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary, #0b2545);
+}
+#quote-header-logos-grid.quote-header-logos-grid,
+#quote-header-logos-grid.doc-logos-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 0 0 0.5rem;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+#quote-header-logos-grid .doc-logo-card {
+  display: block !important;
+  visibility: visible !important;
+}
+#quote-header-logos-grid .quote-header-logo-preview,
+#quote-header-logos-grid .doc-logo-preview {
+  min-height: 110px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app, #f8fafc);
+  border: 1px dashed var(--border-color, #d0d7de);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  padding: 10px;
+  overflow: hidden;
+}
+#quote-header-logos-grid .doc-logo-preview img.doc-logo-image {
+  max-height: 88px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+#quote-header-logos-grid .logo-upload-controls {
+  display: flex !important;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .quote-header-preview {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;

@@ -416,11 +416,28 @@
   function setSettingsSection(sectionId) {
     if (currentModulePageId !== 'settings') return;
     setGenericSectionPanels('#page-settings', '.settings-section-panel', sectionId);
-    syncSettingsFormFields(sectionId);
-    if (sectionId === 'payroll' && typeof window.loadCompanySettings === 'function') window.loadCompanySettings();
     if (window.AndecoModuleNav) {
       window.AndecoModuleNav.setActiveSectionOnSubtabs('settings', sectionId);
       window.AndecoModuleNav.activateSection('settings', sectionId);
+    }
+    syncSettingsFormFields(sectionId);
+    if (sectionId === 'payroll' && typeof window.loadCompanySettings === 'function') window.loadCompanySettings();
+    if (sectionId === 'quotation-header' && window.app) {
+      try {
+        if (typeof window.app.initQuotationHeaderUploads === 'function') {
+          window.app.initQuotationHeaderUploads();
+        }
+        if (typeof window.app.loadQuotationHeaderForm === 'function' &&
+            window.DataStore && typeof window.DataStore.getCompanySettings === 'function') {
+          window.app.loadQuotationHeaderForm(window.DataStore.getCompanySettings());
+        }
+      } catch (err) { /* ignore */ }
+      // Ensure upload controls are clickable after section switch / subsection wrap.
+      document.querySelectorAll(
+        '#quote-header-logos-grid button, #quote-header-logos-grid input[type="file"]'
+      ).forEach(function (el) {
+        el.disabled = false;
+      });
     }
   }
 
