@@ -720,41 +720,28 @@
 }
 
 .dist-quote-logos {
-  --dist-quote-company-logo-width: 160px;
-  --dist-quote-company-logo-height: 72px;
-  --dist-quote-brand-logo-width: 130px;
-  --dist-quote-brand-logo-height: 56px;
+  /* Shared box so company + brand logos render at the same width. */
+  --dist-quote-logo-width: 130px;
+  --dist-quote-logo-height: 56px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 0.45rem;
   flex-shrink: 0;
-  width: var(--dist-quote-company-logo-width);
+  width: var(--dist-quote-logo-width);
 }
 
-.dist-quote-logos .dist-quote-logo {
+.dist-quote-logos .dist-quote-logo,
+.dist-quote-logos .dist-quote-logo--company,
+.dist-quote-logos .dist-quote-logo--brand {
   display: block;
   box-sizing: border-box;
+  width: var(--dist-quote-logo-width) !important;
+  max-width: var(--dist-quote-logo-width) !important;
+  height: var(--dist-quote-logo-height) !important;
+  max-height: var(--dist-quote-logo-height) !important;
   object-fit: contain;
-  object-position: left center;
-  width: var(--dist-quote-company-logo-width) !important;
-  max-width: var(--dist-quote-company-logo-width) !important;
-  height: var(--dist-quote-company-logo-height) !important;
-  max-height: var(--dist-quote-company-logo-height) !important;
-}
-
-.dist-quote-logos .dist-quote-logo--company {
-  width: var(--dist-quote-company-logo-width) !important;
-  max-width: var(--dist-quote-company-logo-width) !important;
-  height: var(--dist-quote-company-logo-height) !important;
-  max-height: var(--dist-quote-company-logo-height) !important;
-}
-
-.dist-quote-logos .dist-quote-logo--brand {
-  width: var(--dist-quote-brand-logo-width) !important;
-  max-width: var(--dist-quote-brand-logo-width) !important;
-  height: var(--dist-quote-brand-logo-height) !important;
-  max-height: var(--dist-quote-brand-logo-height) !important;
+  object-position: center center;
 }
 
 .dist-quote-mark {
