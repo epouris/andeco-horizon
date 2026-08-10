@@ -1010,7 +1010,7 @@ body.home-view {
 .module-grid-wrap {
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   min-height: calc(100vh - 60px - 56px);
   min-height: calc(100dvh - 60px - 56px);
   padding: 40px 24px;
@@ -1018,16 +1018,17 @@ body.home-view {
 #app-screen.home-view .module-grid-wrap {
   flex: 1;
   min-height: 0;
-  padding: 24px;
+  padding: 28px 24px 40px;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  align-items: safe center;
+  align-items: flex-start;
+  justify-content: center;
 }
 .module-grid-wrap .module-grid {
   margin: 0 auto;
   width: 100%;
-  max-width: 1200px;
+  max-width: 880px;
 }
 
 .sidebar-nav .nav-item {
@@ -1127,11 +1128,12 @@ body.home-view {
   max-width: 1200px;
 }
 #app-screen.home-view .module-grid {
-  gap: 20px;
+  gap: 10px 8px;
   max-width: 100%;
+  justify-items: center;
 }
 #app-screen.home-view .module-card--tile {
-  padding: 18px 14px;
+  padding: 10px 6px;
   border: none;
   box-shadow: none;
   background: transparent;
@@ -1143,13 +1145,13 @@ body.home-view {
   transform: translateY(-2px);
 }
 #app-screen.home-view .module-icon-tile {
-  width: 52px;
-  height: 52px;
-  font-size: 24px;
-  margin-bottom: 8px;
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  margin-bottom: 6px;
 }
 #app-screen.home-view .module-title {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
 }
 
 .module-card {
