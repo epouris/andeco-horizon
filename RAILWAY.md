@@ -78,12 +78,26 @@ Tables created automatically on deploy (relational):
 
 The browser still uses `/api/data` + `/api/save`; the server maps that JSON onto these tables.
 
-## 6. Optional API token
+## 6. Authentication (required)
 
-To stop strangers from calling `/api/data` and `/api/save` if they find your URL:
+The app uses **server session cookies** after login:
+
+- `POST /api/login` creates an httpOnly session cookie
+- `/api/data` and `/api/save` require that session (or an automation token)
+- Password hashes are **never** sent to the browser
+- Passwords are stored with **bcrypt** (legacy SHA-256 hashes are upgraded on next login)
+
+### Optional automation token
+
+`ANDECO_API_TOKEN` is for scripts/admin tooling only. It is **not** injected into the HTML page.
 
 1. Web service → **Variables** → add `ANDECO_API_TOKEN` = a long random string.
-2. Redeploy. The server injects the token into the page for the browser; API calls require it.
+2. Redeploy.
+3. Call APIs with header: `Authorization: Bearer YOUR_TOKEN`.
+
+### Admin password on first seed
+
+Set `ANDECO_ADMIN_PASSWORD` before first deploy. If unset and no users exist, the server generates a random admin password and prints it once in deploy logs.
 
 ## 7. Confirm storage
 

@@ -14,9 +14,14 @@ window.AccountingData = (function () {
   var useFileStorage = false;
   var useSupabase = false;
   var supabasePendingAuth = false;
+  var workspaceRevision = '';
+  var lastSaveError = null;
+  var loadError = null;
 
   function apiHeaders(extra) {
     var h = extra ? Object.assign({}, extra) : {};
+    // Browser session auth uses cookies. Optional bearer token is only for tooling
+    // and must never be injected into page HTML by the server.
     var token = typeof window !== 'undefined' && window.ANDECO_API_TOKEN;
     if (token) h['Authorization'] = 'Bearer ' + token;
     return h;
@@ -24,6 +29,34 @@ window.AccountingData = (function () {
 
   function preferServerData() {
     return !!(typeof window !== 'undefined' && window.ANDECO_PREFER_SERVER_DATA);
+  }
+
+  function usesServerAuth() {
+    return !!(typeof window !== 'undefined' && (window.ANDECO_SERVER_AUTH || preferServerData()));
+  }
+
+  function setSaveBanner(message, isError) {
+    var el = typeof document !== 'undefined' ? document.getElementById('andeco-save-banner') : null;
+    if (!el) return;
+    if (!message) {
+      el.classList.add('hidden');
+      el.textContent = '';
+      return;
+    }
+    el.textContent = message;
+    el.classList.toggle('andeco-save-banner--error', !!isError);
+    el.classList.remove('hidden');
+  }
+
+  function notifySaveError(message) {
+    lastSaveError = message || 'Save failed.';
+    setSaveBanner(lastSaveError, true);
+    if (typeof console !== 'undefined' && console.warn) console.warn('Andeco save:', lastSaveError);
+  }
+
+  function clearSaveError() {
+    lastSaveError = null;
+    setSaveBanner('', false);
   }
   var sharedFileHandle = null;
   var memory = {
@@ -305,14 +338,41 @@ window.AccountingData = (function () {
         .then(function (w) {
           return w.write(JSON.stringify(payload, null, 2)).then(function () { return w.close(); });
         })
-        .catch(function () {});
+        .catch(function (err) {
+          notifySaveError((err && err.message) || 'Could not write shared data file.');
+        });
     }
     if (!useFileStorage) return Promise.resolve();
+    var body = buildFullPayload();
+    if (workspaceRevision) body._rev = workspaceRevision;
     return fetch(SAVE_API_URL, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: apiHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(buildFullPayload())
-    }).catch(function () {});
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        if (res.status === 409 || (json && json.code === 'CONFLICT')) {
+          if (json && json._rev) workspaceRevision = String(json._rev);
+          notifySaveError('Data was updated elsewhere. Reload the page before saving again.');
+          return false;
+        }
+        if (res.status === 401) {
+          notifySaveError('Session expired. Please sign in again.');
+          return false;
+        }
+        if (!res.ok) {
+          notifySaveError((json && json.error) || ('Save failed (' + res.status + ').'));
+          return false;
+        }
+        if (json && json._rev) workspaceRevision = String(json._rev);
+        clearSaveError();
+        return true;
+      });
+    }).catch(function (err) {
+      notifySaveError((err && err.message) || 'Save failed. Check your connection.');
+      return false;
+    });
   }
 
   function getInvoices() {
@@ -549,6 +609,7 @@ window.AccountingData = (function () {
 
   /** When shared file is empty but this browser still has old localStorage (e.g. after switching file:// → localhost). */
   function finishServerInit(data, useSupabaseBackend) {
+    if (data && data._rev != null) workspaceRevision = String(data._rev);
     if (!useSupabaseBackend && !preferServerData() && isServerPayloadAccountingEmpty(data) && hasLocalAccountingData()) {
       loadMemoryFromLocalInvKeys();
       var saved = {
@@ -679,6 +740,29 @@ window.AccountingData = (function () {
     });
   }
 
+  function loadWorkspace() {
+    loadError = null;
+    return fetch(DATA_FILE_URL, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: apiHeaders()
+    }).then(function (res) {
+      if (res.status === 401) {
+        loadError = 'Please sign in to load workspace data.';
+        return Promise.reject(new Error(loadError));
+      }
+      if (!res.ok) {
+        loadError = 'Could not load workspace data (' + res.status + ').';
+        return Promise.reject(new Error(loadError));
+      }
+      return res.json();
+    }).then(function (data) {
+      finishServerInit(data, false);
+      clearSaveError();
+      return data;
+    });
+  }
+
   function init() {
     var isFileProtocol = typeof window !== 'undefined' && window.location && window.location.protocol === 'file:';
     if (isFileProtocol) {
@@ -708,12 +792,34 @@ window.AccountingData = (function () {
         }
         return;
       }
-      return fetch(DATA_FILE_URL, { cache: 'no-store', headers: apiHeaders() })
-        .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+      // Session-auth mode: do not load workspace until the user is signed in.
+      if (usesServerAuth()) {
+        useFileStorage = false;
+        useSupabase = false;
+        applyLoadedData(emptyRemotePayload());
+        return;
+      }
+      return fetch(DATA_FILE_URL, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: apiHeaders()
+      })
+        .then(function (res) {
+          if (!res.ok) return Promise.reject(new Error('load failed'));
+          return res.json();
+        })
         .then(function (data) {
           finishServerInit(data, false);
         })
         .catch(function () {
+          if (preferServerData()) {
+            loadError = 'Could not load workspace from server.';
+            useFileStorage = false;
+            useSupabase = false;
+            applyLoadedData(emptyRemotePayload());
+            setSaveBanner(loadError, true);
+            return;
+          }
           useFileStorage = false;
           useSupabase = false;
           initLocalStorage();
@@ -1072,6 +1178,11 @@ window.AccountingData = (function () {
 
   return {
     init: init,
+    loadWorkspace: loadWorkspace,
+    usesServerAuth: usesServerAuth,
+    getLoadError: function () { return loadError; },
+    getLastSaveError: function () { return lastSaveError; },
+    getWorkspaceRevision: function () { return workspaceRevision; },
     loadFromData: loadFromData,
     persistAll: persistAll,
     isSupabaseMode: function () { return useSupabase; },

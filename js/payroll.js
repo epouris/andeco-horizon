@@ -2323,13 +2323,13 @@ function updateYTDDisplay() {
         
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${employee.firstName} ${employee.lastName}</td>
-            <td>${formatMoney(employeeGross)}</td>
-            <td>${formatMoney(employeeTax)}</td>
-            <td>${formatMoney(employeeSocialInsurance)}</td>
-            <td>${formatMoney(employeeHolidayFund)}</td>
-            <td>${formatMoney(employeeNHS)}</td>
-            <td>${formatMoney(employeeNet)}</td>
+            <td>${escapeEmployeeHtml(employee.firstName)} ${escapeEmployeeHtml(employee.lastName)}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeGross))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeTax))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeSocialInsurance))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeHolidayFund))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeNHS))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeNet))}</td>
         `;
         ytdTableBody.appendChild(row);
         
@@ -2419,12 +2419,12 @@ function updateSocialInsuranceYTDDisplay() {
 
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${employee.firstName} ${employee.lastName}</td>
-            <td>${employee.socialInsurance || '—'}</td>
-            <td>${formatMoney(employeeGross)}</td>
-            <td>${formatMoney(employeeSI)}</td>
-            <td>${formatMoney(employerSI)}</td>
-            <td>${formatMoney(totalSI)}</td>
+            <td>${escapeEmployeeHtml(employee.firstName)} ${escapeEmployeeHtml(employee.lastName)}</td>
+            <td>${escapeEmployeeHtml(employee.socialInsurance || '—')}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeGross))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employeeSI))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(employerSI))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(totalSI))}</td>
         `;
         tableBody.appendChild(row);
     });

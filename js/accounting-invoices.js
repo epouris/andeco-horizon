@@ -225,10 +225,8 @@ const app = {
         }
         var url = ANDECO_DATA_FILE_URL;
         var headers = {};
-        if (typeof window !== 'undefined' && window.ANDECO_API_TOKEN) {
-            headers['Authorization'] = 'Bearer ' + window.ANDECO_API_TOKEN;
-        }
-        fetch(url, { cache: 'no-store', headers: headers })
+        // Prefer session cookies; bearer token is optional tooling only.
+        fetch(url, { cache: 'no-store', credentials: 'same-origin', headers: headers })
             .then(function (res) { return res.ok ? res.json() : null; })
             .then(function (data) {
                 if (!data || typeof DataStore === 'undefined') return;
@@ -1329,45 +1327,69 @@ const app = {
             listEl.innerHTML = '<p class="copilot-drafts-empty">No draft invoices.</p>';
             return;
         }
-        listEl.innerHTML = drafts.map(inv => `
+        listEl.innerHTML = drafts.map(inv => {
+            const safeId = this.escapeJsString(inv.id);
+            return `
             <div class="copilot-draft-item">
-                <div class="copilot-draft-item-main" onclick="app.showPage('create-invoice'); app.setupInvoiceForm('${inv.id}')">
+                <div class="copilot-draft-item-main" onclick="app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">
                     <span class="copilot-draft-label">Draft</span>
-                    <span class="copilot-draft-client">${(inv.clientName || 'No client').replace(/"/g, '&quot;')}</span>
-                    <span class="copilot-draft-amount">${this.formatCurrency(inv.total)}</span>
+                    <span class="copilot-draft-client">${this.escapeHtml(inv.clientName || 'No client')}</span>
+                    <span class="copilot-draft-amount">${this.escapeHtml(this.formatCurrency(inv.total))}</span>
                 </div>
-                <button type="button" class="btn-delete-draft" onclick="event.stopPropagation(); if(confirm('Delete this draft invoice?')) { DataStore.deleteInvoice('${inv.id}'); app.renderCopilotDrafts(); app.renderInvoices(); }" aria-label="Delete draft">×</button>
+                <button type="button" class="btn-delete-draft" onclick="event.stopPropagation(); if(confirm('Delete this draft invoice?')) { DataStore.deleteInvoice('${safeId}'); app.renderCopilotDrafts(); app.renderInvoices(); }" aria-label="Delete draft">×</button>
             </div>
-        `).join('');
+        `;
+        }).join('');
+    },
+
+    escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    escapeJsString(value) {
+        return String(value == null ? '' : value)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/"/g, '\\"')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/</g, '\\x3c');
     },
 
     createInvoiceCardHTML(invoice) {
+        const safeId = this.escapeJsString(invoice.id);
         const displayNumber = (invoice.status === 'draft' && !invoice.invoiceNumber) ? 'Draft' : (invoice.invoiceNumber || '—');
         const label = this.getDocumentTypeLabel(invoice);
+        const status = this.escapeHtml(invoice.status || '');
         const converted = invoice.convertedToInvoiceId
             ? `<p class="module-meta">Converted to invoice</p>`
             : '';
         const convertBtn = this.isProformaDoc(invoice) && !invoice.convertedToInvoiceId
-            ? `<button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.convertProformaToInvoice('${invoice.id}')">Convert to Invoice</button>`
+            ? `<button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.convertProformaToInvoice('${safeId}')">Convert to Invoice</button>`
             : '';
         return `
             <div class="invoice-card">
-                <div class="invoice-info" onclick="app.viewInvoice('${invoice.id}')" style="flex: 1; cursor: pointer;">
-                    <h3>${displayNumber}</h3>
-                    <p><strong>${label}</strong></p>
-                    <p><strong>Client:</strong> ${invoice.clientName}</p>
-                    <p><strong>Date:</strong> ${this.formatDate(invoice.date)}</p>
-                    ${this.isProformaDoc(invoice) ? '' : `<p><strong>Due Date:</strong> ${this.formatDate(invoice.dueDate)}</p>`}
+                <div class="invoice-info" onclick="app.viewInvoice('${safeId}')" style="flex: 1; cursor: pointer;">
+                    <h3>${this.escapeHtml(displayNumber)}</h3>
+                    <p><strong>${this.escapeHtml(label)}</strong></p>
+                    <p><strong>Client:</strong> ${this.escapeHtml(invoice.clientName)}</p>
+                    <p><strong>Date:</strong> ${this.escapeHtml(this.formatDate(invoice.date))}</p>
+                    ${this.isProformaDoc(invoice) ? '' : `<p><strong>Due Date:</strong> ${this.escapeHtml(this.formatDate(invoice.dueDate))}</p>`}
                     ${converted}
                 </div>
                 <div class="invoice-meta">
-                    <div class="invoice-amount">${this.formatCurrency(invoice.total)}</div>
-                    <span class="invoice-status status-${invoice.status}">${invoice.status}</span>
+                    <div class="invoice-amount">${this.escapeHtml(this.formatCurrency(invoice.total))}</div>
+                    <span class="invoice-status status-${status}">${status}</span>
                     <div class="invoice-actions" style="margin-top: 0.5rem;">
-                        <button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.viewInvoice('${invoice.id}')">View</button>
-                        <button class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${invoice.id}')">Edit</button>
+                        <button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.viewInvoice('${safeId}')">View</button>
+                        <button class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">Edit</button>
                         ${convertBtn}
-                        <button class="btn btn-danger" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isProformaDoc(invoice) ? 'proforma' : 'invoice'}?')) { DataStore.deleteInvoice('${invoice.id}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
+                        <button class="btn btn-danger" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isProformaDoc(invoice) ? 'proforma' : 'invoice'}?')) { DataStore.deleteInvoice('${safeId}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
                     </div>
                 </div>
             </div>

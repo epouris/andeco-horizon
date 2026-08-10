@@ -849,6 +849,33 @@
     return !!(ds && typeof ds.isSupabaseConfigured === 'function' && ds.isSupabaseConfigured());
   }
 
+  function usesServerAuth() {
+    if (isFileProtocol()) return false;
+    if (usesCloudLogin()) return false;
+    var ds = window.AccountingData;
+    if (ds && typeof ds.usesServerAuth === 'function') return !!ds.usesServerAuth();
+    return !!(typeof window !== 'undefined' && window.ANDECO_SERVER_AUTH);
+  }
+
+  function fetchJson(url, options) {
+    var opts = options ? Object.assign({}, options) : {};
+    opts.credentials = 'same-origin';
+    opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    return fetch(url, opts).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        return { res: res, json: json };
+      });
+    });
+  }
+
+  function refreshUsersFromServer() {
+    return fetchJson('/api/users', { method: 'GET', headers: {} }).then(function (out) {
+      if (!out.res.ok || !out.json || !Array.isArray(out.json.users)) return getUsers();
+      saveUsers(out.json.users);
+      return out.json.users;
+    }).catch(function () { return getUsers(); });
+  }
+
   function configureUnifiedLoginUI(cloudAuth) {
     var loginSubtitle = document.querySelector('#login-screen .auth-tagline') ||
       document.querySelector('#login-screen .login-brand p.auth-tagline') ||
@@ -920,6 +947,30 @@
       var password = (document.getElementById('setup-password') || {}).value;
       var displayName = (document.getElementById('setup-displayname') || {}).value.trim();
       if (!username || !password || !displayName) return;
+      if (usesServerAuth()) {
+        fetchJson('/api/bootstrap', {
+          method: 'POST',
+          body: JSON.stringify({ username: username, password: password, displayName: displayName })
+        }).then(function (out) {
+          if (!out.res.ok || !out.json || !out.json.session) {
+            alert((out.json && out.json.error) || 'Setup failed.');
+            return null;
+          }
+          setSession(out.json.session);
+          var ds = window.AccountingData;
+          if (ds && typeof ds.loadWorkspace === 'function') {
+            return ds.loadWorkspace().then(function () {
+              if (typeof ds.notifyModulesDataLoaded === 'function') ds.notifyModulesDataLoaded();
+              startApp();
+            });
+          }
+          startApp();
+          return null;
+        }).catch(function () {
+          alert('Setup failed. Please try again.');
+        });
+        return;
+      }
 
       hashPassword(password).then(function (passwordHash) {
         var user = {
@@ -1000,6 +1051,39 @@
       var username = (document.getElementById('login-username') || {}).value.trim().toLowerCase();
       var password = (document.getElementById('login-password') || {}).value;
       if (!username || !password) return;
+
+      if (usesServerAuth()) {
+        fetchJson('/api/login', {
+          method: 'POST',
+          body: JSON.stringify({ username: username, password: password })
+        }).then(function (out) {
+          if (!out.res.ok || !out.json || !out.json.session) {
+            if (errorEl) {
+              errorEl.textContent = (out.json && out.json.error) || 'Invalid username or password.';
+              errorEl.classList.remove('hidden');
+            }
+            return null;
+          }
+          setSession(out.json.session);
+          var ds = window.AccountingData;
+          if (ds && typeof ds.loadWorkspace === 'function') {
+            return ds.loadWorkspace().then(function () {
+              if (typeof ds.notifyModulesDataLoaded === 'function') ds.notifyModulesDataLoaded();
+              if (out.json.session.isAdmin) return refreshUsersFromServer();
+            }).then(function () {
+              startApp();
+            });
+          }
+          startApp();
+          return null;
+        }).catch(function (err) {
+          if (errorEl) {
+            errorEl.textContent = (err && err.message) ? err.message : 'Login failed. Please try again.';
+            errorEl.classList.remove('hidden');
+          }
+        });
+        return;
+      }
 
       hashPassword(password).then(function (passwordHash) {
         var users = getUsers();
@@ -1186,6 +1270,38 @@
           if (document.getElementById('profile-confirm-password')) document.getElementById('profile-confirm-password').value = '';
         }
 
+        if (usesServerAuth()) {
+          var payload = { displayName: displayName };
+          if (changingPassword) {
+            payload.currentPassword = currentPassword;
+            payload.newPassword = newPassword;
+          }
+          fetchJson('/api/change-password', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          }).then(function (out) {
+            if (!out.res.ok) {
+              showError((out.json && out.json.error) || 'Could not update profile.');
+              return;
+            }
+            if (out.json && out.json.session) setSession(out.json.session);
+            else {
+              session.displayName = displayName;
+              setSession(session);
+            }
+            user.displayName = displayName;
+            saveUsers(users);
+            refreshHeaderUser();
+            showOk();
+            if (document.getElementById('profile-current-password')) document.getElementById('profile-current-password').value = '';
+            if (document.getElementById('profile-new-password')) document.getElementById('profile-new-password').value = '';
+            if (document.getElementById('profile-confirm-password')) document.getElementById('profile-confirm-password').value = '';
+          }).catch(function () {
+            showError('Could not update profile. Try again.');
+          });
+          return;
+        }
+
         if (!changingPassword) {
           finishSave(null);
           return;
@@ -1244,14 +1360,21 @@
     if (btn) {
       btn.addEventListener('click', function () {
         var ds = window.AccountingData;
-        var signOutPromise = (ds && typeof ds.signOutFromSupabase === 'function')
-          ? ds.signOutFromSupabase()
-          : Promise.resolve();
+        var signOutPromise = Promise.resolve();
+        if (usesServerAuth()) {
+          signOutPromise = fetchJson('/api/logout', { method: 'POST', body: '{}' }).catch(function () {});
+        } else if (ds && typeof ds.signOutFromSupabase === 'function') {
+          signOutPromise = ds.signOutFromSupabase();
+        }
         signOutPromise.finally(function () {
           clearSession();
           document.body.classList.remove('home-view');
           document.body.classList.remove('lms-portal-active');
           if (usesCloudLogin()) {
+            showScreen('login-screen');
+            return;
+          }
+          if (usesServerAuth()) {
             showScreen('login-screen');
             return;
           }
@@ -1375,6 +1498,33 @@
 
         if (!username || !displayName) return;
         var users = getUsers();
+
+        if (usesServerAuth()) {
+          if (!userId && !password) return;
+          fetchJson('/api/users', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: userId || undefined,
+              username: username,
+              displayName: displayName,
+              isAdmin: isAdmin,
+              allowedModules: isAdmin ? MODULE_IDS.slice() : allowedModules,
+              password: password || undefined
+            })
+          }).then(function (out) {
+            if (!out.res.ok) {
+              alert((out.json && out.json.error) || 'Could not save user.');
+              return;
+            }
+            if (out.json && Array.isArray(out.json.users)) saveUsers(out.json.users);
+            formWrap.classList.add('hidden');
+            form.reset();
+            renderAdminUserList();
+          }).catch(function () {
+            alert('Could not save user. Try again.');
+          });
+          return;
+        }
 
         if (userId) {
           var user = users.filter(function (u) { return u.id === userId; })[0];
@@ -1606,6 +1756,37 @@
           return;
         }
         showScreen('login-screen');
+        return;
+      }
+
+      if (usesServerAuth()) {
+        fetchJson('/api/session', { method: 'GET', headers: {} }).then(function (out) {
+          if (out.json && out.json.hasUsers === false) {
+            clearSession();
+            showScreen('setup-screen');
+            return null;
+          }
+          var serverSession = out.json && out.json.session;
+          if (!serverSession) {
+            clearSession();
+            showScreen('login-screen');
+            return null;
+          }
+          setSession(serverSession);
+          if (ds && typeof ds.loadWorkspace === 'function') {
+            return ds.loadWorkspace().then(function () {
+              if (typeof ds.notifyModulesDataLoaded === 'function') ds.notifyModulesDataLoaded();
+              if (serverSession.isAdmin) return refreshUsersFromServer();
+            }).then(function () {
+              startApp();
+            });
+          }
+          startApp();
+          return null;
+        }).catch(function () {
+          clearSession();
+          showScreen('login-screen');
+        });
         return;
       }
 
