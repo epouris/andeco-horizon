@@ -1148,6 +1148,26 @@
     if (displayEl) displayEl.focus();
   }
 
+  function greetingForHour(hour) {
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  function refreshHomeGreeting(session) {
+    session = session || getSession();
+    var titleEl = document.getElementById('home-greeting-title');
+    var eyebrowEl = document.getElementById('home-greeting-eyebrow');
+    if (!titleEl) return;
+    var name = session
+      ? String(session.displayName || session.username || 'there').trim()
+      : 'there';
+    if (!name) name = 'there';
+    var first = name.split(/\s+/)[0] || name;
+    titleEl.textContent = greetingForHour(new Date().getHours()) + ', ' + first;
+    if (eyebrowEl) eyebrowEl.textContent = 'Welcome back';
+  }
+
   function refreshHeaderUser(session) {
     session = session || getSession();
     if (!session) return;
@@ -1156,6 +1176,7 @@
     var initial = document.getElementById('avatar-initial');
     var name = session.displayName || session.username || '';
     if (initial) initial.textContent = name.charAt(0) ? name.charAt(0).toUpperCase() : 'U';
+    refreshHomeGreeting(session);
   }
 
   function initProfileMenu() {
