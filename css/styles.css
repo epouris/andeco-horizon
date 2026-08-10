@@ -1982,6 +1982,8 @@ body.home-view {
   .main-content #page-home,
   .main-content .page-home { margin: -20px -16px -36px; padding: 0; }
   #app-screen.home-view .module-grid-wrap { padding: 16px 12px 28px; }
+  .home-greeting { margin-bottom: 1rem; }
+  .home-greeting-title { font-size: 1.3rem; }
   #app-screen.home-view .module-grid { gap: 8px 6px; }
   #app-screen.home-view .module-card--tile { padding: 8px 4px; }
   #app-screen.home-view .module-icon-tile {
