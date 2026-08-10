@@ -1946,15 +1946,16 @@ body.home-view {
   .module-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
   .main-content #page-home,
   .main-content .page-home { margin: -20px -16px -36px; padding: 0; }
-  #app-screen.home-view .module-grid-wrap { padding: 20px 16px 28px; }
-  #app-screen.home-view .module-card--tile { padding: 16px 10px; }
+  #app-screen.home-view .module-grid-wrap { padding: 16px 12px 28px; }
+  #app-screen.home-view .module-grid { gap: 8px 6px; }
+  #app-screen.home-view .module-card--tile { padding: 8px 4px; }
   #app-screen.home-view .module-icon-tile {
-    width: 48px;
-    height: 48px;
-    font-size: 22px;
-    margin-bottom: 8px;
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+    margin-bottom: 5px;
   }
-  #app-screen.home-view .module-title { font-size: 0.82rem; }
+  #app-screen.home-view .module-title { font-size: 0.8rem; }
   .module-detail-page { margin: -20px -16px -36px; min-height: calc(100dvh - 60px); }
   .module-detail { padding: 16px 14px 28px; }
   .module-detail-wrap { flex-direction: column; }
@@ -2049,9 +2050,10 @@ body.home-view {
   .module-detail-page { margin: -16px -12px -32px; }
   .main-content #page-home,
   .main-content .page-home { margin: -16px -12px -32px; }
-  #app-screen.home-view .module-grid-wrap { padding: 16px 12px 24px; }
-  #app-screen.home-view .module-card--tile { padding: 14px 8px; }
-  #app-screen.home-view .module-title { font-size: 0.78rem; }
+  #app-screen.home-view .module-grid-wrap { padding: 12px 10px 24px; }
+  #app-screen.home-view .module-grid { gap: 6px 4px; }
+  #app-screen.home-view .module-card--tile { padding: 6px 2px; }
+  #app-screen.home-view .module-title { font-size: 0.76rem; }
   /* Prefer short labels on very small screens to avoid clipping */
   .module-title[data-short] {
     font-size: 0;
