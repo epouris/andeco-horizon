@@ -677,6 +677,25 @@ body.home-view {
   flex-direction: row;
   min-height: 100vh;
 }
+.andeco-save-banner {
+  position: sticky;
+  top: 60px;
+  z-index: 120;
+  margin: 0;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fffbeb;
+  border-bottom: 1px solid #fcd34d;
+}
+.andeco-save-banner.andeco-save-banner--error {
+  color: #991b1b;
+  background: #fef2f2;
+  border-bottom-color: #fecaca;
+}
+.andeco-save-banner.hidden { display: none; }
+
 #app-screen.home-view {
   height: 100vh;
   height: 100dvh;
