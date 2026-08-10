@@ -1132,6 +1132,15 @@ body.home-view {
 }
 #app-screen.home-view .module-card--tile {
   padding: 18px 14px;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+#app-screen.home-view .module-card--tile:hover {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  transform: translateY(-2px);
 }
 #app-screen.home-view .module-icon-tile {
   width: 52px;
