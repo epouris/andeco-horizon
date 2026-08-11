@@ -128,6 +128,7 @@ async function initPostgres() {
   const tables = await migrate.listPublicTables(pool);
   console.log('Postgres public tables:', tables.join(', ') || '(none)');
   usePostgres = true;
+  auth.configureSessionStore(pool);
   await ensureAdminUser();
   await pgStore.migrateLegacyPayloadIfNeeded(pool);
   console.log('Postgres: relational schema ready');
@@ -195,7 +196,7 @@ function readBody(req) {
   });
 }
 
-function getRequestSession(req) {
+async function getRequestSession(req) {
   return auth.getSession(req);
 }
 
@@ -204,16 +205,16 @@ function isApiTokenAuth(req) {
 }
 
 /** Session user or automation token. */
-function requireAuth(req, res) {
-  const session = getRequestSession(req);
+async function requireAuth(req, res) {
+  const session = await getRequestSession(req);
   if (session) return { session, viaToken: false };
   if (isApiTokenAuth(req)) return { session: null, viaToken: true };
   sendJson(res, 401, { ok: false, error: 'Unauthorized' });
   return null;
 }
 
-function requireAdmin(req, res) {
-  const authz = requireAuth(req, res);
+async function requireAdmin(req, res) {
+  const authz = await requireAuth(req, res);
   if (!authz) return null;
   if (authz.viaToken) return authz;
   if (!authz.session || !authz.session.isAdmin) {
@@ -412,7 +413,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === 'GET' && url === '/api/health') {
-      const session = getRequestSession(req);
+      const session = await getRequestSession(req);
       const detail = parsed.searchParams.get('detail') === '1';
       const health = {
         ok: true,
@@ -433,7 +434,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url === '/api/session') {
-      const session = getRequestSession(req);
+      const session = await getRequestSession(req);
       const users = await listUsersSafe();
       sendJson(res, 200, {
         ok: true,
@@ -465,7 +466,7 @@ const server = http.createServer(async (req, res) => {
         allowedModules: ALL_MODULES.slice()
       }, password);
       const user = await findUserRecord(username);
-      const session = auth.createSession(user);
+      const session = await auth.createSession(user);
       sendJson(res, 200, { ok: true, session: auth.publicSession(session) }, {
         'Set-Cookie': auth.sessionCookieHeader(session.id, req)
       });
@@ -494,7 +495,7 @@ const server = http.createServer(async (req, res) => {
         const upgraded = await auth.hashPassword(password);
         await updateUserPasswordHash(user.id, upgraded);
       }
-      const session = auth.createSession(user);
+      const session = await auth.createSession(user);
       sendJson(res, 200, { ok: true, session: auth.publicSession(session) }, {
         'Set-Cookie': auth.sessionCookieHeader(session.id, req)
       });
@@ -502,7 +503,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url === '/api/logout') {
-      auth.destroySession(req);
+      await auth.destroySession(req);
       sendJson(res, 200, { ok: true }, {
         'Set-Cookie': auth.clearSessionCookieHeader(req)
       });
@@ -510,7 +511,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url === '/api/change-password') {
-      const authz = requireAuth(req, res);
+      const authz = await requireAuth(req, res);
       if (!authz || !authz.session) {
         if (authz && authz.viaToken) sendJson(res, 400, { ok: false, error: 'Use an interactive session to change password.' });
         return;
@@ -559,14 +560,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url === '/api/users') {
-      const authz = requireAdmin(req, res);
+      const authz = await requireAdmin(req, res);
       if (!authz) return;
       sendJson(res, 200, { ok: true, users: await listUsersSafe() });
       return;
     }
 
     if (req.method === 'POST' && url === '/api/users') {
-      const authz = requireAdmin(req, res);
+      const authz = await requireAdmin(req, res);
       if (!authz) return;
       const body = JSON.parse(await readBody(req) || '{}');
       const username = String(body.username || '').trim().toLowerCase();
@@ -612,7 +613,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'DELETE' && url === '/api/users') {
-      const authz = requireAdmin(req, res);
+      const authz = await requireAdmin(req, res);
       if (!authz) return;
       const body = JSON.parse(await readBody(req) || '{}');
       const userId = String(body.id || '');
@@ -639,7 +640,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url === '/api/save') {
-      const authz = requireAuth(req, res);
+      const authz = await requireAuth(req, res);
       if (!authz) return;
       const body = await readBody(req);
       const data = JSON.parse(body || '{}');
@@ -674,7 +675,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && (url === '/andeco_data.json' || url === '/api/data')) {
-      const authz = requireAuth(req, res);
+      const authz = await requireAuth(req, res);
       if (!authz) return;
       const data = await readPayloadForClient();
       sendJson(res, 200, data);
@@ -682,7 +683,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url === '/api/setup-db') {
-      const authz = requireAuth(req, res);
+      const authz = await requireAuth(req, res);
       if (!authz) return;
       if (!authz.viaToken && !(authz.session && authz.session.isAdmin)) {
         sendJson(res, 403, { ok: false, error: 'Admin access required' });
@@ -702,6 +703,7 @@ const server = http.createServer(async (req, res) => {
       const schemaPath = path.join(__dirname, 'railway', 'schema.sql');
       const result = await migrate.applySchema(pool, schemaPath);
       usePostgres = true;
+      auth.configureSessionStore(pool);
       await ensureAdminUser();
       await pgStore.migrateLegacyPayloadIfNeeded(pool);
       const tableNames = await migrate.listPublicTables(pool);

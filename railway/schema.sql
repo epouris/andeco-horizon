@@ -15,6 +15,20 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX IF NOT EXISTS users_username_idx ON users (username);
 
+-- Login sessions (survive Railway redeploys; cookie id looks up this row)
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  display_name TEXT NOT NULL DEFAULT '',
+  is_admin BOOLEAN NOT NULL DEFAULT false,
+  allowed_modules JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_sessions_expires_at_idx ON auth_sessions (expires_at);
+CREATE INDEX IF NOT EXISTS auth_sessions_user_id_idx ON auth_sessions (user_id);
+
 -- ---------------------------------------------------------------------------
 -- Accounting
 -- ---------------------------------------------------------------------------
