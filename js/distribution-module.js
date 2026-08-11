@@ -1853,6 +1853,127 @@
     return { models, options, modelId };
   }
 
+  /** OlympicRibs 430 CH — from manufacturer price / equipment sheets. */
+  function build430ChCatalog(brandId, byKey) {
+    const modelId = uid('model');
+    const now = new Date().toISOString();
+    const only = [modelId];
+
+    const techSpecs = {
+      loa: '4.3 m',
+      boa: '1.9 m',
+      internalBeam: '0.87 m',
+      tubeDiam: '46 cm',
+      maxHp: '60 HP',
+      minHp: '30 HP',
+      suggestedHp: '30 HP',
+      dryWeight: '180 Kg',
+      fuelTank: '40 ltrs',
+      ceCategory: 'C',
+      pax: '5'
+    };
+
+    const standardEquipment = [
+      {
+        category: 'Tubes',
+        items: [
+          'Orca 886 1670 DTEX fabric',
+          'Neoprene handles',
+          'Peripheral neoprene protective rubber'
+        ]
+      },
+      {
+        category: 'Tanks',
+        items: ['Fuel tank 40 ltrs']
+      },
+      {
+        category: 'Deck',
+        items: [
+          'Cushion set',
+          'Console',
+          'Steering wheel with helm and cable',
+          'USB sockets',
+          'Electric horn',
+          'Trailer tow eye',
+          'INOX latches and fasteners',
+          'INOX hinges',
+          'Console rail',
+          'Bowsprit with roller'
+        ]
+      },
+      {
+        category: 'Electrical',
+        items: [
+          '4-position switch panel',
+          'Navigation lights',
+          'Bilge pump',
+          'Main battery switch',
+          '12V electrical installation with marine cables'
+        ]
+      }
+    ];
+
+    const models = [
+      {
+        id: modelId,
+        brandId,
+        name: '430 CH',
+        basePrice: 9800,
+        currency: 'EUR',
+        active: true,
+        techSpecs: Object.assign({}, techSpecs),
+        standardEquipment: standardEquipment.slice(),
+        photo: '',
+        notes:
+          '430 CH with standard equipment — without engines. Engine lines are package prices (vessel + engine).',
+        createdAt: now
+      }
+    ];
+
+    const mk = (categoryKey, subgroup, name, price, modelIds, notes) => ({
+      id: uid('opt'),
+      categoryId: byKey[categoryKey],
+      brandId,
+      modelIds: modelIds || only,
+      subgroup: subgroup || '',
+      name,
+      price,
+      unit: 'pcs',
+      notes: notes || '',
+      active: true
+    });
+
+    const options = [
+      // Deck setups with engines (package = vessel + engine)
+      mk('engines', 'YAMAHA', '30 HP (LAN A) — package with standard equipment', 17161),
+
+      // Engine options
+      mk('engine_options', '', 'Steering box upgrade to no-feedback & Teflon cable', 400),
+      mk('engine_options', '', 'Auxiliary engine mount', 300),
+
+      // Covers & awnings
+      mk('covers', '', 'Full parking cover', 980),
+      mk('covers', '', 'Sun awning with stainless steel rails', 850),
+      mk('covers', '', 'Canopy bases with GRP and INOX base', 260),
+
+      // Electronics / electrical extras
+      mk('electronics', '', 'Service battery', 200),
+      mk('electronics', '', 'Sound Hertz source & 2 speakers', 900),
+      mk('electronics', '', 'Raymarine Axiom 7" Plotter, transducer & map', 1900),
+
+      // Other equipment
+      mk('other', '', 'Swimming ladder', 300),
+      mk('other', '', 'Handles on the tube (per piece)', 150),
+      mk('other', '', 'Tube sliders / rubbing strakes (per piece)', 200),
+
+      // Decking / trailer
+      mk('decking', '', 'SeaDeck foam', 800),
+      mk('trailer', '', 'Dromeas 430 Trailer with approval', 1500)
+    ].filter((o) => !!o.categoryId);
+
+    return { models, options, modelId };
+  }
+
   function seedOlympicRibs() {
     const brandId = uid('brand');
     const cats = defaultCategories(brandId);
@@ -1935,6 +2056,7 @@
     const src40c = build40SrcCatalog(brandId, byKey);
     const src585 = build585SpeedsterCatalog(brandId, byKey);
     const src499 = build499StarCatalog(brandId, byKey);
+    const src430 = build430ChCatalog(brandId, byKey);
 
     return {
       brands: [
@@ -2014,7 +2136,8 @@
         ...src40.models,
         ...src40c.models,
         ...src585.models,
-        ...src499.models
+        ...src499.models,
+        ...src430.models
       ],
       optionCategories: cats,
       options: options.concat(
@@ -2024,7 +2147,8 @@
         src40.options,
         src40c.options,
         src585.options,
-        src499.options
+        src499.options,
+        src430.options
       ),
       quotations: [],
       soldVessels: [],
@@ -2229,6 +2353,38 @@
     return true;
   }
 
+  function ensure430ChCatalog(state) {
+    if (!state || !Array.isArray(state.brands) || !state.brands.length) return false;
+    const brand =
+      state.brands.find((b) => String(b.slug || '').toLowerCase() === 'olympicribs') ||
+      state.brands.find((b) => /olympic\s*ribs/i.test(String(b.name || ''))) ||
+      state.brands[0];
+    if (!brand) return false;
+    const models = Array.isArray(state.models) ? state.models : [];
+    const already = models.some((m) => /^430\s*ch\b/i.test(String(m.name || '').trim()));
+    if (already) {
+      const beforeCats = (state.optionCategories || []).length;
+      ensureBrandCategories(state, brand.id);
+      if ((state.optionCategories || []).length > beforeCats) pendingCatalogPersist = true;
+      return false;
+    }
+    const byKey = ensureBrandCategories(state, brand.id);
+    ['engines', 'engine_options', 'covers', 'electronics', 'other', 'decking', 'trailer'].forEach(
+      (key) => {
+        if (byKey[key]) return;
+        const fallback = defaultCategories(brand.id).find((c) => c.key === key);
+        if (!fallback) return;
+        state.optionCategories.push(fallback);
+        byKey[key] = fallback.id;
+      }
+    );
+    const built = build430ChCatalog(brand.id, byKey);
+    state.models = models.concat(built.models);
+    state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
+    pendingCatalogPersist = true;
+    return true;
+  }
+
   function emptyProspect() {
     return {
       id: uid('prospect'),
@@ -2347,6 +2503,7 @@
       ensure40SrcCatalog(s);
       ensure585SpeedsterCatalog(s);
       ensure499StarCatalog(s);
+      ensure430ChCatalog(s);
     }
     return s;
   }
