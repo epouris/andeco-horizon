@@ -2550,29 +2550,38 @@
   function persistAllIfFile() {
     try {
       if (window.AccountingData && typeof window.AccountingData.persistAll === 'function') {
-        window.AccountingData.persistAll();
+        return Promise.resolve(window.AccountingData.persistAll());
       }
     } catch (_) { /* ignore */ }
+    return Promise.resolve(false);
   }
 
   function persist(immediate) {
-    const ok = saveLocal();
-    touchLocalWriteGuard(immediate ? 12000 : 8000);
+    const localOk = saveLocal();
+    touchLocalWriteGuard(immediate ? 20000 : 8000);
     // Always push shared save from live module state (via AccountingData buildFullPayload),
-    // even if localStorage quota failed — otherwise photo uploads are lost on reload/poll.
-    const run = () => persistAllIfFile();
+    // even if localStorage quota failed — quotation photos often exceed localStorage.
+    const run = () =>
+      persistAllIfFile().then((serverOk) => {
+        if (serverOk === false && !localOk) {
+          toast('Could not save to server or local storage. Try a smaller photo.', 'error');
+        } else if (serverOk === false) {
+          toast('Saved in this browser only — server save failed. Check connection and try again.', 'error');
+        } else if (!localOk) {
+          toast('Saved on server. Local browser storage is full, so keep using this device online.', 'info');
+        }
+        return serverOk !== false;
+      });
     if (immediate) {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = null;
-      run();
-      if (!ok) {
-        toast('Photo may not stay saved locally (storage full). Shared save was still attempted — use a smaller image if it disappears.', 'error');
-      }
-      return ok;
+      return run();
     }
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(run, 400);
-    return ok;
+    saveTimer = setTimeout(() => {
+      run();
+    }, 400);
+    return Promise.resolve(localOk);
   }
 
   function brandById(id) {
@@ -4349,9 +4358,10 @@
       if (!file) return;
       try {
         toast('Saving vessel photo…', 'info');
-        q.vesselPhoto = await readImageAsDataUrl(file, 900 * 1024);
+        // Keep quote photos smaller so multi-photo quotes still fit the shared save.
+        q.vesselPhoto = await readImageAsDataUrl(file, 450 * 1024);
         q.updatedAt = new Date().toISOString();
-        const ok = persist(true);
+        const ok = await persist(true);
         renderQuoteEditor(el);
         if (ok) toast('Vessel photo saved');
       } catch (err) {
@@ -4359,17 +4369,17 @@
         toast(err?.message || 'Could not read that image', 'error');
       }
     });
-    el.querySelector('#dq-photo-url')?.addEventListener('change', () => {
+    el.querySelector('#dq-photo-url')?.addEventListener('change', async () => {
       const url = String(el.querySelector('#dq-photo-url')?.value || '').trim();
       q.vesselPhoto = url;
       q.updatedAt = new Date().toISOString();
-      persist(true);
+      await persist(true);
       renderQuoteEditor(el);
     });
-    el.querySelector('#dq-photo-clear')?.addEventListener('click', () => {
+    el.querySelector('#dq-photo-clear')?.addEventListener('click', async () => {
       q.vesselPhoto = '';
       q.updatedAt = new Date().toISOString();
-      persist(true);
+      await persist(true);
       renderQuoteEditor(el);
     });
     el.querySelectorAll('[data-photo-file]').forEach((input) => {
@@ -4381,9 +4391,9 @@
           const slot = QUOTE_PHOTO_SLOTS.find((s) => s.key === key);
           toast(`Saving ${slot ? slot.label : 'photo'}…`, 'info');
           normalizeQuoteDetailPhotos(q);
-          q.detailPhotos[key] = await readImageAsDataUrl(file, 900 * 1024);
+          q.detailPhotos[key] = await readImageAsDataUrl(file, 450 * 1024);
           q.updatedAt = new Date().toISOString();
-          const ok = persist(true);
+          const ok = await persist(true);
           renderQuoteEditor(el);
           if (ok) toast(`${slot ? slot.label : 'Photo'} saved`);
         } catch (err) {
@@ -4393,24 +4403,24 @@
       });
     });
     el.querySelectorAll('[data-photo-url]').forEach((input) => {
-      input.addEventListener('change', () => {
+      input.addEventListener('change', async () => {
         const key = input.getAttribute('data-photo-url');
         if (!key) return;
         normalizeQuoteDetailPhotos(q);
         q.detailPhotos[key] = String(input.value || '').trim();
         q.updatedAt = new Date().toISOString();
-        persist(true);
+        await persist(true);
         renderQuoteEditor(el);
       });
     });
     el.querySelectorAll('[data-photo-clear]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const key = btn.getAttribute('data-photo-clear');
         if (!key) return;
         normalizeQuoteDetailPhotos(q);
         q.detailPhotos[key] = '';
         q.updatedAt = new Date().toISOString();
-        persist(true);
+        await persist(true);
         renderQuoteEditor(el);
       });
     });
@@ -5326,10 +5336,9 @@
   function init() {
     state = loadLocal();
     if (!Array.isArray(state.potentialClients)) state.potentialClients = [];
-    if (pendingCatalogPersist) {
-      pendingCatalogPersist = false;
-      persist(true);
-    }
+    // Do NOT persist catalog seeds from local-only state here. That used to overwrite
+    // server quotations (and wipe photos) before /api/data hydrated Distribution.
+    // pendingCatalogPersist is flushed in applyRemote() after server data arrives.
     const page = document.getElementById('page-distribution');
     if (page && page.classList.contains('active')) {
       setSection(section, { keepEditor: true });
