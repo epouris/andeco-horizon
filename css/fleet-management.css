@@ -152,6 +152,15 @@
   background: #fff8f0;
 }
 
+.fleet-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.fleet-row-actions .btn {
+  margin-left: 0.25rem;
+}
+
 .fleet-module .fleet-toolbar {
   display: flex;
   align-items: center;

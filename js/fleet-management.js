@@ -841,6 +841,14 @@
     var backBtn = document.getElementById('fleet-back-to-list-btn');
     if (backBtn) backBtn.addEventListener('click', function () { selectedVesselId = null; render(); });
 
+    var deleteVesselBtn = document.getElementById('fleet-delete-vessel-btn');
+    if (deleteVesselBtn) {
+      deleteVesselBtn.addEventListener('click', function () {
+        if (!selectedVesselId) return;
+        if (deleteVessel(selectedVesselId)) render();
+      });
+    }
+
     var photoInput = document.getElementById('fleet-vessel-photo-input');
     var photoBtn = document.getElementById('fleet-vessel-photo-btn');
     if (photoBtn && photoInput) {
