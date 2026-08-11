@@ -146,6 +146,47 @@
   function saveCrew(a) { try { localStorage.setItem(STORAGE_KEYS.crew, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
   function persistAllIfFile() { try { if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll(); } catch (e) {} }
 
+  function removeCrewAssignmentsForVessel(vesselId) {
+    try {
+      if (window.CrewManagement && typeof window.CrewManagement.getCrewAssignments === 'function' &&
+          typeof window.CrewManagement.saveCrewAssignments === 'function') {
+        var list = window.CrewManagement.getCrewAssignments() || [];
+        window.CrewManagement.saveCrewAssignments(list.filter(function (a) { return a && a.vesselId !== vesselId; }));
+        return;
+      }
+    } catch (e) {}
+    try {
+      var raw = localStorage.getItem('andeco_crew_assignments');
+      var assignments = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(assignments)) return;
+      localStorage.setItem(
+        'andeco_crew_assignments',
+        JSON.stringify(assignments.filter(function (a) { return a && a.vesselId !== vesselId; }))
+      );
+      persistAllIfFile();
+    } catch (e2) {}
+  }
+
+  function deleteVessel(vesselId) {
+    if (!vesselId) return false;
+    var vessel = getVessels().filter(function (x) { return x.id === vesselId; })[0];
+    var label = (vessel && vessel.name) ? vessel.name : 'this vessel';
+    if (!confirm('Delete "' + label + '"?\n\nThis removes the vessel and its photos, documents, maintenance, inventory, logbooks, and crew links. This cannot be undone.')) {
+      return false;
+    }
+    saveVessels(getVessels().filter(function (x) { return x.id !== vesselId; }));
+    saveVesselPhotos(getVesselPhotos().filter(function (x) { return x.vesselId !== vesselId; }));
+    saveDocuments(getDocuments().filter(function (x) { return x.vesselId !== vesselId; }));
+    saveMaintenance(getMaintenance().filter(function (x) { return x.vesselId !== vesselId; }));
+    saveDrydock(getDrydock().filter(function (x) { return x.vesselId !== vesselId; }));
+    saveInventory(getInventory().filter(function (x) { return x.vesselId !== vesselId; }));
+    saveLogbooks(getLogbooks().filter(function (x) { return x.vesselId !== vesselId; }));
+    saveCrew(getCrew().filter(function (x) { return x.vesselId !== vesselId; }));
+    removeCrewAssignmentsForVessel(vesselId);
+    if (selectedVesselId === vesselId) selectedVesselId = null;
+    return true;
+  }
+
   function escapeHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function id() { return 'f' + Date.now() + '-' + Math.random().toString(36).slice(2, 9); }
   function formatDateDDMMYYYY(dateString) {
@@ -178,6 +219,8 @@
     if (listWrap) listWrap.style.display = (currentFleetSection === 'vessels' && !selectedVesselId) ? 'block' : 'none';
     if (detailWrap) detailWrap.style.display = (currentFleetSection === 'vessels' && selectedVesselId) ? 'block' : 'none';
     if (backBtn) backBtn.style.display = selectedVesselId ? '' : 'none';
+    var deleteBtn = document.getElementById('fleet-delete-vessel-btn');
+    if (deleteBtn) deleteBtn.style.display = selectedVesselId ? '' : 'none';
     if (titleEl) titleEl.textContent = selectedVesselId ? ('Fleet / ' + (getVessels().filter(function (x) { return x.id === selectedVesselId; })[0] || {}).name) : 'Fleet Management';
 
     if (currentFleetSection === 'dashboard') renderDashboard();
@@ -251,11 +294,21 @@
         '<td><a href="#" class="fleet-vessel-link">' + escapeHtml(v.name || '—') + '</a></td>' +
         '<td>' + escapeHtml(v.imo || '—') + '</td><td>' + escapeHtml(v.flag || '—') + '</td>' +
         '<td>' + escapeHtml(v.type || '—') + '</td><td>' + escapeHtml(v.buildYear || '—') + '</td>' +
-        '<td><button type="button" class="btn btn-ghost btn-sm fleet-edit-vessel" data-vessel-id="' + escapeHtml(v.id) + '">Open</button></td></tr>';
+        '<td class="fleet-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm fleet-edit-vessel" data-vessel-id="' + escapeHtml(v.id) + '">Open</button> ' +
+          '<button type="button" class="btn btn-danger btn-sm fleet-delete-vessel" data-vessel-id="' + escapeHtml(v.id) + '">Delete</button>' +
+        '</td></tr>';
     }).join('');
 
     tbody.querySelectorAll('.fleet-vessel-link, .fleet-edit-vessel').forEach(function (el) {
       el.addEventListener('click', function (e) { e.preventDefault(); selectedVesselId = el.closest('tr').getAttribute('data-vessel-id'); render(); });
+    });
+    tbody.querySelectorAll('.fleet-delete-vessel').forEach(function (el) {
+      el.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (deleteVessel(el.getAttribute('data-vessel-id'))) render();
+      });
     });
   }
 
