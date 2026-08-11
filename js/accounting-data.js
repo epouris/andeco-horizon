@@ -358,7 +358,7 @@ window.AccountingData = (function () {
           return false;
         }
         if (res.status === 401) {
-          notifySaveError('Session expired. Please sign in again.');
+          notifySaveError('Please sign in again to save.');
           return false;
         }
         if (!res.ok) {
