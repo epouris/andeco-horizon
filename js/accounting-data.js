@@ -262,7 +262,7 @@ window.AccountingData = (function () {
     };
   }
 
-  function notifyModulesDataLoaded() {
+  function notifyModulesDataLoaded(workspaceDist) {
     if (typeof window.reloadPayrollFromStorage === 'function') {
       try { window.reloadPayrollFromStorage(); } catch (e) {}
     }
@@ -287,15 +287,23 @@ window.AccountingData = (function () {
     }
     if (typeof window.DistributionModule !== 'undefined') {
       try {
-        var distAcceptRemote = !window.DistributionModule.shouldAcceptRemote ||
-          window.DistributionModule.shouldAcceptRemote();
-        if (distAcceptRemote) {
-          var distRaw = null;
-          try { distRaw = localStorage.getItem('andeco_distribution_data'); } catch (e2) {}
-          if (distRaw && window.DistributionModule.applyRemote) {
-            window.DistributionModule.applyRemote(JSON.parse(distRaw));
-          } else if (window.DistributionModule.render) {
-            window.DistributionModule.render();
+        // Prefer an explicit server/workspace payload. Re-reading localStorage here used to
+        // drop quotation photos when the distribution blob was too large to store locally.
+        if (workspaceDist && typeof workspaceDist === 'object' && window.DistributionModule.applyRemote) {
+          var distAcceptExplicit = !window.DistributionModule.shouldAcceptRemote ||
+            window.DistributionModule.shouldAcceptRemote();
+          if (distAcceptExplicit) window.DistributionModule.applyRemote(workspaceDist);
+        } else {
+          var distAcceptRemote = !window.DistributionModule.shouldAcceptRemote ||
+            window.DistributionModule.shouldAcceptRemote();
+          if (distAcceptRemote) {
+            var distRaw = null;
+            try { distRaw = localStorage.getItem('andeco_distribution_data'); } catch (e2) {}
+            if (distRaw && window.DistributionModule.applyRemote) {
+              window.DistributionModule.applyRemote(JSON.parse(distRaw));
+            } else if (window.DistributionModule.render) {
+              window.DistributionModule.render();
+            }
           }
         }
       } catch (e) {}
@@ -392,9 +400,9 @@ window.AccountingData = (function () {
   }
 
   function persistToFile() {
-    if (supabasePendingAuth) return Promise.resolve();
+    if (supabasePendingAuth) return Promise.resolve(false);
     if (useSupabase) {
-      return persistToSupabase();
+      return persistToSupabase().then(function () { return true; }, function () { return false; });
     }
     if (sharedFileHandle) {
       var payload = buildFullPayload();
@@ -402,11 +410,16 @@ window.AccountingData = (function () {
         .then(function (w) {
           return w.write(JSON.stringify(payload, null, 2)).then(function () { return w.close(); });
         })
+        .then(function () {
+          clearSaveError();
+          return true;
+        })
         .catch(function (err) {
           notifySaveError((err && err.message) || 'Could not write shared data file.');
+          return false;
         });
     }
-    if (!useFileStorage) return Promise.resolve();
+    if (!useFileStorage) return Promise.resolve(false);
     return runQueuedWorkspaceSave();
   }
 
@@ -721,6 +734,7 @@ window.AccountingData = (function () {
             window.DistributionModule.shouldAcceptRemote &&
             !window.DistributionModule.shouldAcceptRemote()
           );
+          // Best-effort local cache only — quotation photos often exceed localStorage quota.
           if (distAccept) setLocalStorage('andeco_distribution_data', data.distribution);
         }
         if (data.payroll && typeof data.payroll === 'object') {
@@ -735,7 +749,10 @@ window.AccountingData = (function () {
         if (data.crm && typeof data.crm === 'object') {
           if (Array.isArray(data.crm.users)) setLocalStorage('andeco_crm_users', data.crm.users);
         }
-        notifyModulesDataLoaded();
+        // Pass server distribution directly so photos are not lost when localStorage write fails.
+        notifyModulesDataLoaded(
+          data.distribution && typeof data.distribution === 'object' ? data.distribution : null
+        );
   }
 
   function ensureSupabaseClient() {
@@ -1043,8 +1060,9 @@ window.AccountingData = (function () {
   }
 
   function persistAll() {
-    if (supabasePendingAuth) return;
-    if (useFileStorage || sharedFileHandle || useSupabase) persistToFile();
+    if (supabasePendingAuth) return Promise.resolve(false);
+    if (useFileStorage || sharedFileHandle || useSupabase) return persistToFile();
+    return Promise.resolve(false);
   }
 
   function signInToSupabase(email, password) {
