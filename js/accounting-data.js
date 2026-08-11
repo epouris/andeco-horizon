@@ -17,6 +17,9 @@ window.AccountingData = (function () {
   var workspaceRevision = '';
   var lastSaveError = null;
   var loadError = null;
+  /** Serialize shared saves — overlapping persist calls were causing false 409 conflicts. */
+  var saveInFlight = null;
+  var saveQueued = false;
 
   function apiHeaders(extra) {
     var h = extra ? Object.assign({}, extra) : {};
@@ -327,22 +330,7 @@ window.AccountingData = (function () {
       .catch(function () {});
   }
 
-  function persistToFile() {
-    if (supabasePendingAuth) return Promise.resolve();
-    if (useSupabase) {
-      return persistToSupabase();
-    }
-    if (sharedFileHandle) {
-      var payload = buildFullPayload();
-      return sharedFileHandle.createWritable()
-        .then(function (w) {
-          return w.write(JSON.stringify(payload, null, 2)).then(function () { return w.close(); });
-        })
-        .catch(function (err) {
-          notifySaveError((err && err.message) || 'Could not write shared data file.');
-        });
-    }
-    if (!useFileStorage) return Promise.resolve();
+  function postWorkspaceSave(isRetry) {
     var body = buildFullPayload();
     if (workspaceRevision) body._rev = workspaceRevision;
     return fetch(SAVE_API_URL, {
@@ -354,6 +342,11 @@ window.AccountingData = (function () {
       return res.json().catch(function () { return {}; }).then(function (json) {
         if (res.status === 409 || (json && json.code === 'CONFLICT')) {
           if (json && json._rev) workspaceRevision = String(json._rev);
+          // Same-tab overlapping autosaves often trip this. Adopt server rev and retry once
+          // with the latest in-memory payload instead of forcing a full reload.
+          if (!isRetry) {
+            return postWorkspaceSave(true);
+          }
           notifySaveError('Data was updated elsewhere. Reload the page before saving again.');
           return false;
         }
@@ -373,6 +366,48 @@ window.AccountingData = (function () {
       notifySaveError((err && err.message) || 'Save failed. Check your connection.');
       return false;
     });
+  }
+
+  function runQueuedWorkspaceSave() {
+    if (saveInFlight) {
+      saveQueued = true;
+      return saveInFlight;
+    }
+    saveInFlight = postWorkspaceSave(false).then(function (ok) {
+      saveInFlight = null;
+      if (saveQueued) {
+        saveQueued = false;
+        return runQueuedWorkspaceSave();
+      }
+      return ok;
+    }, function (err) {
+      saveInFlight = null;
+      if (saveQueued) {
+        saveQueued = false;
+        return runQueuedWorkspaceSave();
+      }
+      throw err;
+    });
+    return saveInFlight;
+  }
+
+  function persistToFile() {
+    if (supabasePendingAuth) return Promise.resolve();
+    if (useSupabase) {
+      return persistToSupabase();
+    }
+    if (sharedFileHandle) {
+      var payload = buildFullPayload();
+      return sharedFileHandle.createWritable()
+        .then(function (w) {
+          return w.write(JSON.stringify(payload, null, 2)).then(function () { return w.close(); });
+        })
+        .catch(function (err) {
+          notifySaveError((err && err.message) || 'Could not write shared data file.');
+        });
+    }
+    if (!useFileStorage) return Promise.resolve();
+    return runQueuedWorkspaceSave();
   }
 
   function getInvoices() {
@@ -980,6 +1015,10 @@ window.AccountingData = (function () {
 
   function loadFromData(data) {
     if (!data) return;
+    // Keep revision in sync with background polls so the next save is not a false conflict.
+    if (data._rev != null && !saveInFlight) {
+      workspaceRevision = String(data._rev);
+    }
     if (useFileStorage) {
       memory.invoices = Array.isArray(data.invoices) ? data.invoices : memory.invoices;
       memory.receipts = Array.isArray(data.receipts) ? data.receipts : memory.receipts;
