@@ -1525,6 +1525,176 @@
     return { models, options, modelId };
   }
 
+  /** OlympicRibs 585 SPEEDSTER — from manufacturer price / equipment sheets. */
+  function build585SpeedsterCatalog(brandId, byKey) {
+    const modelId = uid('model');
+    const now = new Date().toISOString();
+    const only = [modelId];
+
+    const techSpecs = {
+      loa: '5.85 m',
+      boa: '2.44 m',
+      internalBeam: '1.3 m',
+      tubeDiam: '50 cm',
+      maxHp: '150 HP',
+      minHp: '60 HP',
+      suggestedHp: '150 HP',
+      dryWeight: '600 Kg',
+      fuelTank: '170 ltrs',
+      waterTank: '90 ltrs',
+      ceCategory: 'C',
+      pax: '6'
+    };
+
+    const standardEquipment = [
+      {
+        category: 'Tubes',
+        items: [
+          'Orca 866 1670 DTEX fabric',
+          'Neoprene handles',
+          'Peripheral neoprene protective rubber'
+        ]
+      },
+      {
+        category: 'Tanks',
+        items: ['Fuel tank INOX 170 ltrs', 'Water tank 90 ltrs']
+      },
+      {
+        category: 'Deck',
+        items: [
+          'Cushion set',
+          'Bow sun deck extension',
+          'Stern platforms with teak lining',
+          'Steering wheel',
+          'Fresh water system with stern shower',
+          'INOX latches and hinges',
+          'Fuel and water filler caps',
+          'Console railing',
+          'USB sockets',
+          'Electric horn',
+          'Trailer winch D-ring',
+          'Folding cleats',
+          'Swimming ladder',
+          'INOX roll bar',
+          'Bowsprit with roller'
+        ]
+      },
+      {
+        category: 'Electrical',
+        items: [
+          '6-position switch panel',
+          'Navigation lights',
+          'Fresh water pump',
+          'Bilge pump',
+          'Two-position main switch',
+          '12V electrical installation with marine cables'
+        ]
+      }
+    ];
+
+    const models = [
+      {
+        id: modelId,
+        brandId,
+        name: '585 SPEEDSTER',
+        basePrice: 24901,
+        currency: 'EUR',
+        active: true,
+        techSpecs: Object.assign({}, techSpecs),
+        standardEquipment: standardEquipment.slice(),
+        photo: '',
+        notes:
+          '585 SPEEDSTER with standard equipment — without engines. Engine lines are package prices (vessel + engine).',
+        createdAt: now
+      }
+    ];
+
+    const mk = (categoryKey, subgroup, name, price, modelIds, notes) => ({
+      id: uid('opt'),
+      categoryId: byKey[categoryKey],
+      brandId,
+      modelIds: modelIds || only,
+      subgroup: subgroup || '',
+      name,
+      price,
+      unit: 'pcs',
+      notes: notes || '',
+      active: true
+    });
+
+    const options = [
+      // Deck setups with engines (package = vessel + engine)
+      mk(
+        'engines',
+        'YAMAHA',
+        'F150XD FULL — Mechanical control (package with standard equipment)',
+        47151
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        'F150XCC FULL — Electronic control (package with standard equipment)',
+        50248
+      ),
+      mk(
+        'engines',
+        'MERCURY',
+        '150 EFI SMART — Mechanical control (package with standard equipment)',
+        43668
+      ),
+      mk(
+        'engines',
+        'MERCURY',
+        '150 EFI SMART — Electronic control (package with standard equipment)',
+        44792
+      ),
+      mk(
+        'engines',
+        'HONDA',
+        'BF150 — Mechanical control (package with standard equipment)',
+        44653
+      ),
+      mk(
+        'engines',
+        'HONDA',
+        'BF150 — Electronic control (package with standard equipment)',
+        48379
+      ),
+
+      // Engine options
+      mk('engine_options', '', 'Seastar hydraulic steering', 1950),
+      mk('engine_options', '', 'Auxiliary engine mount', 1050),
+      mk('engine_options', '', 'Auxiliary engine Yamaha F6CMH/L', 2143),
+      mk('engine_options', '', 'Auxiliary engine Mercury 6MH', 1807),
+
+      // Covers & awnings
+      mk('covers', '', 'Full parking cover', 1043),
+      mk('covers', '', 'Console cover', 350),
+      mk('covers', '', 'Sun awning with stainless steel rails', 1078),
+      mk('covers', '', 'Bow upholstery lining', 1200),
+
+      // Electronics / electrical extras
+      mk('electronics', '', 'Service battery', 350),
+      mk('electronics', '', 'Sound Hertz source & 2 speakers', 905),
+      mk('electronics', '', 'Raymarine Axiom 7" Plotter', 1654),
+      mk('electronics', '', 'Raymarine Axiom 9" Plotter', 2100),
+      mk('electronics', '', 'Floor lighting', 759),
+      mk('electronics', '', 'Electric windlass package', 2766),
+      mk('electronics', '', 'Underwater lights', 1268),
+
+      // Other equipment
+      mk('other', '', 'INOX anchor with swivel and 35m chain', 800),
+      mk('other', '', 'Handles on the tube', 200),
+      mk('other', '', 'Powder-coated stainless steel (electrostatic paint)', 700),
+
+      // Decking / trailer
+      mk('decking', '', 'SeaDeck foam', 1800),
+      mk('trailer', '', 'Dromeas 620 Trailer with approval', 3700)
+    ].filter((o) => !!o.categoryId);
+
+    return { models, options, modelId };
+  }
+
   function seedOlympicRibs() {
     const brandId = uid('brand');
     const cats = defaultCategories(brandId);
@@ -1605,6 +1775,7 @@
     const src30 = build30SrCatalog(brandId, byKey);
     const src40 = build40SrCatalog(brandId, byKey);
     const src40c = build40SrcCatalog(brandId, byKey);
+    const src585 = build585SpeedsterCatalog(brandId, byKey);
 
     return {
       brands: [
@@ -1682,10 +1853,18 @@
         ...src45.models,
         ...src30.models,
         ...src40.models,
-        ...src40c.models
+        ...src40c.models,
+        ...src585.models
       ],
       optionCategories: cats,
-      options: options.concat(more, src45.options, src30.options, src40.options, src40c.options),
+      options: options.concat(
+        more,
+        src45.options,
+        src30.options,
+        src40.options,
+        src40c.options,
+        src585.options
+      ),
       quotations: [],
       soldVessels: [],
       potentialClients: [],
@@ -1825,6 +2004,38 @@
     return true;
   }
 
+  function ensure585SpeedsterCatalog(state) {
+    if (!state || !Array.isArray(state.brands) || !state.brands.length) return false;
+    const brand =
+      state.brands.find((b) => String(b.slug || '').toLowerCase() === 'olympicribs') ||
+      state.brands.find((b) => /olympic\s*ribs/i.test(String(b.name || ''))) ||
+      state.brands[0];
+    if (!brand) return false;
+    const models = Array.isArray(state.models) ? state.models : [];
+    const already = models.some((m) => /585\s*speedster/i.test(String(m.name || '').trim()));
+    if (already) {
+      const beforeCats = (state.optionCategories || []).length;
+      ensureBrandCategories(state, brand.id);
+      if ((state.optionCategories || []).length > beforeCats) pendingCatalogPersist = true;
+      return false;
+    }
+    const byKey = ensureBrandCategories(state, brand.id);
+    ['engines', 'engine_options', 'covers', 'electronics', 'other', 'decking', 'trailer'].forEach(
+      (key) => {
+        if (byKey[key]) return;
+        const fallback = defaultCategories(brand.id).find((c) => c.key === key);
+        if (!fallback) return;
+        state.optionCategories.push(fallback);
+        byKey[key] = fallback.id;
+      }
+    );
+    const built = build585SpeedsterCatalog(brand.id, byKey);
+    state.models = models.concat(built.models);
+    state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
+    pendingCatalogPersist = true;
+    return true;
+  }
+
   function emptyProspect() {
     return {
       id: uid('prospect'),
@@ -1941,6 +2152,7 @@
       ensure30SrCatalog(s);
       ensure40SrCatalog(s);
       ensure40SrcCatalog(s);
+      ensure585SpeedsterCatalog(s);
     }
     return s;
   }
