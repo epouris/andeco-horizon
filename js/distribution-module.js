@@ -1695,6 +1695,164 @@
     return { models, options, modelId };
   }
 
+  /** OlympicRibs 499 STAR — from manufacturer price / equipment sheets. */
+  function build499StarCatalog(brandId, byKey) {
+    const modelId = uid('model');
+    const now = new Date().toISOString();
+    const only = [modelId];
+
+    const techSpecs = {
+      loa: '4.98 m',
+      boa: '2.29 m',
+      internalBeam: '1.26 m',
+      tubeDiam: '50 cm',
+      maxHp: '115 HP',
+      minHp: '60 HP',
+      suggestedHp: '80 HP',
+      dryWeight: '360 Kg',
+      fuelTank: '58 ltrs',
+      ceCategory: 'C',
+      pax: '6'
+    };
+
+    const standardEquipment = [
+      {
+        category: 'Tubes',
+        items: [
+          'Orca 866 1670 DTEX fabric',
+          'Neoprene handles',
+          'Peripheral neoprene protective rubber'
+        ]
+      },
+      {
+        category: 'Tanks',
+        items: ['Fuel tank 58 ltrs']
+      },
+      {
+        category: 'Deck',
+        items: [
+          'Cushion set',
+          'Sofa backrest',
+          'Console',
+          'Steering wheel with helm and cable',
+          'INOX latches and fasteners',
+          'INOX hinges',
+          'Console rail',
+          'USB sockets',
+          'Electric horn',
+          'Heavy-duty trailer tow eye',
+          'Swimming ladder',
+          'Bowsprit with roller'
+        ]
+      },
+      {
+        category: 'Electrical',
+        items: [
+          '6-position switch panel',
+          'Navigation lights',
+          'Bilge pump',
+          'Two-position main switch',
+          '12V electrical installation with marine cables'
+        ]
+      }
+    ];
+
+    const models = [
+      {
+        id: modelId,
+        brandId,
+        name: '499 STAR',
+        basePrice: 18663,
+        currency: 'EUR',
+        active: true,
+        techSpecs: Object.assign({}, techSpecs),
+        standardEquipment: standardEquipment.slice(),
+        photo: '',
+        notes:
+          '499 STAR with standard equipment — without engines. Engine lines are package prices (vessel + engine).',
+        createdAt: now
+      }
+    ];
+
+    const mk = (categoryKey, subgroup, name, price, modelIds, notes) => ({
+      id: uid('opt'),
+      categoryId: byKey[categoryKey],
+      brandId,
+      modelIds: modelIds || only,
+      subgroup: subgroup || '',
+      name,
+      price,
+      unit: 'pcs',
+      notes: notes || '',
+      active: true
+    });
+
+    const options = [
+      // Deck setups with engines (package = vessel + engine)
+      mk('engines', 'YAMAHA', '80 HP (LAN B) — package with standard equipment', 31869),
+      mk('engines', 'YAMAHA', '100 HP (LCD 5") — package with standard equipment', 33739),
+      mk(
+        'engines',
+        'YAMAHA',
+        '100 HP LB2 WHITE (LCD 5") — package with standard equipment',
+        34501
+      ),
+      mk('engines', 'YAMAHA', '115 HP (LCD 5") — package with standard equipment', 35046),
+      mk(
+        'engines',
+        'YAMAHA',
+        '115 HP LB2 WHITE (LCD 5") — package with standard equipment',
+        35795
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        '115 HP — Mechanical control / LCD 4.3" (package with standard equipment)',
+        36421
+      ),
+      mk(
+        'engines',
+        'YAMAHA',
+        '115 HP — Electronic control / LCD 4.3" (package with standard equipment)',
+        38368
+      ),
+      mk('engines', 'MERCURY', '80 HP L SMART — package with standard equipment', 32469),
+      mk('engines', 'MERCURY', '100 HP L SMART — package with standard equipment', 33571),
+      mk('engines', 'MERCURY', '115 HP L SMART — package with standard equipment', 34530),
+      mk('engines', 'HONDA', '100 HP — package with standard equipment', 32050),
+
+      // Engine options
+      mk('engine_options', '', 'No-feedback helm & Teflon cable', 485),
+      mk('engine_options', '', 'Baystar hydraulic steering', 1630),
+      mk('engine_options', '', 'Auxiliary engine mount', 256),
+      mk('engine_options', '', 'Auxiliary engine Yamaha 4HP', 1855),
+      mk('engine_options', '', 'Auxiliary engine Mercury 4HP', 1619),
+      mk('engine_options', '', 'Auxiliary engine Honda 4HP', 1948),
+
+      // Covers & awnings
+      mk('covers', '', 'Full parking cover', 820),
+      mk('covers', '', 'Console cover', 323),
+      mk('covers', '', 'Sun awning with stainless steel rails', 936),
+      mk('covers', '', 'Canopy bases with GRP and INOX base', 300),
+
+      // Electronics / electrical extras
+      mk('electronics', '', 'Service battery', 350),
+      mk('electronics', '', 'Sound Hertz source & 2 speakers', 1160),
+      mk('electronics', '', 'Raymarine Axiom 7" Plotter, transducer & map', 1566),
+
+      // Other equipment
+      mk('other', '', 'Extra fuel tank 50 ltrs with selector valve', 548),
+      mk('other', '', 'Lifting points', 600),
+      mk('other', '', 'Fresh water system 20 ltrs', 1600),
+
+      // Decking / trailer
+      mk('decking', '', 'SeaDeck foam', 1650),
+      mk('trailer', '', 'Dromeas 520 Trailer with approval', 1500)
+    ].filter((o) => !!o.categoryId);
+
+    return { models, options, modelId };
+  }
+
   function seedOlympicRibs() {
     const brandId = uid('brand');
     const cats = defaultCategories(brandId);
@@ -1776,6 +1934,7 @@
     const src40 = build40SrCatalog(brandId, byKey);
     const src40c = build40SrcCatalog(brandId, byKey);
     const src585 = build585SpeedsterCatalog(brandId, byKey);
+    const src499 = build499StarCatalog(brandId, byKey);
 
     return {
       brands: [
@@ -1854,7 +2013,8 @@
         ...src30.models,
         ...src40.models,
         ...src40c.models,
-        ...src585.models
+        ...src585.models,
+        ...src499.models
       ],
       optionCategories: cats,
       options: options.concat(
@@ -1863,7 +2023,8 @@
         src30.options,
         src40.options,
         src40c.options,
-        src585.options
+        src585.options,
+        src499.options
       ),
       quotations: [],
       soldVessels: [],
@@ -2036,6 +2197,38 @@
     return true;
   }
 
+  function ensure499StarCatalog(state) {
+    if (!state || !Array.isArray(state.brands) || !state.brands.length) return false;
+    const brand =
+      state.brands.find((b) => String(b.slug || '').toLowerCase() === 'olympicribs') ||
+      state.brands.find((b) => /olympic\s*ribs/i.test(String(b.name || ''))) ||
+      state.brands[0];
+    if (!brand) return false;
+    const models = Array.isArray(state.models) ? state.models : [];
+    const already = models.some((m) => /499\s*star/i.test(String(m.name || '').trim()));
+    if (already) {
+      const beforeCats = (state.optionCategories || []).length;
+      ensureBrandCategories(state, brand.id);
+      if ((state.optionCategories || []).length > beforeCats) pendingCatalogPersist = true;
+      return false;
+    }
+    const byKey = ensureBrandCategories(state, brand.id);
+    ['engines', 'engine_options', 'covers', 'electronics', 'other', 'decking', 'trailer'].forEach(
+      (key) => {
+        if (byKey[key]) return;
+        const fallback = defaultCategories(brand.id).find((c) => c.key === key);
+        if (!fallback) return;
+        state.optionCategories.push(fallback);
+        byKey[key] = fallback.id;
+      }
+    );
+    const built = build499StarCatalog(brand.id, byKey);
+    state.models = models.concat(built.models);
+    state.options = (Array.isArray(state.options) ? state.options : []).concat(built.options);
+    pendingCatalogPersist = true;
+    return true;
+  }
+
   function emptyProspect() {
     return {
       id: uid('prospect'),
@@ -2153,6 +2346,7 @@
       ensure40SrCatalog(s);
       ensure40SrcCatalog(s);
       ensure585SpeedsterCatalog(s);
+      ensure499StarCatalog(s);
     }
     return s;
   }
