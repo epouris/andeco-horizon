@@ -10,10 +10,6 @@
   /** @type {Object<string, Object<string, Array<{id:string, label:string}>>>} */
   var MODULE_SUBSECTIONS = {
     accounting: {
-      dashboard: [
-        { id: 'overview', label: 'Overview' },
-        { id: 'charts', label: 'Charts & KPIs' }
-      ],
       invoices: [
         { id: 'list', label: 'Invoice list' },
         { id: 'proforma', label: 'Proforma invoices' },

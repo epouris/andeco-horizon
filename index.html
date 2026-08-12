@@ -827,14 +827,37 @@
             <div id="accounting-invoice-app" class="accounting-embed" style="display:none;">
               <div class="accounting-embed-inner">
                 <div id="dashboard" class="page">
-                  <div class="page-header"><h2>Dashboard</h2><div class="header-actions"><button type="button" class="btn btn-primary" data-action="show-create-invoice">➕ New Invoice</button></div></div>
-                  <div class="dashboard-stats">
-                    <div class="stat-card"><div class="stat-icon">📄</div><div class="stat-content"><h3 id="total-invoices">0</h3><p>Total Invoices</p></div></div>
-                    <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-content"><h3 id="total-revenue">—</h3><p>Total Revenue</p></div></div>
-                    <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-content"><h3 id="pending-invoices">0</h3><p>Pending</p></div></div>
-                    <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-content"><h3 id="paid-invoices">0</h3><p>Paid</p></div></div>
+                  <div class="page-header"><h2>Dashboard</h2><div class="header-actions"><button type="button" class="btn btn-primary" data-action="show-create-invoice">New Invoice</button></div></div>
+                  <div class="dashboard-stats" id="dashboard-summary-stats">
+                    <div class="stat-card"><div class="stat-content"><h3 id="total-invoices">0</h3><p>Total invoices</p></div></div>
+                    <div class="stat-card"><div class="stat-content"><h3 id="total-revenue">—</h3><p>Total billed</p></div></div>
+                    <div class="stat-card"><div class="stat-content"><h3 id="pending-invoices">0</h3><p>Pending</p></div></div>
+                    <div class="stat-card"><div class="stat-content"><h3 id="paid-invoices">0</h3><p>Paid</p></div></div>
+                    <div class="stat-card stat-card--warn"><div class="stat-content"><h3 id="overdue-invoices">0</h3><p>Overdue</p></div></div>
                   </div>
-                  <div class="recent-section"><h3>Recent Invoices</h3><div id="recent-invoices-list"></div></div>
+                  <div class="dashboard-panels">
+                    <section class="dashboard-panel">
+                      <div class="dashboard-panel-head">
+                        <h3>Overdue</h3>
+                        <span id="dashboard-overdue-count" class="dashboard-panel-meta">0</span>
+                      </div>
+                      <div id="dashboard-overdue-list" class="dashboard-panel-body"></div>
+                    </section>
+                    <section class="dashboard-panel">
+                      <div class="dashboard-panel-head">
+                        <h3>Per client</h3>
+                        <span class="dashboard-panel-meta">Outstanding focus</span>
+                      </div>
+                      <div id="dashboard-client-stats" class="dashboard-panel-body"></div>
+                    </section>
+                    <section class="dashboard-panel dashboard-panel--wide">
+                      <div class="dashboard-panel-head">
+                        <h3>Monthly breakdown</h3>
+                        <span class="dashboard-panel-meta">Last 12 months</span>
+                      </div>
+                      <div id="dashboard-monthly-breakdown" class="dashboard-panel-body"></div>
+                    </section>
+                  </div>
                 </div>
                 <div id="invoices" class="page active">
                   <div class="page-header"><h2 id="invoices-page-title">Invoices</h2><div class="header-actions"><input type="text" id="invoice-search" placeholder="Search invoices..." class="search-input"><button type="button" class="btn btn-primary" id="btn-new-invoice-doc" data-action="show-create-invoice">➕ New Invoice</button></div></div>

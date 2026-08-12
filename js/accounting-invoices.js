@@ -582,42 +582,198 @@ const app = {
     },
 
     // Dashboard
+    isInvoiceOverdue(inv, today) {
+        if (!inv || this.isProformaDoc(inv) || inv.status === 'draft' || inv.status === 'paid') return false;
+        if (inv.status === 'overdue') return true;
+        const due = inv.dueDate ? new Date(inv.dueDate + 'T00:00:00') : null;
+        if (!due || isNaN(due.getTime())) return false;
+        const now = today || new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return due < todayStart;
+    },
+
     renderDashboard() {
         const invoices = DataStore.getInvoices().filter(inv => !this.isProformaDoc(inv));
-        const stats = this.calculateStats(invoices);
-        
+        const active = invoices.filter(inv => inv.status !== 'draft');
+        const today = new Date();
+        const overdue = active
+            .filter(inv => this.isInvoiceOverdue(inv, today))
+            .sort((a, b) => new Date(a.dueDate || a.date) - new Date(b.dueDate || b.date));
+        const stats = this.calculateStats(active, overdue);
+
         const totalInvoicesEl = document.getElementById('total-invoices');
         const totalRevenueEl = document.getElementById('total-revenue');
         const pendingInvoicesEl = document.getElementById('pending-invoices');
         const paidInvoicesEl = document.getElementById('paid-invoices');
-        
+        const overdueInvoicesEl = document.getElementById('overdue-invoices');
         if (totalInvoicesEl) totalInvoicesEl.textContent = stats.total;
         if (totalRevenueEl) totalRevenueEl.textContent = this.formatCurrency(stats.totalRevenue);
         if (pendingInvoicesEl) pendingInvoicesEl.textContent = stats.pending;
         if (paidInvoicesEl) paidInvoicesEl.textContent = stats.paid;
+        if (overdueInvoicesEl) overdueInvoicesEl.textContent = stats.overdue;
 
-        // Recent invoices (non-draft only; drafts are in Copilot)
-        const recentInvoices = invoices
-            .filter(inv => inv.status !== 'draft')
-            .sort((a, b) => new Date(b.date) - new Date(a.date))
-            .slice(0, 5);
-        
-        const recentList = document.getElementById('recent-invoices-list');
-        if (recentList) {
-            recentList.innerHTML = recentInvoices.length > 0
-                ? recentInvoices.map(inv => this.createInvoiceCardHTML(inv)).join('')
-                : '<p style="color: var(--text-secondary);">No invoices yet. Create your first invoice!</p>';
-        }
+        this.renderDashboardOverdue(overdue);
+        this.renderDashboardClientStats(active, today);
+        this.renderDashboardMonthlyBreakdown(active, today);
         this.renderCopilotDrafts();
     },
 
-    calculateStats(invoices) {
+    calculateStats(invoices, overdueList) {
+        const list = Array.isArray(invoices) ? invoices : [];
+        const overdue = Array.isArray(overdueList)
+            ? overdueList
+            : list.filter(inv => this.isInvoiceOverdue(inv));
         return {
-            total: invoices.length,
-            totalRevenue: invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0),
-            pending: invoices.filter(inv => inv.status === 'pending').length,
-            paid: invoices.filter(inv => inv.status === 'paid').length
+            total: list.length,
+            totalRevenue: list.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0),
+            pending: list.filter(inv => inv.status === 'pending' && !this.isInvoiceOverdue(inv)).length,
+            paid: list.filter(inv => inv.status === 'paid').length,
+            overdue: overdue.length
         };
+    },
+
+    renderDashboardOverdue(overdue) {
+        const countEl = document.getElementById('dashboard-overdue-count');
+        const listEl = document.getElementById('dashboard-overdue-list');
+        if (countEl) countEl.textContent = String((overdue || []).length);
+        if (!listEl) return;
+        if (!overdue || !overdue.length) {
+            listEl.innerHTML = '<p class="dashboard-empty">No overdue invoices.</p>';
+            return;
+        }
+        listEl.innerHTML = `
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Client</th>
+                  <th>Due</th>
+                  <th class="num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${overdue.slice(0, 12).map((inv) => {
+                    const safeId = this.escapeJsString(inv.id);
+                    return `<tr class="is-clickable" onclick="app.viewInvoice('${safeId}')">
+                      <td><strong>${this.escapeHtml(inv.invoiceNumber || '—')}</strong></td>
+                      <td>${this.escapeHtml(inv.clientName || '—')}</td>
+                      <td>${this.escapeHtml(this.formatDate(inv.dueDate || inv.date))}</td>
+                      <td class="num">${this.escapeHtml(this.formatCurrency(inv.total))}</td>
+                    </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+            ${overdue.length > 12 ? `<p class="dashboard-footnote">Showing 12 of ${overdue.length} overdue invoices.</p>` : ''}
+        `;
+    },
+
+    renderDashboardClientStats(invoices, today) {
+        const el = document.getElementById('dashboard-client-stats');
+        if (!el) return;
+        const byClient = {};
+        (invoices || []).forEach((inv) => {
+            const key = (inv.clientName || 'Unassigned').trim() || 'Unassigned';
+            if (!byClient[key]) {
+                byClient[key] = { client: key, count: 0, billed: 0, paid: 0, outstanding: 0, overdue: 0 };
+            }
+            const row = byClient[key];
+            const total = parseFloat(inv.total) || 0;
+            row.count += 1;
+            row.billed += total;
+            if (inv.status === 'paid') {
+                row.paid += total;
+            } else {
+                row.outstanding += total;
+                if (this.isInvoiceOverdue(inv, today)) row.overdue += 1;
+            }
+        });
+        const rows = Object.keys(byClient)
+            .map((k) => byClient[k])
+            .sort((a, b) => b.outstanding - a.outstanding || b.billed - a.billed || a.client.localeCompare(b.client));
+        if (!rows.length) {
+            el.innerHTML = '<p class="dashboard-empty">No client invoice activity yet.</p>';
+            return;
+        }
+        el.innerHTML = `
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th class="num">Invoices</th>
+                  <th class="num">Billed</th>
+                  <th class="num">Paid</th>
+                  <th class="num">Outstanding</th>
+                  <th class="num">Overdue</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.slice(0, 15).map((row) => `
+                  <tr>
+                    <td>${this.escapeHtml(row.client)}</td>
+                    <td class="num">${row.count}</td>
+                    <td class="num">${this.escapeHtml(this.formatCurrency(row.billed))}</td>
+                    <td class="num">${this.escapeHtml(this.formatCurrency(row.paid))}</td>
+                    <td class="num">${this.escapeHtml(this.formatCurrency(row.outstanding))}</td>
+                    <td class="num${row.overdue ? ' is-warn' : ''}">${row.overdue}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            ${rows.length > 15 ? `<p class="dashboard-footnote">Showing top 15 of ${rows.length} clients by outstanding balance.</p>` : ''}
+        `;
+    },
+
+    renderDashboardMonthlyBreakdown(invoices, today) {
+        const el = document.getElementById('dashboard-monthly-breakdown');
+        if (!el) return;
+        const months = [];
+        const cursor = new Date(today.getFullYear(), today.getMonth(), 1);
+        for (let i = 0; i < 12; i++) {
+            const y = cursor.getFullYear();
+            const m = cursor.getMonth();
+            const key = y + '-' + String(m + 1).padStart(2, '0');
+            const label = cursor.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+            months.push({ key, label, y, m, count: 0, billed: 0, paid: 0 });
+            cursor.setMonth(cursor.getMonth() - 1);
+        }
+        const byKey = Object.fromEntries(months.map((row) => [row.key, row]));
+        (invoices || []).forEach((inv) => {
+            if (!inv.date) return;
+            const d = new Date(inv.date + 'T00:00:00');
+            if (isNaN(d.getTime())) return;
+            const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            const row = byKey[key];
+            if (!row) return;
+            const total = parseFloat(inv.total) || 0;
+            row.count += 1;
+            row.billed += total;
+            if (inv.status === 'paid') row.paid += total;
+        });
+        el.innerHTML = `
+            <table class="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th class="num">Invoices</th>
+                  <th class="num">Billed</th>
+                  <th class="num">Paid</th>
+                  <th class="num">Unpaid</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${months.map((row) => {
+                    const unpaid = Math.max(0, row.billed - row.paid);
+                    return `<tr>
+                      <td>${this.escapeHtml(row.label)}</td>
+                      <td class="num">${row.count}</td>
+                      <td class="num">${this.escapeHtml(this.formatCurrency(row.billed))}</td>
+                      <td class="num">${this.escapeHtml(this.formatCurrency(row.paid))}</td>
+                      <td class="num">${this.escapeHtml(this.formatCurrency(unpaid))}</td>
+                    </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+        `;
     },
 
     // Invoice Form
