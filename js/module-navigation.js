@@ -13,8 +13,7 @@
       invoices: [
         { id: 'list', label: 'Invoice list' },
         { id: 'proforma', label: 'Proforma invoices' },
-        { id: 'drafts', label: 'Drafts' },
-        { id: 'recurring', label: 'Recurring' }
+        { id: 'drafts', label: 'Drafts' }
       ],
       receipts: [
         { id: 'list', label: 'Receipt list' },
