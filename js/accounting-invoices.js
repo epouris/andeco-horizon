@@ -1366,30 +1366,34 @@ const app = {
         const displayNumber = (invoice.status === 'draft' && !invoice.invoiceNumber) ? 'Draft' : (invoice.invoiceNumber || '—');
         const label = this.getDocumentTypeLabel(invoice);
         const status = this.escapeHtml(invoice.status || '');
+        const dateLine = this.isProformaDoc(invoice)
+            ? this.escapeHtml(this.formatDate(invoice.date))
+            : `${this.escapeHtml(this.formatDate(invoice.date))} · due ${this.escapeHtml(this.formatDate(invoice.dueDate))}`;
         const converted = invoice.convertedToInvoiceId
-            ? `<p class="module-meta">Converted to invoice</p>`
+            ? `<span class="invoice-info-note">Converted</span>`
             : '';
         const convertBtn = this.isProformaDoc(invoice) && !invoice.convertedToInvoiceId
-            ? `<button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.convertProformaToInvoice('${safeId}')">Convert to Invoice</button>`
+            ? `<button class="btn btn-secondary" onclick="event.stopPropagation(); app.convertProformaToInvoice('${safeId}')">Convert</button>`
             : '';
         return `
             <div class="invoice-card">
-                <div class="invoice-info" onclick="app.viewInvoice('${safeId}')" style="flex: 1; cursor: pointer;">
-                    <h3>${this.escapeHtml(displayNumber)}</h3>
-                    <p><strong>${this.escapeHtml(label)}</strong></p>
-                    <p><strong>Client:</strong> ${this.escapeHtml(invoice.clientName)}</p>
-                    <p><strong>Date:</strong> ${this.escapeHtml(this.formatDate(invoice.date))}</p>
-                    ${this.isProformaDoc(invoice) ? '' : `<p><strong>Due Date:</strong> ${this.escapeHtml(this.formatDate(invoice.dueDate))}</p>`}
-                    ${converted}
+                <div class="invoice-info" onclick="app.viewInvoice('${safeId}')">
+                    <div class="invoice-info-top">
+                        <h3>${this.escapeHtml(displayNumber)}</h3>
+                        <span class="invoice-doc-type">${this.escapeHtml(label)}</span>
+                        ${converted}
+                    </div>
+                    <p class="invoice-info-line">${this.escapeHtml(invoice.clientName || '—')}</p>
+                    <p class="invoice-info-line invoice-info-dates">${dateLine}</p>
                 </div>
                 <div class="invoice-meta">
                     <div class="invoice-amount">${this.escapeHtml(this.formatCurrency(invoice.total))}</div>
                     <span class="invoice-status status-${status}">${status}</span>
-                    <div class="invoice-actions" style="margin-top: 0.5rem;">
-                        <button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.viewInvoice('${safeId}')">View</button>
-                        <button class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">Edit</button>
+                    <div class="invoice-actions">
+                        <button class="btn btn-secondary" onclick="event.stopPropagation(); app.viewInvoice('${safeId}')">View</button>
+                        <button class="btn btn-primary" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">Edit</button>
                         ${convertBtn}
-                        <button class="btn btn-danger" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isProformaDoc(invoice) ? 'proforma' : 'invoice'}?')) { DataStore.deleteInvoice('${safeId}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
+                        <button class="btn btn-danger" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isProformaDoc(invoice) ? 'proforma' : 'invoice'}?')) { DataStore.deleteInvoice('${safeId}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
                     </div>
                 </div>
             </div>
