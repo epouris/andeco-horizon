@@ -667,7 +667,7 @@ const app = {
         if (cols.qty) metrics += '0.35fr ';
         if (cols.persons) metrics += '0.35fr ';
         if (cols.hours) metrics += '0.35fr ';
-        wrap.style.setProperty('--item-grid', `0.5fr 3fr ${metrics}0.7fr 1fr auto`);
+        wrap.style.setProperty('--item-grid', `0.5fr 0.95fr 2.6fr ${metrics}0.7fr 1fr auto`);
     },
 
     lineItemAmount(item, cols) {
@@ -709,10 +709,21 @@ const app = {
 
     formatInvoiceItemDescription(item) {
         const base = (item && item.description) || '';
-        const label = this.formatServiceScheduleLabel(item && item.serviceDate, item && item.serviceStart, item && item.serviceEnd);
-        if (!label) return base;
-        if (base && base.indexOf(label) !== -1) return base;
-        return base ? (base + ' (' + label + ')') : label;
+        // Date has its own column on the printed invoice — only append start/finish times here.
+        const timePart = [item && item.serviceStart, item && item.serviceEnd].filter(Boolean).join(' – ');
+        if (!timePart) return base;
+        if (base && base.indexOf(timePart) !== -1) return base;
+        return base ? (base + ' (' + timePart + ')') : timePart;
+    },
+
+    formatInvoiceItemDate(item) {
+        const dateStr = item && item.serviceDate;
+        if (!dateStr) return '';
+        const d = new Date(String(dateStr) + 'T00:00:00');
+        if (isNaN(d.getTime())) return String(dateStr);
+        return window.AndecoDate
+            ? window.AndecoDate.formatDate(d)
+            : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     },
 
     applyServiceScheduleToRow(row) {
@@ -765,6 +776,7 @@ const app = {
         return `
             <div class="invoice-item-main">
                 <input type="text" placeholder="Code" class="item-product-code" value="${code}" title="Enter preset product code to fill description and price">
+                <input type="date" class="item-service-date item-line-date" value="${serviceDate}" title="Line date">
                 <div class="item-desc-wrap">
                     <input type="text" placeholder="Description" class="item-description" value="${desc}" required>
                     <button type="button" class="item-schedule-toggle">${hasSchedule ? 'Hide schedule' : 'Add schedule'}</button>
@@ -778,10 +790,6 @@ const app = {
             </div>
             <div class="item-service-schedule">
                 <div class="svc-field">
-                    <label>Date</label>
-                    <input type="date" class="item-service-date" value="${serviceDate}">
-                </div>
-                <div class="svc-field">
                     <label>Start</label>
                     <input type="time" class="item-service-start" value="${serviceStart}">
                 </div>
@@ -789,7 +797,7 @@ const app = {
                     <label>Finish</label>
                     <input type="time" class="item-service-end" value="${serviceEnd}">
                 </div>
-                <span class="item-service-hint">Hours are calculated from start → finish</span>
+                <span class="item-service-hint">Hours are calculated from start → finish (uses the Date column)</span>
             </div>
         `;
     },
@@ -797,6 +805,7 @@ const app = {
     buildInvoiceItemsTableHtml(invoice) {
         const cols = this.normalizeItemColumns(invoice && invoice.itemColumns);
         const headers = [
+            '<th>Date</th>',
             '<th>Description</th>',
             cols.qty ? '<th class="text-center">Qty</th>' : '',
             cols.persons ? '<th class="text-center">Persons</th>' : '',
@@ -804,14 +813,16 @@ const app = {
             '<th class="text-center">Rate</th>',
             '<th class="text-center">Amount</th>'
         ].join('');
-        const colSpan = 2 + (cols.qty ? 1 : 0) + (cols.persons ? 1 : 0) + (cols.hours ? 1 : 0) + 1;
+        const colSpan = 4 + (cols.qty ? 1 : 0) + (cols.persons ? 1 : 0) + (cols.hours ? 1 : 0);
         const rows = (invoice.items || []).map((item) => {
             if (item.isHeader) {
                 const text = (item.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 return `<tr><td colspan="${colSpan}" class="item-header-cell">${text || '&nbsp;'}</td></tr>`;
             }
+            const dateCell = this.formatInvoiceItemDate(item).replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const desc = this.formatInvoiceItemDescription(item).replace(/</g, '&lt;').replace(/>/g, '&gt;');
             return `<tr>
+                <td>${dateCell}</td>
                 <td>${desc}</td>
                 ${cols.qty ? `<td class="text-center">${item.quantity != null && item.quantity !== '' ? item.quantity : ''}</td>` : ''}
                 ${cols.persons ? `<td class="text-center">${item.persons != null && item.persons !== '' ? item.persons : ''}</td>` : ''}
