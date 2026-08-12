@@ -3693,7 +3693,6 @@
     const list = [...state.quotations].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     el.innerHTML = `
       <div class="dist-toolbar">
-        <p style="margin:0;color:var(--text-secondary);font-size:.9rem">Build quotations for potential clients from model options, apply line discounts, print, and convert to a proforma invoice. Import a configurator PDF to fill OLR Ref and the Colors section only — engines and options stay manual.</p>
         <div class="dist-actions">
           <input type="file" id="dist-config-pdf-file" accept="application/pdf,.pdf" hidden>
           <button type="button" class="btn btn-secondary" id="dist-import-config-pdf">Import colors from PDF</button>
