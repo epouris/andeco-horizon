@@ -953,16 +953,8 @@
     margin-bottom: 1.25rem;
   }
   .stat-card { padding: 1rem 0.85rem; gap: 0.65rem; }
-  .stat-icon { width: 40px; height: 40px; font-size: 1.35rem; }
   .stat-content h3 { font-size: 1.25rem; }
   .stat-content p { font-size: 0.72rem; }
-  .recent-section { padding: 1rem; }
-  .recent-section h3 {
-    font-size: 1.05rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   .search-input { width: min(100%, 11rem); }
   .invoice-form-container { padding: 1.15rem; }
 }
