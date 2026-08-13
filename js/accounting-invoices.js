@@ -832,11 +832,15 @@ const app = {
         wrap.classList.toggle('col-qty', cols.qty);
         wrap.classList.toggle('col-persons', cols.persons);
         wrap.classList.toggle('col-hours', cols.hours);
+        // Fixed mins keep date/number fields usable on narrow monitors; description flexes.
         let metrics = '';
-        if (cols.qty) metrics += '0.35fr ';
-        if (cols.persons) metrics += '0.35fr ';
-        if (cols.hours) metrics += '0.35fr ';
-        wrap.style.setProperty('--item-grid', `0.5fr 0.95fr 2.6fr ${metrics}0.7fr 1fr auto`);
+        if (cols.qty) metrics += 'minmax(3.5rem, 4.25rem) ';
+        if (cols.persons) metrics += 'minmax(3.75rem, 4.5rem) ';
+        if (cols.hours) metrics += 'minmax(3.75rem, 4.5rem) ';
+        wrap.style.setProperty(
+            '--item-grid',
+            `minmax(4.75rem, 5.75rem) minmax(9.75rem, 10.75rem) minmax(11rem, 1fr) ${metrics}minmax(6rem, 7.25rem) minmax(5rem, 6.5rem) 2rem`
+        );
     },
 
     lineItemAmount(item, cols) {
