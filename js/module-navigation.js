@@ -390,8 +390,8 @@
     if (sectionId === 'payroll') return false;
     if (sectionId === 'subcontractors') return false;
     if (sectionId === 'social-insurance') return false;
-    // Invoices: list + proforma are real screens; other subtabs stay placeholders
-    if (sectionId === 'invoices' && (subsectionId === 'list' || subsectionId === 'proforma')) {
+    // Invoices: list + proforma + drafts are real screens; other subtabs stay placeholders
+    if (sectionId === 'invoices' && (subsectionId === 'list' || subsectionId === 'proforma' || subsectionId === 'drafts')) {
       var invOverlay = document.getElementById('accounting-subsection-overlay');
       if (invOverlay) invOverlay.style.display = 'none';
       if (typeof window.andecoRefreshAccountingSection === 'function') {

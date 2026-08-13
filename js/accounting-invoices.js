@@ -19,7 +19,7 @@ const app = {
     currentInvoiceId: null,
     currentClientId: null,
     currentReceiptId: null,
-    invoiceListMode: 'invoice', // 'invoice' | 'proforma'
+    invoiceListMode: 'invoice', // 'invoice' | 'proforma' | 'drafts'
     _sharedDataPollTimer: null,
 
     isProformaMode() {
@@ -42,7 +42,9 @@ const app = {
     },
 
     setInvoicesSubsection(subsectionId) {
-        this.invoiceListMode = subsectionId === 'proforma' ? 'proforma' : 'invoice';
+        if (subsectionId === 'proforma') this.invoiceListMode = 'proforma';
+        else if (subsectionId === 'drafts') this.invoiceListMode = 'drafts';
+        else this.invoiceListMode = 'invoice';
         this.applyInvoiceModeUi();
         if (typeof this.showPage === 'function') {
             const createPage = document.getElementById('create-invoice');
@@ -50,14 +52,25 @@ const app = {
             if (!onCreate) this.showPage('invoices');
             else this.applyInvoiceModeUi();
         }
+        if (typeof this.renderInvoices === 'function') {
+            const search = document.getElementById('invoice-search');
+            this.renderInvoices(search ? search.value : '');
+        }
     },
 
     applyInvoiceModeUi() {
         const isProforma = this.isProformaMode();
+        const isDrafts = this.invoiceListMode === 'drafts';
         const title = document.getElementById('invoices-page-title');
-        if (title) title.textContent = isProforma ? 'Proforma Invoices' : 'Invoices';
+        if (title) {
+            title.textContent = isDrafts ? 'Drafts' : (isProforma ? 'Proforma Invoices' : 'Invoices');
+        }
         const search = document.getElementById('invoice-search');
-        if (search) search.placeholder = isProforma ? 'Search proforma invoices...' : 'Search invoices...';
+        if (search) {
+            search.placeholder = isDrafts
+                ? 'Search drafts...'
+                : (isProforma ? 'Search proforma invoices...' : 'Search invoices...');
+        }
         const newBtn = document.getElementById('btn-new-invoice-doc');
         if (newBtn) newBtn.textContent = isProforma ? '➕ New Proforma' : '➕ New Invoice';
         const formTitle = document.getElementById('invoice-form-title');
@@ -1432,13 +1445,22 @@ const app = {
         this.showPage('invoices');
     },
 
-    // Invoice List (excludes drafts; drafts appear in Copilot section)
+    // Invoice list excludes drafts (those appear under Drafts / Copilot).
+    // Proforma list includes draft proformas. Drafts subsection shows all drafts.
     renderInvoices(searchTerm = '') {
         this.applyInvoiceModeUi();
-        const wantProforma = this.isProformaMode();
+        const mode = this.invoiceListMode;
+        const wantProforma = mode === 'proforma';
+        const wantDrafts = mode === 'drafts';
         let invoices = DataStore.getInvoices().filter(inv => {
+            if (wantDrafts) return inv.status === 'draft';
+            if (wantProforma) {
+                if (!this.isProformaDoc(inv)) return false;
+                return true; // include draft + non-draft proformas
+            }
+            // Regular invoices: hide drafts and proformas
             if (inv.status === 'draft') return false;
-            return wantProforma ? this.isProformaDoc(inv) : !this.isProformaDoc(inv);
+            return !this.isProformaDoc(inv);
         });
         
         if (searchTerm) {
@@ -1446,11 +1468,15 @@ const app = {
             invoices = invoices.filter(inv => 
                 (inv.invoiceNumber || '').toLowerCase().includes(term) ||
                 (inv.clientName || '').toLowerCase().includes(term) ||
-                (inv.status || '').toLowerCase().includes(term)
+                (inv.status || '').toLowerCase().includes(term) ||
+                (this.getDocumentTypeLabel(inv) || '').toLowerCase().includes(term)
             );
         }
 
         invoices = invoices.sort((a, b) => {
+            if (wantDrafts) {
+                return new Date(b.updatedAt || b.createdAt || b.date) - new Date(a.updatedAt || a.createdAt || a.date);
+            }
             const numA = (a.invoiceNumber || '').match(/\d+/);
             const numB = (b.invoiceNumber || '').match(/\d+/);
             const nA = numA ? parseInt(numA[0], 10) : -1;
@@ -1474,9 +1500,11 @@ const app = {
             container.innerHTML = '';
             container.appendChild(fragment);
         } else {
-            container.innerHTML = wantProforma
-                ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No proforma invoices found.</p>'
-                : '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No invoices found.</p>';
+            container.innerHTML = wantDrafts
+                ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No draft invoices or proformas.</p>'
+                : (wantProforma
+                    ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No proforma invoices found.</p>'
+                    : '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No invoices found.</p>');
         }
         this.renderCopilotDrafts();
     },
@@ -1488,22 +1516,23 @@ const app = {
     renderCopilotDrafts() {
         const listEl = document.getElementById('copilot-drafts-list');
         if (!listEl) return;
-        const drafts = DataStore.getInvoices().filter(inv => inv.status === 'draft' && !this.isProformaDoc(inv));
+        const drafts = DataStore.getInvoices().filter(inv => inv.status === 'draft');
         drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
         if (drafts.length === 0) {
-            listEl.innerHTML = '<p class="copilot-drafts-empty">No draft invoices.</p>';
+            listEl.innerHTML = '<p class="copilot-drafts-empty">No drafts.</p>';
             return;
         }
         listEl.innerHTML = drafts.map(inv => {
             const safeId = this.escapeJsString(inv.id);
+            const kind = this.isProformaDoc(inv) ? 'Proforma draft' : 'Draft';
             return `
             <div class="copilot-draft-item">
                 <div class="copilot-draft-item-main" onclick="app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">
-                    <span class="copilot-draft-label">Draft</span>
+                    <span class="copilot-draft-label">${kind}</span>
                     <span class="copilot-draft-client">${this.escapeHtml(inv.clientName || 'No client')}</span>
                     <span class="copilot-draft-amount">${this.escapeHtml(this.formatCurrency(inv.total))}</span>
                 </div>
-                <button type="button" class="btn-delete-draft" onclick="event.stopPropagation(); if(confirm('Delete this draft invoice?')) { DataStore.deleteInvoice('${safeId}'); app.renderCopilotDrafts(); app.renderInvoices(); }" aria-label="Delete draft">×</button>
+                <button type="button" class="btn-delete-draft" onclick="event.stopPropagation(); if(confirm('Delete this draft?')) { DataStore.deleteInvoice('${safeId}'); app.renderCopilotDrafts(); app.renderInvoices(); }" aria-label="Delete draft">×</button>
             </div>
         `;
         }).join('');
@@ -1539,7 +1568,7 @@ const app = {
         const converted = invoice.convertedToInvoiceId
             ? `<span class="invoice-info-note">Converted</span>`
             : '';
-        const convertBtn = this.isProformaDoc(invoice) && !invoice.convertedToInvoiceId
+        const convertBtn = this.isProformaDoc(invoice) && !invoice.convertedToInvoiceId && invoice.status !== 'draft'
             ? `<button class="btn btn-secondary" onclick="event.stopPropagation(); app.convertProformaToInvoice('${safeId}')">Convert</button>`
             : '';
         return `
