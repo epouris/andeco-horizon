@@ -1708,12 +1708,14 @@ body.dist-modal-open { overflow: hidden; }
   /* Page 1: header, prepared for, tech specs, standard equipment, colors.
      Then photos on their own page (when present), then pricing / terms. */
   body.dist-quote-open .dist-quote-section--detail-photos,
+  body.dist-quote-open .dist-quote-section--sister-photos,
   body.dist-quote-open .dist-quote-section--pricing {
     break-before: page;
     page-break-before: always;
   }
 
-  body.dist-quote-open .dist-quote-section--detail-photos {
+  body.dist-quote-open .dist-quote-section--detail-photos,
+  body.dist-quote-open .dist-quote-section--sister-photos {
     break-inside: auto;
     page-break-inside: auto;
   }
