@@ -268,6 +268,17 @@
     return q;
   }
 
+  function normalizeSisterDetailPhotos(q) {
+    if (!q || typeof q !== 'object') return q;
+    const src = q.sisterDetailPhotos && typeof q.sisterDetailPhotos === 'object' ? q.sisterDetailPhotos : {};
+    const next = emptyDetailPhotos();
+    QUOTE_PHOTO_SLOTS.forEach((slot) => {
+      next[slot.key] = String(src[slot.key] || '').trim();
+    });
+    q.sisterDetailPhotos = next;
+    return q;
+  }
+
   function quoteDetailPhotosList(q) {
     normalizeQuoteDetailPhotos(q);
     return QUOTE_PHOTO_SLOTS.map((slot) => ({
@@ -277,10 +288,25 @@
     })).filter((p) => p.src);
   }
 
+  function quoteSisterDetailPhotosList(q) {
+    normalizeSisterDetailPhotos(q);
+    return QUOTE_PHOTO_SLOTS.map((slot) => ({
+      key: slot.key,
+      label: slot.label,
+      src: q.sisterDetailPhotos[slot.key] || ''
+    })).filter((p) => p.src);
+  }
+
   function quoteHasAnyDetailPhotos(q) {
     if (!q) return false;
     normalizeQuoteDetailPhotos(q);
     return QUOTE_PHOTO_SLOTS.some((slot) => !!(q.detailPhotos[slot.key] || '').trim());
+  }
+
+  function quoteHasAnySisterDetailPhotos(q) {
+    if (!q) return false;
+    normalizeSisterDetailPhotos(q);
+    return QUOTE_PHOTO_SLOTS.some((slot) => !!(q.sisterDetailPhotos[slot.key] || '').trim());
   }
 
   function quoteHasVesselPhoto(q) {
@@ -382,20 +408,30 @@
     });
   }
 
-  function applyPhotoToTargetSlot(target, slotKey, src, overwrite) {
+  function photoBagFor(target, bag) {
+    const key = bag === 'sisterDetailPhotos' ? 'sisterDetailPhotos' : 'detailPhotos';
+    if (key === 'sisterDetailPhotos') normalizeSisterDetailPhotos(target);
+    else normalizeQuoteDetailPhotos(target);
+    return target[key];
+  }
+
+  function applyPhotoToTargetSlot(target, slotKey, src, overwrite, bag) {
     const value = String(src || '').trim();
     if (!value) return 'empty';
+    const targetBag = bag === 'sisterDetailPhotos' ? 'sisterDetailPhotos' : 'detailPhotos';
     if (slotKey === 'vesselPhoto') {
+      // Sister vessel section has no separate main photo — map into first empty detail slot if needed.
+      if (targetBag === 'sisterDetailPhotos') return 'empty';
       const existing = String(target.vesselPhoto || '').trim();
       if (existing && !overwrite) return 'skipped';
       target.vesselPhoto = value;
       return 'copied';
     }
-    normalizeQuoteDetailPhotos(target);
+    const photos = photoBagFor(target, targetBag);
     if (!QUOTE_PHOTO_SLOTS.some((s) => s.key === slotKey)) return 'empty';
-    const existing = String((target.detailPhotos && target.detailPhotos[slotKey]) || '').trim();
+    const existing = String((photos && photos[slotKey]) || '').trim();
     if (existing && !overwrite) return 'skipped';
-    target.detailPhotos[slotKey] = value;
+    photos[slotKey] = value;
     return 'copied';
   }
 
@@ -405,30 +441,49 @@
       ? options.keys
       : QUOTE_PHOTO_SLOTS.map((s) => s.key);
     const overwrite = !!options.overwrite;
-    normalizeQuoteDetailPhotos(target);
+    const bag = options.bag === 'sisterDetailPhotos' ? 'sisterDetailPhotos' : 'detailPhotos';
+    photoBagFor(target, bag);
     normalizeQuoteDetailPhotos(source);
     let copied = 0;
     let skipped = 0;
     keys.forEach((key) => {
       const src = String((source.detailPhotos && source.detailPhotos[key]) || '').trim();
-      const result = applyPhotoToTargetSlot(target, key, src, overwrite);
+      const result = applyPhotoToTargetSlot(target, key, src, overwrite, bag);
       if (result === 'copied') copied += 1;
       else if (result === 'skipped') skipped += 1;
     });
-    if (options.includeVesselPhoto) {
-      const result = applyPhotoToTargetSlot(target, 'vesselPhoto', source.vesselPhoto, overwrite);
+    if (options.includeVesselPhoto && bag !== 'sisterDetailPhotos') {
+      const result = applyPhotoToTargetSlot(target, 'vesselPhoto', source.vesselPhoto, overwrite, bag);
       if (result === 'copied') copied += 1;
       else if (result === 'skipped') skipped += 1;
+    } else if (options.includeVesselPhoto && bag === 'sisterDetailPhotos') {
+      // Prefer mapping source vessel photo into an empty sister slot (hull first).
+      const photos = photoBagFor(target, bag);
+      const vesselSrc = String(source.vesselPhoto || '').trim();
+      if (vesselSrc) {
+        const free = QUOTE_PHOTO_SLOTS.find((slot) => !(photos[slot.key] || '').trim());
+        if (free) {
+          const result = applyPhotoToTargetSlot(target, free.key, vesselSrc, overwrite, bag);
+          if (result === 'copied') copied += 1;
+          else if (result === 'skipped') skipped += 1;
+        } else if (overwrite) {
+          const result = applyPhotoToTargetSlot(target, 'hull', vesselSrc, true, bag);
+          if (result === 'copied') copied += 1;
+        } else {
+          skipped += 1;
+        }
+      }
     }
     return { copied, skipped };
   }
 
-  function copyPhotosFromFleet(target, photoAssignments, overwrite) {
-    normalizeQuoteDetailPhotos(target);
+  function copyPhotosFromFleet(target, photoAssignments, overwrite, bag) {
+    const targetBag = bag === 'sisterDetailPhotos' ? 'sisterDetailPhotos' : 'detailPhotos';
+    photoBagFor(target, targetBag);
     let copied = 0;
     let skipped = 0;
     (photoAssignments || []).forEach((row) => {
-      const result = applyPhotoToTargetSlot(target, row.slotKey, row.src, overwrite);
+      const result = applyPhotoToTargetSlot(target, row.slotKey, row.src, overwrite, targetBag);
       if (result === 'copied') copied += 1;
       else if (result === 'skipped') skipped += 1;
     });
@@ -2633,6 +2688,7 @@
       if (q.paymentTerms == null) q.paymentTerms = s.settings.defaultPaymentTerms || '';
       normalizeQuoteColors(q);
       normalizeQuoteDetailPhotos(q);
+      normalizeSisterDetailPhotos(q);
       normalizeQuoteFees(q);
       return q;
     });
@@ -4041,6 +4097,7 @@
       olrRef: '',
       colors: [],
       detailPhotos: emptyDetailPhotos(),
+      sisterDetailPhotos: emptyDetailPhotos(),
       vesselPhoto: model.photo || '',
       paymentTerms: defaultPaymentTerms(),
       transportPackagingFee: 0,
@@ -4107,6 +4164,7 @@
     if (q.paymentTerms == null) q.paymentTerms = defaultPaymentTerms();
     normalizeQuoteColors(q);
     normalizeQuoteDetailPhotos(q);
+    normalizeSisterDetailPhotos(q);
     normalizeQuoteFees(q);
     if (q.vesselPhoto == null) q.vesselPhoto = '';
     recalcQuote(q);
@@ -4115,6 +4173,7 @@
     const model = modelById(q.modelId);
     const vesselPhoto = resolveQuoteVesselPhoto(q, model);
     const detailPhotos = q.detailPhotos || emptyDetailPhotos();
+    const sisterDetailPhotos = q.sisterDetailPhotos || emptyDetailPhotos();
     const prospects = [...(state.potentialClients || [])].sort((a, b) =>
       prospectLabel(a).localeCompare(prospectLabel(b))
     );
@@ -4221,12 +4280,9 @@
       <div class="dist-card" style="margin-top:1rem">
         <div class="dist-card-header">
           <h3>Detail photos</h3>
-          <div class="dist-actions">
-            <button type="button" class="btn btn-secondary btn-sm" id="dq-sister-photos">Add from another vessel</button>
-          </div>
         </div>
         <p class="dist-hint" style="margin:0 0 .75rem">
-          Copy photos from another quotation (any model) or from a Fleet vessel gallery into these detail slots.
+          Photos of this vessel for the quotation (Hull, Fore, Aft, Tubes, Interior, Electronics).
         </p>
         <div class="dist-detail-photos-editor">
           ${QUOTE_PHOTO_SLOTS.map((slot) => {
@@ -4240,6 +4296,34 @@
                   <input type="file" accept="image/*" data-photo-file="${esc(slot.key)}">
                   <input type="url" data-photo-url="${esc(slot.key)}" value="${esc(urlValue)}" placeholder="Or paste image URL">
                   <button type="button" class="btn btn-secondary btn-sm" data-photo-clear="${esc(slot.key)}" ${src ? '' : 'disabled'}>Remove</button>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="dist-card" style="margin-top:1rem">
+        <div class="dist-card-header">
+          <h3>Sister Vessel</h3>
+          <div class="dist-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="dq-sister-photos">Add from another vessel</button>
+          </div>
+        </div>
+        <p class="dist-hint" style="margin:0 0 .75rem">
+          Reference photos of a sister vessel. Upload here, or copy from another quotation / Fleet vessel.
+        </p>
+        <div class="dist-detail-photos-editor" data-photo-bag="sister">
+          ${QUOTE_PHOTO_SLOTS.map((slot) => {
+            const src = sisterDetailPhotos[slot.key] || '';
+            const urlValue = src && String(src).indexOf('data:') === 0 ? '' : src;
+            return `
+              <div class="dist-detail-photo-slot" data-sister-photo-slot="${esc(slot.key)}">
+                <div class="dist-detail-photo-slot-label">${esc(slot.label)}</div>
+                <div class="dist-photo-preview">${src ? `<img src="${safeImgSrcAttr(src)}" alt="${esc(slot.label)}">` : '<span>No photo</span>'}</div>
+                <div class="dist-actions" style="flex-direction:column;align-items:stretch;gap:.35rem">
+                  <input type="file" accept="image/*" data-sister-photo-file="${esc(slot.key)}">
+                  <input type="url" data-sister-photo-url="${esc(slot.key)}" value="${esc(urlValue)}" placeholder="Or paste image URL">
+                  <button type="button" class="btn btn-secondary btn-sm" data-sister-photo-clear="${esc(slot.key)}" ${src ? '' : 'disabled'}>Remove</button>
                 </div>
               </div>`;
           }).join('')}
@@ -4321,12 +4405,19 @@
       const photoUrl = String(el.querySelector('#dq-photo-url')?.value || '').trim();
       if (photoUrl) q.vesselPhoto = photoUrl;
       normalizeQuoteDetailPhotos(q);
+      normalizeSisterDetailPhotos(q);
       el.querySelectorAll('[data-photo-url]').forEach((input) => {
         const key = input.getAttribute('data-photo-url');
         if (!key) return;
         const typed = String(input.value || '').trim();
         // Keep an uploaded data-URL when the URL field is left blank.
         if (typed) q.detailPhotos[key] = typed;
+      });
+      el.querySelectorAll('[data-sister-photo-url]').forEach((input) => {
+        const key = input.getAttribute('data-sister-photo-url');
+        if (!key) return;
+        const typed = String(input.value || '').trim();
+        if (typed) q.sisterDetailPhotos[key] = typed;
       });
       q.prospectId = el.querySelector('#dq-prospect')?.value || '';
       q.clientId = '';
@@ -4587,6 +4678,48 @@
         renderQuoteEditor(el);
       });
     });
+    el.querySelectorAll('[data-sister-photo-file]').forEach((input) => {
+      input.addEventListener('change', async (e) => {
+        const key = input.getAttribute('data-sister-photo-file');
+        const file = e.target.files && e.target.files[0];
+        if (!key || !file) return;
+        try {
+          const slot = QUOTE_PHOTO_SLOTS.find((s) => s.key === key);
+          toast(`Saving sister ${slot ? slot.label : 'photo'}…`, 'info');
+          normalizeSisterDetailPhotos(q);
+          q.sisterDetailPhotos[key] = await readImageAsDataUrl(file, 450 * 1024);
+          q.updatedAt = new Date().toISOString();
+          const ok = await persist(true);
+          renderQuoteEditor(el);
+          if (ok) toast(`Sister ${slot ? slot.label : 'photo'} saved`);
+        } catch (err) {
+          console.error(err);
+          toast(err?.message || 'Could not read that image', 'error');
+        }
+      });
+    });
+    el.querySelectorAll('[data-sister-photo-url]').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const key = input.getAttribute('data-sister-photo-url');
+        if (!key) return;
+        normalizeSisterDetailPhotos(q);
+        q.sisterDetailPhotos[key] = String(input.value || '').trim();
+        q.updatedAt = new Date().toISOString();
+        await persist(true);
+        renderQuoteEditor(el);
+      });
+    });
+    el.querySelectorAll('[data-sister-photo-clear]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const key = btn.getAttribute('data-sister-photo-clear');
+        if (!key) return;
+        normalizeSisterDetailPhotos(q);
+        q.sisterDetailPhotos[key] = '';
+        q.updatedAt = new Date().toISOString();
+        await persist(true);
+        renderQuoteEditor(el);
+      });
+    });
     el.querySelector('#dq-sister-photos')?.addEventListener('click', () => {
       saveFields();
       openSisterPhotosDialog(q.id, () => {
@@ -4661,7 +4794,7 @@
       return;
     }
 
-    normalizeQuoteDetailPhotos(q);
+    normalizeSisterDetailPhotos(q);
     let selectedKey = sources[0].key;
 
     const overlay = document.createElement('div');
@@ -4670,8 +4803,8 @@
       <div class="dist-modal dist-modal--sister-photos" role="dialog" aria-modal="true" aria-labelledby="dist-sister-title">
         <div class="dist-modal-header">
           <div>
-            <h3 id="dist-sister-title">Add photos from another vessel</h3>
-            <p class="dist-hint">Choose any quotation or Fleet vessel that already has photos, then pick what to copy.</p>
+            <h3 id="dist-sister-title">Add photos to Sister Vessel</h3>
+            <p class="dist-hint">Copy into the Sister Vessel section from another quotation or Fleet vessel.</p>
           </div>
           <button type="button" class="btn btn-ghost btn-sm" data-dist-sister-cancel aria-label="Close">✕</button>
         </div>
@@ -4687,22 +4820,19 @@
     const selectedSource = () => sources.find((s) => s.key === selectedKey) || sources[0];
 
     const emptyTargetSlots = () => {
-      normalizeQuoteDetailPhotos(q);
-      const slots = QUOTE_PHOTO_SLOTS
-        .filter((slot) => !(q.detailPhotos[slot.key] || '').trim())
+      normalizeSisterDetailPhotos(q);
+      return QUOTE_PHOTO_SLOTS
+        .filter((slot) => !(q.sisterDetailPhotos[slot.key] || '').trim())
         .map((slot) => slot.key);
-      if (!(q.vesselPhoto || '').trim()) slots.push('vesselPhoto');
-      return slots;
     };
 
     const slotOptionsHtml = (selected) => {
       const opts = [
         '<option value="">Skip</option>',
         ...QUOTE_PHOTO_SLOTS.map((slot) => {
-          const filled = !!(q.detailPhotos[slot.key] || '').trim();
+          const filled = !!(q.sisterDetailPhotos[slot.key] || '').trim();
           return `<option value="${esc(slot.key)}" ${selected === slot.key ? 'selected' : ''}>${esc(slot.label)}${filled ? ' (filled)' : ''}</option>`;
-        }),
-        `<option value="vesselPhoto" ${selected === 'vesselPhoto' ? 'selected' : ''}>Vessel photo${(q.vesselPhoto || '').trim() ? ' (filled)' : ''}</option>`
+        })
       ];
       return opts.join('');
     };
@@ -4720,7 +4850,7 @@
             key: slot.key,
             label: slot.label,
             src: String((source.detailPhotos && source.detailPhotos[slot.key]) || '').trim(),
-            targetHas: !!(q.detailPhotos[slot.key] || '').trim()
+            targetHas: !!(q.sisterDetailPhotos[slot.key] || '').trim()
           }));
           const vesselSrc = String(source.vesselPhoto || '').trim();
           photosHtml = `
@@ -4735,7 +4865,7 @@
                   </span>
                   <span class="dist-sister-slot-meta">
                     <strong>${esc(slot.label)}</strong>
-                    <small>${slot.src ? (slot.targetHas ? 'Already filled here' : 'Available') : 'Not on source'}</small>
+                    <small>${slot.src ? (slot.targetHas ? 'Already in Sister Vessel' : 'Available') : 'Not on source'}</small>
                   </span>
                 </label>
               `).join('')}
@@ -4748,7 +4878,7 @@
                 </span>
                 <span class="dist-sister-slot-meta">
                   <strong>Vessel photo</strong>
-                  <small>${vesselSrc ? (q.vesselPhoto ? 'Already filled here' : 'Optional main photo') : 'Not on source'}</small>
+                  <small>${vesselSrc ? 'Maps into first empty Sister Vessel slot' : 'Not on source'}</small>
                 </span>
               </label>
             </div>`;
@@ -4876,7 +5006,12 @@
           toast('Select at least one photo to copy', 'info');
           return;
         }
-        result = copyDetailPhotosFromQuote(q, source, { keys, includeVesselPhoto, overwrite });
+        result = copyDetailPhotosFromQuote(q, source, {
+          keys,
+          includeVesselPhoto,
+          overwrite,
+          bag: 'sisterDetailPhotos'
+        });
       } else {
         const assignments = [];
         bodyEl.querySelectorAll('[data-fleet-photo-id]').forEach((sel) => {
@@ -4889,13 +5024,13 @@
           toast('Choose a target slot for at least one Fleet photo', 'info');
           return;
         }
-        result = copyPhotosFromFleet(q, assignments, overwrite);
+        result = copyPhotosFromFleet(q, assignments, overwrite, 'sisterDetailPhotos');
       }
 
       if (!result.copied) {
         toast(
           result.skipped
-            ? 'Selected slots are already filled. Switch to overwrite, or clear them first.'
+            ? 'Selected Sister Vessel slots are already filled. Switch to overwrite, or clear them first.'
             : 'Nothing to copy from that vessel.',
           'info'
         );
@@ -4908,8 +5043,8 @@
       if (ok) {
         toast(
           result.skipped
-            ? `Added ${result.copied} photo(s); skipped ${result.skipped} already filled.`
-            : `Added ${result.copied} photo(s) from another vessel.`
+            ? `Added ${result.copied} Sister Vessel photo(s); skipped ${result.skipped} already filled.`
+            : `Added ${result.copied} photo(s) to Sister Vessel.`
         );
       }
     });
@@ -5233,8 +5368,10 @@
     const olrRef = String(q.olrRef || '').trim();
     normalizeQuoteColors(q);
     normalizeQuoteDetailPhotos(q);
+    normalizeSisterDetailPhotos(q);
     const colors = Array.isArray(q.colors) ? q.colors : [];
     const detailPhotoList = quoteDetailPhotosList(q);
+    const sisterPhotoList = quoteSisterDetailPhotosList(q);
     const companyBits = getCompanyContactBits();
     const qh = getQuotationHeaderSettings();
     const company = qh.companyName || state.settings.companyName || companyBits.name || 'OlympicRibs Distribution';
@@ -5387,6 +5524,21 @@
             </div>
             <div class="dist-quote-detail-photos">
               ${detailPhotoList.map((p) => `
+                <figure class="dist-quote-detail-photo">
+                  <img src="${safeImgSrcAttr(p.src)}" alt="${esc(p.label)}">
+                  <figcaption>${esc(p.label)}</figcaption>
+                </figure>`).join('')}
+            </div>
+          </section>` : ''}
+
+        ${sisterPhotoList.length ? `
+          <section class="dist-quote-section dist-quote-section--sister-photos">
+            <div class="dist-quote-section-head">
+              <h2>Sister Vessel</h2>
+              <span>${sisterPhotoList.length} view${sisterPhotoList.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="dist-quote-detail-photos">
+              ${sisterPhotoList.map((p) => `
                 <figure class="dist-quote-detail-photo">
                   <img src="${safeImgSrcAttr(p.src)}" alt="${esc(p.label)}">
                   <figcaption>${esc(p.label)}</figcaption>
