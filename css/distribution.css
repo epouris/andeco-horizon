@@ -1706,7 +1706,7 @@ body.dist-modal-open { overflow: hidden; }
   }
 
   /* Page 1: header, prepared for, tech specs, standard equipment, colors.
-     Then photos on their own page (when present), then pricing / terms. */
+     Then photos (detail + sister vessel together) on their own page, then pricing / terms. */
   body.dist-quote-open .dist-quote-section--detail-photos,
   body.dist-quote-open .dist-quote-section--sister-photos,
   body.dist-quote-open .dist-quote-section--pricing {
@@ -1714,10 +1714,20 @@ body.dist-modal-open { overflow: hidden; }
     page-break-before: always;
   }
 
+  /* Keep Sister Vessel on the same page as Detail photos when both exist. */
+  body.dist-quote-open .dist-quote-section--detail-photos + .dist-quote-section--sister-photos {
+    break-before: avoid;
+    page-break-before: avoid;
+  }
+
   body.dist-quote-open .dist-quote-section--detail-photos,
   body.dist-quote-open .dist-quote-section--sister-photos {
     break-inside: auto;
     page-break-inside: auto;
+  }
+
+  body.dist-quote-open .dist-quote-section--detail-photos + .dist-quote-section--sister-photos .dist-quote-section-head {
+    margin-top: 0.75rem;
   }
 
   body.dist-quote-open .dist-quote-section--std,
