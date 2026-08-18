@@ -5539,9 +5539,8 @@
             </div>
             <div class="dist-quote-detail-photos">
               ${sisterPhotoList.map((p) => `
-                <figure class="dist-quote-detail-photo">
+                <figure class="dist-quote-detail-photo dist-quote-detail-photo--no-caption">
                   <img src="${safeImgSrcAttr(p.src)}" alt="${esc(p.label)}">
-                  <figcaption>${esc(p.label)}</figcaption>
                 </figure>`).join('')}
             </div>
           </section>` : ''}
