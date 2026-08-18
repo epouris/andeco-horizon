@@ -277,6 +277,72 @@
     })).filter((p) => p.src);
   }
 
+  function quoteHasAnyDetailPhotos(q) {
+    if (!q) return false;
+    normalizeQuoteDetailPhotos(q);
+    return QUOTE_PHOTO_SLOTS.some((slot) => !!(q.detailPhotos[slot.key] || '').trim());
+  }
+
+  function quoteSisterLabel(q) {
+    if (!q) return 'Quotation';
+    const client = (q.clientSnapshot && q.clientSnapshot.name) || 'No client';
+    const date = formatDistDate(q.date || q.updatedAt || q.createdAt);
+    const filled = quoteDetailPhotosList(q).length;
+    return `${q.number || 'Quote'} · ${client} · ${date} · ${filled} photo${filled === 1 ? '' : 's'}`;
+  }
+
+  /** Sister vessels = other quotations of the same model that already have detail photos. */
+  function findSisterQuotesWithPhotos(quote) {
+    if (!quote || !quote.modelId) return [];
+    return (state.quotations || [])
+      .filter((other) => {
+        if (!other || other.id === quote.id) return false;
+        if (String(other.modelId || '') !== String(quote.modelId || '')) return false;
+        return quoteHasAnyDetailPhotos(other);
+      })
+      .sort((a, b) => {
+        const filledDiff = quoteDetailPhotosList(b).length - quoteDetailPhotosList(a).length;
+        if (filledDiff) return filledDiff;
+        return new Date(b.updatedAt || b.date || 0) - new Date(a.updatedAt || a.date || 0);
+      });
+  }
+
+  function copyDetailPhotosFromSister(target, source, opts) {
+    const options = opts || {};
+    const keys = Array.isArray(options.keys) && options.keys.length
+      ? options.keys
+      : QUOTE_PHOTO_SLOTS.map((s) => s.key);
+    const overwrite = !!options.overwrite;
+    normalizeQuoteDetailPhotos(target);
+    normalizeQuoteDetailPhotos(source);
+    let copied = 0;
+    let skipped = 0;
+    keys.forEach((key) => {
+      const src = String((source.detailPhotos && source.detailPhotos[key]) || '').trim();
+      if (!src) return;
+      const existing = String((target.detailPhotos && target.detailPhotos[key]) || '').trim();
+      if (existing && !overwrite) {
+        skipped += 1;
+        return;
+      }
+      target.detailPhotos[key] = src;
+      copied += 1;
+    });
+    if (options.includeVesselPhoto) {
+      const vesselSrc = String(source.vesselPhoto || '').trim();
+      if (vesselSrc) {
+        const existingVessel = String(target.vesselPhoto || '').trim();
+        if (!existingVessel || overwrite) {
+          target.vesselPhoto = vesselSrc;
+          copied += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+    }
+    return { copied, skipped };
+  }
+
   function defaultCategories(brandId) {
     return [
       { id: uid('cat'), brandId, key: 'engines', label: 'Main engines', sortOrder: 10, subgroupBy: true },
@@ -4063,7 +4129,13 @@
       <div class="dist-card" style="margin-top:1rem">
         <div class="dist-card-header">
           <h3>Detail photos</h3>
+          <div class="dist-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="dq-sister-photos">Add from sister vessel</button>
+          </div>
         </div>
+        <p class="dist-hint" style="margin:0 0 .75rem">
+          Copy Hull / Fore / Aft / Tubes / Interior / Electronics photos from another quotation of the same model.
+        </p>
         <div class="dist-detail-photos-editor">
           ${QUOTE_PHOTO_SLOTS.map((slot) => {
             const src = detailPhotos[slot.key] || '';
@@ -4423,6 +4495,13 @@
         renderQuoteEditor(el);
       });
     });
+    el.querySelector('#dq-sister-photos')?.addEventListener('click', () => {
+      saveFields();
+      openSisterPhotosDialog(q.id, () => {
+        const host = document.getElementById('dist-quotations') || el;
+        renderQuoteEditor(host);
+      });
+    });
     el.querySelector('#dq-open-options')?.addEventListener('click', () => {
       saveFields();
       persist(true);
@@ -4473,6 +4552,184 @@
         renderQuoteEditor(el);
       });
     });
+  }
+
+  function openSisterPhotosDialog(quoteId, onDone) {
+    const q = quoteById(quoteId);
+    if (!q) {
+      toast('Quotation not found', 'error');
+      return;
+    }
+    const sisters = findSisterQuotesWithPhotos(q);
+    if (!sisters.length) {
+      const model = modelById(q.modelId);
+      toast(
+        `No sister vessel photos found for ${model?.name || 'this model'}. Add detail photos on another quotation of the same model first.`,
+        'info'
+      );
+      return;
+    }
+
+    normalizeQuoteDetailPhotos(q);
+    let selectedId = sisters[0].id;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dist-modal-overlay';
+    overlay.innerHTML = `
+      <div class="dist-modal dist-modal--sister-photos" role="dialog" aria-modal="true" aria-labelledby="dist-sister-title">
+        <div class="dist-modal-header">
+          <div>
+            <h3 id="dist-sister-title">Add photos from sister vessel</h3>
+            <p class="dist-hint">Choose another quotation of the same model and pick which detail photos to copy.</p>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" data-dist-sister-cancel aria-label="Close">✕</button>
+        </div>
+        <div class="dist-modal-body" data-dist-sister-body></div>
+        <div class="dist-modal-footer">
+          <button type="button" class="btn btn-secondary" data-dist-sister-cancel>Cancel</button>
+          <button type="button" class="btn btn-primary" data-dist-sister-apply>Add photos</button>
+        </div>
+      </div>`;
+
+    const bodyEl = overlay.querySelector('[data-dist-sister-body]');
+
+    const renderBody = () => {
+      const source = quoteById(selectedId) || sisters[0];
+      normalizeQuoteDetailPhotos(source);
+      const sourceSlots = QUOTE_PHOTO_SLOTS.map((slot) => ({
+        key: slot.key,
+        label: slot.label,
+        src: String((source.detailPhotos && source.detailPhotos[slot.key]) || '').trim(),
+        targetHas: !!(q.detailPhotos[slot.key] || '').trim()
+      }));
+      const vesselSrc = String(source.vesselPhoto || '').trim();
+      bodyEl.innerHTML = `
+        <div class="dist-sister-picker">
+          <label class="dist-field">
+            <span>Sister vessel (same model)</span>
+            <select id="dist-sister-quote">
+              ${sisters.map((s) => `
+                <option value="${esc(s.id)}" ${s.id === selectedId ? 'selected' : ''}>${esc(quoteSisterLabel(s))}</option>
+              `).join('')}
+            </select>
+          </label>
+          <div class="dist-sister-slots">
+            ${sourceSlots.map((slot) => `
+              <label class="dist-sister-slot ${slot.src ? '' : 'is-empty'}">
+                <input type="checkbox" data-sister-slot="${esc(slot.key)}" ${slot.src ? 'checked' : 'disabled'}>
+                <span class="dist-sister-slot-preview">
+                  ${slot.src
+                    ? `<img src="${safeImgSrcAttr(slot.src)}" alt="${esc(slot.label)}">`
+                    : '<span>Empty</span>'}
+                </span>
+                <span class="dist-sister-slot-meta">
+                  <strong>${esc(slot.label)}</strong>
+                  <small>${slot.src ? (slot.targetHas ? 'Already filled here' : 'Available') : 'Not on sister'}</small>
+                </span>
+              </label>
+            `).join('')}
+            <label class="dist-sister-slot ${vesselSrc ? '' : 'is-empty'}">
+              <input type="checkbox" data-sister-vessel-photo ${vesselSrc ? '' : 'disabled'}>
+              <span class="dist-sister-slot-preview">
+                ${vesselSrc
+                  ? `<img src="${safeImgSrcAttr(vesselSrc)}" alt="Vessel photo">`
+                  : '<span>Empty</span>'}
+              </span>
+              <span class="dist-sister-slot-meta">
+                <strong>Vessel photo</strong>
+                <small>${vesselSrc ? (q.vesselPhoto ? 'Already filled here' : 'Optional main photo') : 'Not on sister'}</small>
+              </span>
+            </label>
+          </div>
+          <div class="dist-sister-mode">
+            <label class="dist-opt-check is-selected">
+              <input type="radio" name="dist-sister-mode" value="fill" checked>
+              <span class="dist-opt-check-mark" aria-hidden="true"></span>
+              <span class="dist-opt-check-text">
+                <span class="dist-opt-check-name">Fill empty slots only</span>
+              </span>
+            </label>
+            <label class="dist-opt-check">
+              <input type="radio" name="dist-sister-mode" value="overwrite">
+              <span class="dist-opt-check-mark" aria-hidden="true"></span>
+              <span class="dist-opt-check-text">
+                <span class="dist-opt-check-name">Overwrite selected slots</span>
+              </span>
+            </label>
+          </div>
+        </div>`;
+      bodyEl.querySelector('#dist-sister-quote')?.addEventListener('change', (e) => {
+        selectedId = e.target.value;
+        renderBody();
+      });
+      bodyEl.querySelectorAll('input[name="dist-sister-mode"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          bodyEl.querySelectorAll('.dist-sister-mode .dist-opt-check').forEach((lab) => {
+            const radio = lab.querySelector('input[type="radio"]');
+            lab.classList.toggle('is-selected', !!(radio && radio.checked));
+          });
+        });
+      });
+    };
+
+    const close = () => {
+      overlay.remove();
+      document.body.classList.remove('dist-modal-open');
+      optionsDialogOpen = false;
+    };
+
+    overlay.querySelectorAll('[data-dist-sister-cancel]').forEach((btn) => {
+      btn.addEventListener('click', close);
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelector('[data-dist-sister-apply]')?.addEventListener('click', async () => {
+      const source = quoteById(selectedId);
+      if (!source) {
+        toast('Sister quotation not found', 'error');
+        return;
+      }
+      const keys = Array.from(overlay.querySelectorAll('[data-sister-slot]:checked'))
+        .map((el) => el.getAttribute('data-sister-slot'))
+        .filter(Boolean);
+      const includeVesselPhoto = !!overlay.querySelector('[data-sister-vessel-photo]:checked');
+      const mode = overlay.querySelector('input[name="dist-sister-mode"]:checked')?.value || 'fill';
+      if (!keys.length && !includeVesselPhoto) {
+        toast('Select at least one photo to copy', 'info');
+        return;
+      }
+      const result = copyDetailPhotosFromSister(q, source, {
+        keys,
+        includeVesselPhoto,
+        overwrite: mode === 'overwrite'
+      });
+      if (!result.copied) {
+        toast(
+          result.skipped
+            ? 'Selected slots are already filled. Switch to overwrite, or clear them first.'
+            : 'Nothing to copy from that sister vessel.',
+          'info'
+        );
+        return;
+      }
+      q.updatedAt = new Date().toISOString();
+      const ok = await persist(true);
+      close();
+      if (typeof onDone === 'function') onDone();
+      if (ok) {
+        toast(
+          result.skipped
+            ? `Added ${result.copied} photo(s); skipped ${result.skipped} already filled.`
+            : `Added ${result.copied} photo(s) from sister vessel.`
+        );
+      }
+    });
+
+    renderBody();
+    document.body.appendChild(overlay);
+    document.body.classList.add('dist-modal-open');
+    optionsDialogOpen = true;
   }
 
   function openQuoteOptionsDialog(quoteId, onDone) {
