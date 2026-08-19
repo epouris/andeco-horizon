@@ -20,6 +20,51 @@ window.AccountingData = (function () {
   /** Serialize shared saves — overlapping persist calls were causing false 409 conflicts. */
   var saveInFlight = null;
   var saveQueued = false;
+  /** True after local mutations until a workspace save succeeds — blocks poll overwrites. */
+  var localDirty = false;
+  var lastSuccessfulSaveAt = 0;
+  var persistSuppressCount = 0;
+
+  function markLocalDirty() {
+    localDirty = true;
+  }
+
+  function isPersistBusy() {
+    return !!(saveInFlight || saveQueued || localDirty);
+  }
+
+  /** Prefer ISO / mtime revisions from the server; reject clearly older poll responses. */
+  function isRemoteRevFreshEnough(incoming, current) {
+    if (!incoming) return false;
+    if (!current) return true;
+    if (String(incoming) === String(current)) return true;
+    var ta = Date.parse(incoming);
+    var tb = Date.parse(current);
+    if (!isNaN(ta) && !isNaN(tb)) return ta >= tb;
+    var ma = String(incoming).split('-')[0];
+    var mb = String(current).split('-')[0];
+    if (/^\d+(\.\d+)?$/.test(ma) && /^\d+(\.\d+)?$/.test(mb)) return Number(ma) >= Number(mb);
+    // Unknown format: after a recent save, ignore non-matching (likely stale) polls.
+    if (lastSuccessfulSaveAt && Date.now() - lastSuccessfulSaveAt < 15000) return false;
+    return true;
+  }
+
+  function shouldSkipRemoteLoad(data) {
+    if (saveInFlight || saveQueued || localDirty) return true;
+    if (data && data._rev != null && workspaceRevision && !isRemoteRevFreshEnough(data._rev, workspaceRevision)) {
+      return true;
+    }
+    return false;
+  }
+
+  function withPersistSuppressed(fn) {
+    persistSuppressCount += 1;
+    try {
+      return fn();
+    } finally {
+      persistSuppressCount -= 1;
+    }
+  }
 
   function apiHeaders(extra) {
     var h = extra ? Object.assign({}, extra) : {};
@@ -384,8 +429,13 @@ window.AccountingData = (function () {
     saveInFlight = postWorkspaceSave(false).then(function (ok) {
       saveInFlight = null;
       if (saveQueued) {
+        // Keep localDirty set — another save will flush the latest memory next.
         saveQueued = false;
         return runQueuedWorkspaceSave();
+      }
+      if (ok) {
+        localDirty = false;
+        lastSuccessfulSaveAt = Date.now();
       }
       return ok;
     }, function (err) {
@@ -435,7 +485,8 @@ window.AccountingData = (function () {
   function saveInvoices(invoices) {
     if (useFileStorage) {
       memory.invoices = invoices;
-      persistToFile();
+      markLocalDirty();
+      if (persistSuppressCount === 0) persistToFile();
       return;
     }
     try {
@@ -455,7 +506,8 @@ window.AccountingData = (function () {
   function saveReceipts(receipts) {
     if (useFileStorage) {
       memory.receipts = receipts;
-      persistToFile();
+      markLocalDirty();
+      if (persistSuppressCount === 0) persistToFile();
       return;
     }
     try {
@@ -492,7 +544,8 @@ window.AccountingData = (function () {
       try {
         localStorage.setItem(PREFIX + 'clients', JSON.stringify(clients || []));
       } catch (e) {}
-      persistToFile();
+      markLocalDirty();
+      if (persistSuppressCount === 0) persistToFile();
       return;
     }
     try {
@@ -512,7 +565,8 @@ window.AccountingData = (function () {
   function saveCompanySettings(settings) {
     if (useFileStorage) {
       memory.companySettings = settings && typeof settings === 'object' ? settings : defaultSettings;
-      persistToFile();
+      markLocalDirty();
+      if (persistSuppressCount === 0) persistToFile();
       return;
     }
     try {
@@ -570,7 +624,8 @@ window.AccountingData = (function () {
   function saveProducts(products) {
     if (useFileStorage) {
       memory.products = Array.isArray(products) ? products : [];
-      persistToFile();
+      markLocalDirty();
+      if (persistSuppressCount === 0) persistToFile();
       return;
     }
     try {
@@ -590,7 +645,8 @@ window.AccountingData = (function () {
   function saveSubcontractors(list) {
     if (useFileStorage) {
       memory.subcontractors = Array.isArray(list) ? list : [];
-      persistToFile();
+      markLocalDirty();
+      if (persistSuppressCount === 0) persistToFile();
       return;
     }
     try {
@@ -610,7 +666,8 @@ window.AccountingData = (function () {
   function savePaymentOrders(list) {
     if (useFileStorage) {
       memory.paymentOrders = Array.isArray(list) ? list : [];
-      persistToFile();
+      markLocalDirty();
+      if (persistSuppressCount === 0) persistToFile();
       return;
     }
     try {
@@ -1095,8 +1152,10 @@ window.AccountingData = (function () {
 
   function loadFromData(data) {
     if (!data) return;
+    // Never clobber in-memory edits with a stale poll while a save is pending/in-flight.
+    if (shouldSkipRemoteLoad(data)) return;
     // Keep revision in sync with background polls so the next save is not a false conflict.
-    if (data._rev != null && !saveInFlight) {
+    if (data._rev != null) {
       workspaceRevision = String(data._rev);
     }
     if (useFileStorage) {
@@ -1305,7 +1364,8 @@ window.AccountingData = (function () {
     getWorkspaceRevision: function () { return workspaceRevision; },
     loadFromData: loadFromData,
     persistAll: persistAll,
-    isSaveInFlight: function () { return !!saveInFlight; },
+    isSaveInFlight: function () { return isPersistBusy(); },
+    withPersistSuppressed: withPersistSuppressed,
     isSupabaseMode: function () { return useSupabase; },
     isSupabaseConfigured: isSupabaseConfigured,
     isSupabasePendingAuth: function () { return supabasePendingAuth; },
@@ -1374,11 +1434,15 @@ window.AccountingData = (function () {
     getInvoice: function (id) {
       return getInvoices().filter(function (inv) { return inv.id === id; })[0];
     },
-    saveInvoice: function (invoice) {
+    saveInvoice: function (invoice, opts) {
       var list = getInvoices();
       var idx = list.map(function (i) { return i.id; }).indexOf(invoice.id);
       if (idx >= 0) list[idx] = invoice; else list.push(invoice);
-      saveInvoices(list);
+      if (opts && opts.persist === false) {
+        withPersistSuppressed(function () { saveInvoices(list); });
+      } else {
+        saveInvoices(list);
+      }
       return invoice;
     },
     deleteInvoice: function (id) {
@@ -1387,11 +1451,15 @@ window.AccountingData = (function () {
     getReceipt: function (id) {
       return getReceipts().filter(function (r) { return r.id === id; })[0];
     },
-    saveReceipt: function (receipt) {
+    saveReceipt: function (receipt, opts) {
       var list = getReceipts();
       var idx = list.map(function (r) { return r.id; }).indexOf(receipt.id);
       if (idx >= 0) list[idx] = receipt; else list.push(receipt);
-      saveReceipts(list);
+      if (opts && opts.persist === false) {
+        withPersistSuppressed(function () { saveReceipts(list); });
+      } else {
+        saveReceipts(list);
+      }
       return receipt;
     },
     deleteReceipt: function (id) {
