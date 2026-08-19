@@ -955,6 +955,69 @@ window.AccountingData = (function () {
     return (max + 1).toString().padStart(4, '0');
   }
 
+  /**
+   * Keep the lowest existing receipt sequence, sort by receipt date (oldest first),
+   * and renumber continuously so late-added payments slot into date order.
+   */
+  function resequenceReceiptsByDate() {
+    var receipts = getReceipts().slice();
+    if (!receipts.length) {
+      return { changed: 0, start: null, end: null, count: 0 };
+    }
+
+    var nums = [];
+    var padLen = 4;
+    var prefix = '';
+    receipts.forEach(function (r) {
+      var raw = String(r.receiptNumber || '');
+      var m = raw.match(/^(.*?)(\d+)(.*)$/);
+      if (!m) return;
+      var n = parseInt(m[2], 10);
+      if (!isFinite(n)) return;
+      nums.push(n);
+      if (m[2].length > padLen) padLen = m[2].length;
+      if (!prefix && m[1]) prefix = m[1];
+    });
+    if (!nums.length) {
+      return { changed: 0, start: null, end: null, count: receipts.length };
+    }
+
+    var start = Math.min.apply(null, nums);
+    receipts.sort(function (a, b) {
+      var da = String(a.date || '');
+      var db = String(b.date || '');
+      if (da !== db) return da < db ? -1 : 1;
+      var na = parseInt((String(a.receiptNumber || '').match(/\d+/) || ['0'])[0], 10) || 0;
+      var nb = parseInt((String(b.receiptNumber || '').match(/\d+/) || ['0'])[0], 10) || 0;
+      if (na !== nb) return na - nb;
+      return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+    });
+
+    var changed = 0;
+    var next = start;
+    var now = new Date().toISOString();
+    receipts.forEach(function (r) {
+      var newNum = prefix + String(next).padStart(padLen, '0');
+      if (String(r.receiptNumber || '') !== newNum) {
+        r.receiptNumber = newNum;
+        r.updatedAt = now;
+        changed += 1;
+      }
+      next += 1;
+    });
+
+    saveReceipts(receipts);
+
+    var settings = getCompanySettings() || {};
+    // Keep the series start; getNextReceiptNumber still uses max(existing).
+    if (settings.receiptSequenceNumber == null || settings.receiptSequenceNumber > start) {
+      settings.receiptSequenceNumber = start;
+      saveCompanySettings(settings);
+    }
+
+    return { changed: changed, start: start, end: next - 1, count: receipts.length };
+  }
+
   function getDocumentLogo(kind) {
     var settings = getCompanySettings() || {};
     var logos = settings.documentLogos && typeof settings.documentLogos === 'object'
@@ -1269,6 +1332,7 @@ window.AccountingData = (function () {
     formatCurrency: formatCurrency,
     getNextInvoiceNumber: getNextInvoiceNumber,
     getNextReceiptNumber: getNextReceiptNumber,
+    resequenceReceiptsByDate: resequenceReceiptsByDate,
     getNextPaymentOrderNumber: getNextPaymentOrderNumber,
     getNextProformaNumber: getNextProformaNumber,
     getNextCustomerId: getNextCustomerId,
