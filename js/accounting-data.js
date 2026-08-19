@@ -563,16 +563,69 @@ window.AccountingData = (function () {
     return [];
   }
 
-  function saveInvoices(invoices) {
-    if (useFileStorage) {
-      memory.invoices = invoices;
-      markLocalDirty();
-      if (persistSuppressCount === 0) persistToFile();
-      return;
-    }
+  function mirrorLocalAccounting(key, value) {
     try {
-      localStorage.setItem(PREFIX + 'invoices', JSON.stringify(invoices));
+      localStorage.setItem(PREFIX + key, JSON.stringify(value));
     } catch (e) {}
+  }
+
+  function mergeLocalCacheIntoPayload(data) {
+    if (!data || typeof data !== 'object') return false;
+    var merged = false;
+    function mergeList(key) {
+      var localList = [];
+      try {
+        localList = getLocalStorage(PREFIX + key, []);
+      } catch (e) {
+        localList = [];
+      }
+      if (!Array.isArray(localList) || !localList.length) return;
+      var serverList = Array.isArray(data[key]) ? data[key].slice() : [];
+      var byId = {};
+      serverList.forEach(function (row) {
+        if (row && row.id != null) byId[String(row.id)] = row;
+      });
+      localList.forEach(function (row) {
+        if (!row || row.id == null) return;
+        var id = String(row.id);
+        if (!byId[id]) {
+          serverList.push(row);
+          byId[id] = row;
+          merged = true;
+          return;
+        }
+        var localTs = Date.parse(row.updatedAt || row.createdAt || 0) || 0;
+        var serverTs = Date.parse(byId[id].updatedAt || byId[id].createdAt || 0) || 0;
+        if (localTs > serverTs) {
+          for (var i = 0; i < serverList.length; i++) {
+            if (serverList[i] && String(serverList[i].id) === id) {
+              serverList[i] = row;
+              byId[id] = row;
+              merged = true;
+              break;
+            }
+          }
+        }
+      });
+      data[key] = serverList;
+    }
+    mergeList('receipts');
+    mergeList('invoices');
+    mergeList('clients');
+    return merged;
+  }
+
+  function saveInvoices(invoices) {
+    var list = Array.isArray(invoices) ? invoices : [];
+    if (useFileStorage) {
+      memory.invoices = list;
+      mirrorLocalAccounting('invoices', list);
+      markLocalDirty();
+      if (persistSuppressCount === 0) return persistToFile();
+      return Promise.resolve(true);
+    }
+    mirrorLocalAccounting('invoices', list);
+    return Promise.resolve(true);
   }
 
   function getReceipts() {
@@ -585,15 +638,16 @@ window.AccountingData = (function () {
   }
 
   function saveReceipts(receipts) {
+    var list = Array.isArray(receipts) ? receipts : [];
     if (useFileStorage) {
-      memory.receipts = receipts;
+      memory.receipts = list;
+      mirrorLocalAccounting('receipts', list);
       markLocalDirty();
-      if (persistSuppressCount === 0) persistToFile();
-      return;
+      if (persistSuppressCount === 0) return persistToFile();
+      return Promise.resolve(true);
     }
-    try {
-      localStorage.setItem(PREFIX + 'receipts', JSON.stringify(receipts));
-    } catch (e) {}
+    mirrorLocalAccounting('receipts', list);
+    return Promise.resolve(true);
   }
 
   function getClients() {
@@ -620,18 +674,16 @@ window.AccountingData = (function () {
   }
 
   function saveClients(clients) {
+    var list = Array.isArray(clients) ? clients : [];
     if (useFileStorage) {
-      memory.clients = clients;
-      try {
-        localStorage.setItem(PREFIX + 'clients', JSON.stringify(clients || []));
-      } catch (e) {}
+      memory.clients = list;
+      mirrorLocalAccounting('clients', list);
       markLocalDirty();
-      if (persistSuppressCount === 0) persistToFile();
-      return;
+      if (persistSuppressCount === 0) return persistToFile();
+      return Promise.resolve(true);
     }
-    try {
-      localStorage.setItem(PREFIX + 'clients', JSON.stringify(clients));
-    } catch (e) {}
+    mirrorLocalAccounting('clients', list);
+    return Promise.resolve(true);
   }
 
   function getCompanySettings() {
@@ -796,6 +848,7 @@ window.AccountingData = (function () {
   /** When shared file is empty but this browser still has old localStorage (e.g. after switching file:// → localhost). */
   function finishServerInit(data, useSupabaseBackend) {
     if (data && data._rev != null) workspaceRevision = String(data._rev);
+    var needsRepersist = false;
     if (!useSupabaseBackend && !preferServerData() && isServerPayloadAccountingEmpty(data) && hasLocalAccountingData()) {
       loadMemoryFromLocalInvKeys();
       var saved = {
@@ -823,9 +876,21 @@ window.AccountingData = (function () {
       }
       return;
     }
+    // Re-attach any receipts/invoices that were saved locally but never made it to Railway.
+    needsRepersist = mergeLocalCacheIntoPayload(data);
     applyLoadedData(data);
     useFileStorage = true;
     useSupabase = !!useSupabaseBackend;
+    mirrorLocalAccounting('receipts', memory.receipts || []);
+    mirrorLocalAccounting('invoices', memory.invoices || []);
+    mirrorLocalAccounting('clients', memory.clients || []);
+    if (needsRepersist) {
+      markLocalDirty();
+      persistToFile();
+      if (typeof console !== 'undefined' && console.info) {
+        console.info('Andeco: merged locally cached receipts/invoices into workspace and re-saving.');
+      }
+    }
   }
 
   function applyLoadedData(data) {
@@ -1521,13 +1586,12 @@ window.AccountingData = (function () {
       if (idx >= 0) list[idx] = invoice; else list.push(invoice);
       if (opts && opts.persist === false) {
         withPersistSuppressed(function () { saveInvoices(list); });
-      } else {
-        saveInvoices(list);
+        return Promise.resolve(true);
       }
-      return invoice;
+      return Promise.resolve(saveInvoices(list));
     },
     deleteInvoice: function (id) {
-      saveInvoices(getInvoices().filter(function (i) { return i.id !== id; }));
+      return Promise.resolve(saveInvoices(getInvoices().filter(function (i) { return i.id !== id; })));
     },
     getReceipt: function (id) {
       return getReceipts().filter(function (r) { return r.id === id; })[0];
@@ -1538,13 +1602,12 @@ window.AccountingData = (function () {
       if (idx >= 0) list[idx] = receipt; else list.push(receipt);
       if (opts && opts.persist === false) {
         withPersistSuppressed(function () { saveReceipts(list); });
-      } else {
-        saveReceipts(list);
+        return Promise.resolve(true);
       }
-      return receipt;
+      return Promise.resolve(saveReceipts(list));
     },
     deleteReceipt: function (id) {
-      saveReceipts(getReceipts().filter(function (r) { return r.id !== id; }));
+      return Promise.resolve(saveReceipts(getReceipts().filter(function (r) { return r.id !== id; })));
     },
     getClient: function (id) {
       return getClients().filter(function (c) { return c.id === id; })[0];
