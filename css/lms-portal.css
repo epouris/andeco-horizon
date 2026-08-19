@@ -1,6 +1,5 @@
 /* Andeco Learning Portal — standalone look, independent from CRM chrome */
-
-@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap');
+/* Fonts: css/fonts.css (self-hosted Figtree + Sora) */
 
 .lms-portal-screen {
   --lp-bg: #07131f;

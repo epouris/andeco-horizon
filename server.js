@@ -757,6 +757,8 @@ const server = http.createServer(async (req, res) => {
       if (ext === '.html') {
         out = Buffer.from(injectConfigIntoHtml(content.toString('utf8')), 'utf8');
         headers['Cache-Control'] = 'no-store';
+      } else if (ext === '.woff2' || ext === '.woff') {
+        headers['Cache-Control'] = 'public, max-age=31536000, immutable';
       }
       res.writeHead(200, headers);
       res.end(out);
