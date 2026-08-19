@@ -301,7 +301,9 @@ const app = {
                 if (data.crm && typeof data.crm === 'object') {
                     if (Array.isArray(data.crm.users)) setLocal('andeco_crm_users', data.crm.users);
                 }
-                if (typeof window.reloadPayrollFromStorage === 'function') window.reloadPayrollFromStorage();
+                var saveBusy = (typeof DataStore !== 'undefined' && typeof DataStore.isSaveInFlight === 'function' && DataStore.isSaveInFlight())
+                    || (typeof window.AccountingData !== 'undefined' && typeof window.AccountingData.isSaveInFlight === 'function' && window.AccountingData.isSaveInFlight());
+                if (!saveBusy && typeof window.reloadPayrollFromStorage === 'function') window.reloadPayrollFromStorage();
                 if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
                 if (typeof app.refreshCurrentView === 'function') app.refreshCurrentView();
             })
@@ -4126,11 +4128,9 @@ const app = {
         if (document.getElementById('invoice-subtotal') && typeof this.calculateTotals === 'function') {
             this.calculateTotals();
         }
+        // Refresh payroll UI amounts only — do not auto-generate/save payslips
+        // (that was causing save storms and /api/save 502s).
         if (typeof window.updateAllTabs === 'function') window.updateAllTabs();
-        var payslipEmployee = document.getElementById('payslipEmployee');
-        if (payslipEmployee && payslipEmployee.value && typeof window.generatePayslip === 'function') {
-            try { window.generatePayslip(); } catch (e) {}
-        }
     },
 
     /** Sync main app company settings to Payroll localStorage so payslips and IR63 use the same data. */

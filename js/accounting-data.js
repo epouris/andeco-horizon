@@ -1305,6 +1305,7 @@ window.AccountingData = (function () {
     getWorkspaceRevision: function () { return workspaceRevision; },
     loadFromData: loadFromData,
     persistAll: persistAll,
+    isSaveInFlight: function () { return !!saveInFlight; },
     isSupabaseMode: function () { return useSupabase; },
     isSupabaseConfigured: isSupabaseConfigured,
     isSupabasePendingAuth: function () { return supabasePendingAuth; },
