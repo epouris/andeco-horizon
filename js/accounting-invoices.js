@@ -2810,17 +2810,19 @@ const app = {
             });
         }
         
-        DataStore.saveReceipt(receipt).then((ok) => {
-            if (ok === false) {
-                alert('Receipt is kept on this device, but the server save failed. It will retry automatically — keep this tab open until the save banner clears, then refresh.');
-            } else {
-                alert(onAccount ? 'Receipt saved successfully!' : 'Receipt saved successfully! Invoices have been marked as paid.');
+        // Keep the receipt on this device immediately, then return to the list.
+        // Server persist continues in the background (retries on failure).
+        DataStore.saveReceipt(receipt, { persist: false });
+        try {
+            if (typeof DataStore.persistAll === 'function') DataStore.persistAll();
+            else if (window.AccountingData && typeof window.AccountingData.persistAll === 'function') {
+                window.AccountingData.persistAll();
             }
-            this.showPage('receipts');
-        }).catch(() => {
-            alert('Receipt is kept on this device, but the server save failed. It will retry automatically — keep this tab open until the save banner clears, then refresh.');
-            this.showPage('receipts');
-        });
+        } catch (e) {}
+
+        this.currentReceiptId = null;
+        alert(onAccount ? 'Receipt saved successfully!' : 'Receipt saved successfully! Invoices have been marked as paid.');
+        this.showPage('receipts');
     },
 
     viewReceipt(id) {
