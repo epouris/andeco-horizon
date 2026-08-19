@@ -24,9 +24,62 @@ window.AccountingData = (function () {
   var localDirty = false;
   var lastSuccessfulSaveAt = 0;
   var persistSuppressCount = 0;
+  var deferredSaveTimer = null;
+  var SAVE_NETWORK_RETRIES = 3;
+  var SAVE_FETCH_TIMEOUT_MS = 120000;
 
   function markLocalDirty() {
     localDirty = true;
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  function isRetryableNetworkError(err) {
+    if (!err) return true;
+    var msg = String((err && err.message) || (err && err.name) || err || '');
+    return /failed to fetch|networkerror|network error|load failed|http2|ping|timeout|aborted|abort|err_network|err_connection|err_internet/i.test(msg)
+      || err.name === 'TypeError'
+      || err.name === 'AbortError';
+  }
+
+  function isRetryableHttpStatus(status) {
+    return status === 408 || status === 425 || status === 429 || status === 502 || status === 503 || status === 504;
+  }
+
+  function fetchWithTimeout(url, options, timeoutMs) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = null;
+    var opts = Object.assign({}, options || {});
+    if (ctrl) opts.signal = ctrl.signal;
+    var p = fetch(url, opts);
+    if (ctrl && timeoutMs > 0) {
+      timer = setTimeout(function () {
+        try { ctrl.abort(); } catch (e) {}
+      }, timeoutMs);
+    }
+    return Promise.resolve(p).then(function (res) {
+      if (timer) clearTimeout(timer);
+      return res;
+    }, function (err) {
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
+
+  function scheduleDeferredSaveRetry(delayMs) {
+    if (deferredSaveTimer) return;
+    deferredSaveTimer = setTimeout(function () {
+      deferredSaveTimer = null;
+      if (!localDirty && !saveQueued) return;
+      if (saveInFlight) {
+        scheduleDeferredSaveRetry(5000);
+        return;
+      }
+      setSaveBanner('Retrying save…', true);
+      persistToFile();
+    }, delayMs || 8000);
   }
 
   function isPersistBusy() {
@@ -383,40 +436,68 @@ window.AccountingData = (function () {
       .catch(function () {});
   }
 
-  function postWorkspaceSave(isRetry) {
+  function postWorkspaceSave(isConflictRetry, networkAttempt) {
+    networkAttempt = networkAttempt || 0;
     var body = buildFullPayload();
     if (workspaceRevision) body._rev = workspaceRevision;
-    return fetch(SAVE_API_URL, {
+    // Bust HTTP/2 connection reuse on retries (ERR_HTTP2_PING_FAILED / Failed to fetch).
+    var url = SAVE_API_URL;
+    if (networkAttempt > 0) {
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + '_retry=' + encodeURIComponent(String(networkAttempt)) + '&_t=' + Date.now();
+    }
+    var payloadJson = JSON.stringify(body);
+    return fetchWithTimeout(url, {
       method: 'POST',
       credentials: 'same-origin',
       headers: apiHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(body)
-    }).then(function (res) {
+      body: payloadJson,
+      cache: 'no-store',
+      keepalive: false
+    }, SAVE_FETCH_TIMEOUT_MS).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         if (res.status === 409 || (json && json.code === 'CONFLICT')) {
           if (json && json._rev) workspaceRevision = String(json._rev);
           // Same-tab overlapping autosaves often trip this. Adopt server rev and retry once
           // with the latest in-memory payload instead of forcing a full reload.
-          if (!isRetry) {
-            return postWorkspaceSave(true);
+          if (!isConflictRetry) {
+            return postWorkspaceSave(true, 0);
           }
           notifySaveError('Data was updated elsewhere. Reload the page before saving again.');
+          scheduleDeferredSaveRetry(15000);
           return false;
         }
         if (res.status === 401) {
           notifySaveError('Please sign in again to save.');
           return false;
         }
+        if (isRetryableHttpStatus(res.status) && networkAttempt < SAVE_NETWORK_RETRIES) {
+          setSaveBanner('Save interrupted (' + res.status + ') — retrying…', true);
+          return sleep(1000 * Math.pow(2, networkAttempt)).then(function () {
+            return postWorkspaceSave(!!isConflictRetry, networkAttempt + 1);
+          });
+        }
         if (!res.ok) {
           notifySaveError((json && json.error) || ('Save failed (' + res.status + ').'));
+          if (isRetryableHttpStatus(res.status)) scheduleDeferredSaveRetry(10000);
           return false;
         }
         if (json && json._rev) workspaceRevision = String(json._rev);
+        if (deferredSaveTimer) {
+          clearTimeout(deferredSaveTimer);
+          deferredSaveTimer = null;
+        }
         clearSaveError();
         return true;
       });
     }).catch(function (err) {
+      if (networkAttempt < SAVE_NETWORK_RETRIES && isRetryableNetworkError(err)) {
+        setSaveBanner('Connection interrupted — retrying save…', true);
+        return sleep(1000 * Math.pow(2, networkAttempt)).then(function () {
+          return postWorkspaceSave(!!isConflictRetry, networkAttempt + 1);
+        });
+      }
       notifySaveError((err && err.message) || 'Save failed. Check your connection.');
+      scheduleDeferredSaveRetry(8000);
       return false;
     });
   }
