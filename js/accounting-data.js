@@ -193,6 +193,7 @@ window.AccountingData = (function () {
     receiptSequenceNumber: 1000,
     paymentOrderSequenceNumber: 1000,
     proformaSequenceNumber: 1000,
+    creditNoteSequenceNumber: 1000,
     defaultTaxRate: 0,
     defaultPaymentTerms: 30,
     defaultInvoiceNotes: '',
@@ -203,7 +204,8 @@ window.AccountingData = (function () {
       payslip: '',
       socialInsurance: '',
       statement: '',
-      proforma: ''
+      proforma: '',
+      creditNote: ''
     },
     quotationHeader: {
       companyName: '',
@@ -1133,7 +1135,7 @@ window.AccountingData = (function () {
     var max = start - 1;
     invoices.forEach(function (inv) {
       if (inv.status === 'draft') return;
-      if (inv.documentType === 'proforma') return;
+      if (inv.documentType === 'proforma' || inv.documentType === 'creditNote') return;
       if (inv.invoiceNumber) {
         var m = inv.invoiceNumber.match(/\d+/);
         if (m) {
@@ -1162,6 +1164,25 @@ window.AccountingData = (function () {
       }
     });
     return 'PF-' + (max + 1).toString().padStart(4, '0');
+  }
+
+  function getNextCreditNoteNumber() {
+    var settings = getCompanySettings();
+    var start = settings.creditNoteSequenceNumber || 1000;
+    var invoices = getInvoices();
+    var max = start - 1;
+    invoices.forEach(function (inv) {
+      if (inv.documentType !== 'creditNote') return;
+      if (inv.status === 'draft') return;
+      if (inv.invoiceNumber) {
+        var m = String(inv.invoiceNumber).match(/\d+/);
+        if (m) {
+          var n = parseInt(m[0], 10);
+          if (n > max) max = n;
+        }
+      }
+    });
+    return 'CN-' + (max + 1).toString().padStart(4, '0');
   }
 
   function getNextReceiptNumber() {
@@ -1565,6 +1586,7 @@ window.AccountingData = (function () {
     resequenceReceiptsByDate: resequenceReceiptsByDate,
     getNextPaymentOrderNumber: getNextPaymentOrderNumber,
     getNextProformaNumber: getNextProformaNumber,
+    getNextCreditNoteNumber: getNextCreditNoteNumber,
     getNextCustomerId: getNextCustomerId,
     getDocumentLogo: getDocumentLogo,
     getDocumentLogoHtml: getDocumentLogoHtml,

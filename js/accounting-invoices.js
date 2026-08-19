@@ -19,26 +19,50 @@ const app = {
     currentInvoiceId: null,
     currentClientId: null,
     currentReceiptId: null,
-    invoiceListMode: 'invoice', // 'invoice' | 'proforma' | 'drafts'
+    invoiceListMode: 'invoice', // 'invoice' | 'proforma' | 'creditNote' | 'drafts'
     _sharedDataPollTimer: null,
 
     isProformaMode() {
         return this.invoiceListMode === 'proforma';
     },
 
+    isCreditNoteMode() {
+        return this.invoiceListMode === 'creditNote';
+    },
+
     isProformaDoc(doc) {
         return !!(doc && doc.documentType === 'proforma');
     },
 
+    isCreditNoteDoc(doc) {
+        return !!(doc && doc.documentType === 'creditNote');
+    },
+
     getActiveDocumentType() {
-        return this.isProformaMode() ? 'proforma' : 'invoice';
+        if (this.isCreditNoteMode()) return 'creditNote';
+        if (this.isProformaMode()) return 'proforma';
+        return 'invoice';
     },
 
     getDocumentTypeLabel(docOrType) {
         const type = typeof docOrType === 'string'
             ? docOrType
-            : (this.isProformaDoc(docOrType) ? 'proforma' : 'invoice');
-        return type === 'proforma' ? 'Proforma Invoice' : 'Invoice';
+            : (this.isCreditNoteDoc(docOrType)
+                ? 'creditNote'
+                : (this.isProformaDoc(docOrType) ? 'proforma' : 'invoice'));
+        if (type === 'creditNote') return 'Credit Note';
+        if (type === 'proforma') return 'Proforma Invoice';
+        return 'Invoice';
+    },
+
+    setCreditNotesSection() {
+        this.invoiceListMode = 'creditNote';
+        this.applyInvoiceModeUi();
+        if (typeof this.showPage === 'function') this.showPage('invoices');
+        if (typeof this.renderInvoices === 'function') {
+            const search = document.getElementById('invoice-search');
+            this.renderInvoices(search ? search.value : '');
+        }
     },
 
     setInvoicesSubsection(subsectionId) {
@@ -60,39 +84,55 @@ const app = {
 
     applyInvoiceModeUi() {
         const isProforma = this.isProformaMode();
+        const isCreditNote = this.isCreditNoteMode();
         const isDrafts = this.invoiceListMode === 'drafts';
         const title = document.getElementById('invoices-page-title');
         if (title) {
-            title.textContent = isDrafts ? 'Drafts' : (isProforma ? 'Proforma Invoices' : 'Invoices');
+            title.textContent = isDrafts
+                ? 'Drafts'
+                : (isCreditNote ? 'Credit Notes' : (isProforma ? 'Proforma Invoices' : 'Invoices'));
         }
         const search = document.getElementById('invoice-search');
         if (search) {
             search.placeholder = isDrafts
                 ? 'Search drafts...'
-                : (isProforma ? 'Search proforma invoices...' : 'Search invoices...');
+                : (isCreditNote
+                    ? 'Search credit notes...'
+                    : (isProforma ? 'Search proforma invoices...' : 'Search invoices...'));
         }
         const newBtn = document.getElementById('btn-new-invoice-doc');
-        if (newBtn) newBtn.textContent = isProforma ? '➕ New Proforma' : '➕ New Invoice';
+        if (newBtn) {
+            newBtn.textContent = isCreditNote
+                ? '➕ New Credit Note'
+                : (isProforma ? '➕ New Proforma' : '➕ New Invoice');
+        }
         const formTitle = document.getElementById('invoice-form-title');
         if (formTitle && !this.currentInvoiceId) {
-            formTitle.textContent = isProforma ? 'Create Proforma Invoice' : 'Create New Invoice';
+            formTitle.textContent = isCreditNote
+                ? 'Create Credit Note'
+                : (isProforma ? 'Create Proforma Invoice' : 'Create New Invoice');
         }
         const saveBtn = document.querySelector('#invoice-form button[type="submit"]');
-        if (saveBtn) saveBtn.textContent = isProforma ? 'Save Proforma' : 'Save Invoice';
+        if (saveBtn) {
+            saveBtn.textContent = isCreditNote
+                ? 'Save Credit Note'
+                : (isProforma ? 'Save Proforma' : 'Save Invoice');
+        }
         const statusEl = document.getElementById('invoice-status');
         if (statusEl) {
             Array.from(statusEl.options).forEach((opt) => {
                 if (opt.value === 'paid' || opt.value === 'overdue') {
-                    opt.hidden = isProforma;
-                    opt.disabled = isProforma;
+                    opt.hidden = isProforma || isCreditNote;
+                    opt.disabled = isProforma || isCreditNote;
                 }
             });
-            if (isProforma && (statusEl.value === 'paid' || statusEl.value === 'overdue')) {
+            if ((isProforma || isCreditNote) && (statusEl.value === 'paid' || statusEl.value === 'overdue')) {
                 statusEl.value = 'pending';
             }
         }
 
         // Proforma: free-text recipient only (no client list / customer ID)
+        // Credit notes: keep normal client selection like invoices
         const clientSelectRow = document.querySelector('.invoice-client-select-row');
         const customerIdGroup = document.querySelector('.invoice-customer-id-group');
         const nameGroup = document.getElementById('invoice-client-name-group');
@@ -113,17 +153,24 @@ const app = {
             if (customerIdInput) customerIdInput.value = '';
         }
 
-        // Proforma: no payment due date
+        // Proforma / credit notes: no payment due date
         const dueDateGroup = document.getElementById('invoice-due-date-group');
         const dueDateInput = document.getElementById('invoice-due-date');
-        if (dueDateGroup) dueDateGroup.style.display = isProforma ? 'none' : '';
+        if (dueDateGroup) dueDateGroup.style.display = (isProforma || isCreditNote) ? 'none' : '';
         if (dueDateInput) {
-            if (isProforma) {
+            if (isProforma || isCreditNote) {
                 dueDateInput.removeAttribute('required');
                 dueDateInput.value = '';
             } else {
                 dueDateInput.setAttribute('required', 'required');
             }
+        }
+
+        const infoHeading = document.querySelector('#invoice-form .form-section-half h3');
+        if (infoHeading && infoHeading.textContent && /Invoice|Credit|Proforma/i.test(infoHeading.textContent)) {
+            infoHeading.textContent = isCreditNote
+                ? 'Credit Note Information'
+                : (isProforma ? 'Proforma Information' : 'Invoice Information');
         }
     },
 
@@ -453,6 +500,13 @@ const app = {
         if (invoiceSearch) {
             invoiceSearch.addEventListener('input', (e) => {
                 this.searchInvoices(e.target.value);
+            });
+        }
+
+        const receiptSearch = document.getElementById('receipt-search');
+        if (receiptSearch) {
+            receiptSearch.addEventListener('input', (e) => {
+                this.searchReceipts(e.target.value);
             });
         }
 
@@ -1030,10 +1084,14 @@ const app = {
             // Edit mode
             const invoice = DataStore.getInvoice(invoiceId);
             if (invoice) {
-                this.invoiceListMode = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
+                this.invoiceListMode = this.isCreditNoteDoc(invoice)
+                    ? 'creditNote'
+                    : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice');
                 this.populateInvoiceForm(invoice);
                 document.getElementById('invoice-form-title').textContent =
-                    this.isProformaDoc(invoice) ? 'Edit Proforma Invoice' : 'Edit Invoice';
+                    this.isCreditNoteDoc(invoice)
+                        ? 'Edit Credit Note'
+                        : (this.isProformaDoc(invoice) ? 'Edit Proforma Invoice' : 'Edit Invoice');
                 const deleteDraftBtn = document.getElementById('btn-delete-draft-invoice');
                 if (deleteDraftBtn) deleteDraftBtn.style.display = invoice.status === 'draft' ? '' : 'none';
                 this.applyInvoiceModeUi();
@@ -1054,7 +1112,9 @@ const app = {
             document.getElementById('invoice-notes').value = settings.defaultInvoiceNotes || '';
             
             document.getElementById('invoice-form-title').textContent =
-                this.isProformaMode() ? 'Create Proforma Invoice' : 'Create New Invoice';
+                this.isCreditNoteMode()
+                    ? 'Create Credit Note'
+                    : (this.isProformaMode() ? 'Create Proforma Invoice' : 'Create New Invoice');
             const deleteDraftBtn = document.getElementById('btn-delete-draft-invoice');
             if (deleteDraftBtn) deleteDraftBtn.style.display = 'none';
 
@@ -1410,16 +1470,20 @@ const app = {
         let invoiceNumber = (document.getElementById('invoice-number').value || '').trim();
         const status = document.getElementById('invoice-status').value;
         const existing = this.currentInvoiceId ? DataStore.getInvoice(this.currentInvoiceId) : null;
-        const documentType = (existing && existing.documentType === 'proforma') || this.isProformaMode()
-            ? 'proforma'
-            : 'invoice';
+        let documentType = 'invoice';
+        if ((existing && existing.documentType === 'creditNote') || this.isCreditNoteMode()) documentType = 'creditNote';
+        else if ((existing && existing.documentType === 'proforma') || this.isProformaMode()) documentType = 'proforma';
         if (status === 'draft') {
             invoiceNumber = invoiceNumber || '';
         } else {
             if (!invoiceNumber || invoiceNumber === 'Draft' || invoiceNumber === '—') {
-                invoiceNumber = documentType === 'proforma'
-                    ? (DataStore.getNextProformaNumber ? DataStore.getNextProformaNumber() : 'PF-1000')
-                    : DataStore.getNextInvoiceNumber();
+                if (documentType === 'proforma') {
+                    invoiceNumber = DataStore.getNextProformaNumber ? DataStore.getNextProformaNumber() : 'PF-1000';
+                } else if (documentType === 'creditNote') {
+                    invoiceNumber = DataStore.getNextCreditNoteNumber ? DataStore.getNextCreditNoteNumber() : 'CN-1000';
+                } else {
+                    invoiceNumber = DataStore.getNextInvoiceNumber();
+                }
             }
         }
 
@@ -1430,7 +1494,9 @@ const app = {
             convertedToInvoiceId: existing && existing.convertedToInvoiceId ? existing.convertedToInvoiceId : '',
             sourceProformaId: existing && existing.sourceProformaId ? existing.sourceProformaId : '',
             date: document.getElementById('invoice-date').value,
-            dueDate: documentType === 'proforma' ? '' : document.getElementById('invoice-due-date').value,
+            dueDate: (documentType === 'proforma' || documentType === 'creditNote')
+                ? ''
+                : document.getElementById('invoice-due-date').value,
             clientCustomerId: documentType === 'proforma'
                 ? ''
                 : document.getElementById('client-customer-id').value,
@@ -1451,27 +1517,35 @@ const app = {
         };
 
         DataStore.saveInvoice(invoice);
-        alert((documentType === 'proforma' ? 'Proforma invoice' : 'Invoice') + ' saved successfully!');
-        this.invoiceListMode = documentType === 'proforma' ? 'proforma' : 'invoice';
+        const savedLabel = documentType === 'creditNote'
+            ? 'Credit note'
+            : (documentType === 'proforma' ? 'Proforma invoice' : 'Invoice');
+        alert(savedLabel + ' saved successfully!');
+        this.invoiceListMode = documentType === 'creditNote'
+            ? 'creditNote'
+            : (documentType === 'proforma' ? 'proforma' : 'invoice');
         this.showPage('invoices');
     },
 
-    // Invoice list excludes drafts (those appear under Drafts / Copilot).
-    // Proforma list includes draft proformas. Drafts subsection shows all drafts.
+    // Invoice list excludes drafts/proformas/credit notes.
+    // Proforma and credit-note modes filter by documentType.
     renderInvoices(searchTerm = '') {
         this.applyInvoiceModeUi();
         const mode = this.invoiceListMode;
         const wantProforma = mode === 'proforma';
+        const wantCreditNote = mode === 'creditNote';
         const wantDrafts = mode === 'drafts';
         let invoices = DataStore.getInvoices().filter(inv => {
             if (wantDrafts) return inv.status === 'draft';
-            if (wantProforma) {
-                if (!this.isProformaDoc(inv)) return false;
-                return true; // include draft + non-draft proformas
+            if (wantProforma) return this.isProformaDoc(inv);
+            if (wantCreditNote) {
+                if (!this.isCreditNoteDoc(inv)) return false;
+                return inv.status !== 'draft';
             }
-            // Regular invoices: hide drafts and proformas
+            // Regular invoices: hide drafts, proformas, and credit notes
             if (inv.status === 'draft') return false;
-            return !this.isProformaDoc(inv);
+            if (this.isProformaDoc(inv) || this.isCreditNoteDoc(inv)) return false;
+            return true;
         });
         
         if (searchTerm) {
@@ -1512,10 +1586,12 @@ const app = {
             container.appendChild(fragment);
         } else {
             container.innerHTML = wantDrafts
-                ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No draft invoices or proformas.</p>'
-                : (wantProforma
-                    ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No proforma invoices found.</p>'
-                    : '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No invoices found.</p>');
+                ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No draft invoices, proformas, or credit notes.</p>'
+                : (wantCreditNote
+                    ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No credit notes found. Create your first credit note!</p>'
+                    : (wantProforma
+                        ? '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No proforma invoices found.</p>'
+                        : '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No invoices found.</p>'));
         }
         this.renderCopilotDrafts();
     },
@@ -1535,7 +1611,7 @@ const app = {
         }
         listEl.innerHTML = drafts.map(inv => {
             const safeId = this.escapeJsString(inv.id);
-            const kind = this.isProformaDoc(inv) ? 'Proforma draft' : 'Draft';
+            const kind = this.isCreditNoteDoc(inv) ? 'Credit note draft' : (this.isProformaDoc(inv) ? 'Proforma draft' : 'Draft');
             return `
             <div class="copilot-draft-item">
                 <div class="copilot-draft-item-main" onclick="app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">
@@ -1573,7 +1649,7 @@ const app = {
         const displayNumber = (invoice.status === 'draft' && !invoice.invoiceNumber) ? 'Draft' : (invoice.invoiceNumber || '—');
         const label = this.getDocumentTypeLabel(invoice);
         const status = this.escapeHtml(invoice.status || '');
-        const dateLine = this.isProformaDoc(invoice)
+        const dateLine = (this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice))
             ? this.escapeHtml(this.formatDate(invoice.date))
             : `${this.escapeHtml(this.formatDate(invoice.date))} · due ${this.escapeHtml(this.formatDate(invoice.dueDate))}`;
         const converted = invoice.convertedToInvoiceId
@@ -1600,7 +1676,7 @@ const app = {
                         <button class="btn btn-secondary" onclick="event.stopPropagation(); app.viewInvoice('${safeId}')">View</button>
                         <button class="btn btn-primary" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">Edit</button>
                         ${convertBtn}
-                        <button class="btn btn-danger" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isProformaDoc(invoice) ? 'proforma' : 'invoice'}?')) { DataStore.deleteInvoice('${safeId}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
+                        <button class="btn btn-danger" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isCreditNoteDoc(invoice) ? 'credit note' : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice')}?')) { DataStore.deleteInvoice('${safeId}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
                     </div>
                 </div>
             </div>
@@ -1652,7 +1728,9 @@ const app = {
         // Store current invoice ID immediately for quick response
         this.currentInvoiceId = id;
         this.currentReceiptId = null;
-        this.invoiceListMode = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
+        this.invoiceListMode = this.isCreditNoteDoc(invoice)
+            ? 'creditNote'
+            : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice');
         
         // Update modal for invoice
         const modalTitleEl = document.getElementById('modal-title');
@@ -1687,7 +1765,7 @@ const app = {
 
             const previewContent = document.getElementById('invoice-preview-content');
             const docLabel = this.getDocumentTypeLabel(invoice);
-            const logoKind = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
+            const logoKind = this.isCreditNoteDoc(invoice) ? 'creditNote' : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice');
             const invoiceLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
                 ? DataStore.getDocumentLogoHtml(logoKind) : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
             previewContent.innerHTML = `
@@ -1709,7 +1787,7 @@ const app = {
                                 <td class="value-cell">${formattedInvoiceDate}</td>
                             </tr>
                             <tr>
-                                <td class="label-cell">${this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #'}:</td>
+                                <td class="label-cell">${this.isCreditNoteDoc(invoice) ? 'Credit Note #' : (this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #')}:</td>
                                 <td class="value-cell">${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</td>
                             </tr>
                             ${invoice.clientCustomerId ? `
@@ -1718,7 +1796,7 @@ const app = {
                                 <td class="value-cell">${invoice.clientCustomerId}</td>
                             </tr>
                             ` : ''}
-                            ${this.isProformaDoc(invoice) ? '' : `
+                            ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
                             <tr>
                                 <td class="label-cell">Payment Due by:</td>
                                 <td class="value-cell">${formattedDueDate}</td>
@@ -1768,7 +1846,7 @@ const app = {
                     </table>
                 </div>
 
-                ${this.isProformaDoc(invoice) ? '' : `
+                ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
                 <div class="signatures-section">
                     <table class="signatures-table">
                         <tr>
@@ -1875,7 +1953,7 @@ const app = {
         
         const settings = DataStore.getCompanySettings();
         const docLabel = this.getDocumentTypeLabel(invoice);
-        const logoKind = this.isProformaDoc(invoice) ? 'proforma' : 'invoice';
+        const logoKind = this.isCreditNoteDoc(invoice) ? 'creditNote' : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice');
         const invoiceLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
             ? DataStore.getDocumentLogoHtml(logoKind)
             : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
@@ -2336,7 +2414,7 @@ const app = {
                                     <td class="value-cell">${formattedInvoiceDate}</td>
                                 </tr>
                                 <tr>
-                                    <td class="label-cell">${this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #'}:</td>
+                                    <td class="label-cell">${this.isCreditNoteDoc(invoice) ? 'Credit Note #' : (this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #')}:</td>
                                     <td class="value-cell">${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</td>
                                 </tr>
                                 ${invoice.clientCustomerId ? `
@@ -2345,7 +2423,7 @@ const app = {
                                     <td class="value-cell">${invoice.clientCustomerId}</td>
                                 </tr>
                                 ` : ''}
-                                ${this.isProformaDoc(invoice) ? '' : `
+                                ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
                                 <tr>
                                     <td class="label-cell">Payment Due by:</td>
                                     <td class="value-cell">${formattedDueDate}</td>
@@ -2395,7 +2473,7 @@ const app = {
                         </table>
                     </div>
 
-                ${this.isProformaDoc(invoice) ? '' : `
+                ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
                 <div class="signatures-section">
                         <table class="signatures-table">
                             <tr>
@@ -2464,8 +2542,22 @@ const app = {
     },
 
     // Receipts
-    renderReceipts() {
+    renderReceipts(searchTerm = '') {
         let receipts = DataStore.getReceipts().slice();
+        const term = String(searchTerm || '').trim().toLowerCase();
+        if (term) {
+            receipts = receipts.filter((r) => {
+                const client = r.clientId ? DataStore.getClient(r.clientId) : null;
+                const clientName = client ? (client.name || '') : '';
+                return (
+                    String(r.receiptNumber || '').toLowerCase().includes(term) ||
+                    clientName.toLowerCase().includes(term) ||
+                    String(r.paymentMethod || '').toLowerCase().includes(term) ||
+                    String(r.notes || '').toLowerCase().includes(term) ||
+                    String(r.date || '').toLowerCase().includes(term)
+                );
+            });
+        }
         receipts.sort((a, b) => {
             const da = String(a.date || '');
             const db = String(b.date || '');
@@ -2481,6 +2573,10 @@ const app = {
         container.innerHTML = receipts.length > 0
             ? receipts.map(receipt => this.createReceiptCardHTML(receipt)).join('')
             : '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No receipts found. Create your first receipt!</p>';
+    },
+
+    searchReceipts(term) {
+        this.renderReceipts(term);
     },
 
     createReceiptCardHTML(receipt) {
@@ -2650,7 +2746,7 @@ const app = {
         
         invoices = invoices.filter(inv => {
             if (inv.status === 'draft') return false;
-            if (inv.documentType === 'proforma') return false;
+            if (inv.documentType === 'proforma' || inv.documentType === 'creditNote') return false;
             const clientMatch = inv.clientName === client.name ||
                 (client.email && inv.clientEmail === client.email);
             if (!clientMatch) return false;
@@ -3720,6 +3816,7 @@ const app = {
             setVal('receipt-sequence-number', settings.receiptSequenceNumber || 1000);
             setVal('payment-order-sequence-number', settings.paymentOrderSequenceNumber || 1000);
             setVal('proforma-sequence-number', settings.proformaSequenceNumber || 1000);
+            setVal('credit-note-sequence-number', settings.creditNoteSequenceNumber || 1000);
             setVal('default-tax-rate', settings.defaultTaxRate || 0);
             setVal('default-payment-terms', settings.defaultPaymentTerms || 30);
             setVal('default-invoice-notes', settings.defaultInvoiceNotes || '');
@@ -4101,6 +4198,7 @@ const app = {
             receiptSequenceNumber: parseInt(document.getElementById('receipt-sequence-number').value) || 1000,
             paymentOrderSequenceNumber: parseInt((document.getElementById('payment-order-sequence-number') || {}).value) || 1000,
             proformaSequenceNumber: parseInt((document.getElementById('proforma-sequence-number') || {}).value) || 1000,
+            creditNoteSequenceNumber: parseInt((document.getElementById('credit-note-sequence-number') || {}).value) || 1000,
             defaultTaxRate: parseFloat(document.getElementById('default-tax-rate').value) || 0,
             defaultPaymentTerms: parseInt(document.getElementById('default-payment-terms').value) || 30,
             defaultInvoiceNotes: document.getElementById('default-invoice-notes').value,
@@ -5177,6 +5275,12 @@ if (typeof window !== 'undefined') {
     window.setInvoicesSubsection = function (subsectionId) {
         if (window.app && typeof window.app.setInvoicesSubsection === 'function') {
             window.app.setInvoicesSubsection(subsectionId);
+        }
+    };
+
+    window.setCreditNotesSection = function () {
+        if (window.app && typeof window.app.setCreditNotesSection === 'function') {
+            window.app.setCreditNotesSection();
         }
     };
 }

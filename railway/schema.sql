@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS company_settings (
   receipt_sequence_number INTEGER NOT NULL DEFAULT 1000,
   payment_order_sequence_number INTEGER NOT NULL DEFAULT 1000,
   proforma_sequence_number INTEGER NOT NULL DEFAULT 1000,
+  credit_note_sequence_number INTEGER NOT NULL DEFAULT 1000,
   default_tax_rate NUMERIC NOT NULL DEFAULT 0,
   default_payment_terms INTEGER NOT NULL DEFAULT 30,
   default_invoice_notes TEXT NOT NULL DEFAULT '',
@@ -59,6 +60,8 @@ ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS payment_order_sequence_number INTEGER NOT NULL DEFAULT 1000;
 ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS proforma_sequence_number INTEGER NOT NULL DEFAULT 1000;
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS credit_note_sequence_number INTEGER NOT NULL DEFAULT 1000;
 ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS document_logos JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE company_settings
