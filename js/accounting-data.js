@@ -25,8 +25,10 @@ window.AccountingData = (function () {
   var lastSuccessfulSaveAt = 0;
   var persistSuppressCount = 0;
   var deferredSaveTimer = null;
+  var persistDebounceTimer = null;
   var SAVE_NETWORK_RETRIES = 3;
   var SAVE_FETCH_TIMEOUT_MS = 120000;
+  var PERSIST_DEBOUNCE_MS = 1500;
 
   function markLocalDirty() {
     localDirty = true;
@@ -77,9 +79,15 @@ window.AccountingData = (function () {
         scheduleDeferredSaveRetry(5000);
         return;
       }
-      setSaveBanner('Retrying save…', true);
-      persistToFile();
+      // Silent background retry — do not alarm the user for transient blips.
+      persistToFile({ immediate: true });
     }, delayMs || 8000);
+  }
+
+  function logSaveRetry(detail) {
+    if (typeof console !== 'undefined' && console.info) {
+      console.info('Andeco save: retrying after transient error', detail || '');
+    }
   }
 
   function isPersistBusy() {
@@ -471,13 +479,13 @@ window.AccountingData = (function () {
           return false;
         }
         if (isRetryableHttpStatus(res.status) && networkAttempt < SAVE_NETWORK_RETRIES) {
-          setSaveBanner('Save interrupted (' + res.status + ') — retrying…', true);
+          logSaveRetry('HTTP ' + res.status);
           return sleep(1000 * Math.pow(2, networkAttempt)).then(function () {
             return postWorkspaceSave(!!isConflictRetry, networkAttempt + 1);
           });
         }
         if (!res.ok) {
-          notifySaveError((json && json.error) || ('Save failed (' + res.status + ').'));
+          notifySaveError((json && json.error) || ('Could not sync to the server (' + res.status + '). Your changes are kept on this device.'));
           if (isRetryableHttpStatus(res.status)) scheduleDeferredSaveRetry(10000);
           return false;
         }
@@ -491,12 +499,12 @@ window.AccountingData = (function () {
       });
     }).catch(function (err) {
       if (networkAttempt < SAVE_NETWORK_RETRIES && isRetryableNetworkError(err)) {
-        setSaveBanner('Connection interrupted — retrying save…', true);
+        logSaveRetry(err && err.message);
         return sleep(1000 * Math.pow(2, networkAttempt)).then(function () {
           return postWorkspaceSave(!!isConflictRetry, networkAttempt + 1);
         });
       }
-      notifySaveError((err && err.message) || 'Save failed. Check your connection.');
+      notifySaveError('Could not sync to the server. Your changes are kept on this device and will retry automatically.');
       scheduleDeferredSaveRetry(8000);
       return false;
     });
@@ -530,7 +538,7 @@ window.AccountingData = (function () {
     return saveInFlight;
   }
 
-  function persistToFile() {
+  function persistToFile(opts) {
     if (supabasePendingAuth) return Promise.resolve(false);
     if (useSupabase) {
       return persistToSupabase().then(function () { return true; }, function () { return false; });
@@ -551,7 +559,22 @@ window.AccountingData = (function () {
         });
     }
     if (!useFileStorage) return Promise.resolve(false);
-    return runQueuedWorkspaceSave();
+    // Debounce bursty module saves so one receipt/invoice edit does not open
+    // several large /api/save connections (which surface as connection blips).
+    if (opts && opts.immediate) {
+      if (persistDebounceTimer) {
+        clearTimeout(persistDebounceTimer);
+        persistDebounceTimer = null;
+      }
+      return runQueuedWorkspaceSave();
+    }
+    if (persistDebounceTimer) clearTimeout(persistDebounceTimer);
+    return new Promise(function (resolve) {
+      persistDebounceTimer = setTimeout(function () {
+        persistDebounceTimer = null;
+        resolve(runQueuedWorkspaceSave());
+      }, PERSIST_DEBOUNCE_MS);
+    });
   }
 
   function getInvoices() {
