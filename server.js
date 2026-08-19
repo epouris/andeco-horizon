@@ -781,6 +781,12 @@ async function main() {
   if (!usePostgres) {
     ensureDataFile();
   }
+  // Large workspace saves (photos / payroll) can outlive default idle timeouts and
+  // surface in the browser as ERR_HTTP2_PING_FAILED / Failed to fetch.
+  server.requestTimeout = 0;
+  server.headersTimeout = 130000;
+  server.keepAliveTimeout = 120000;
+  server.timeout = 0;
   server.listen(PORT, () => {
     console.log('Andeco Horizon Suite at http://localhost:' + PORT);
     console.log('Storage:', usePostgres ? 'Postgres relational tables' : 'file (' + DATA_FILE + ')');
