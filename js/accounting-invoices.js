@@ -230,6 +230,10 @@ const app = {
     /** Fetch shared data file and refresh UI so users see updates without reloading (e.g. when using single file in OneDrive). */
     refreshFromSharedFile() {
         if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') return;
+        var saveBusy = (typeof DataStore !== 'undefined' && typeof DataStore.isSaveInFlight === 'function' && DataStore.isSaveInFlight())
+            || (typeof window.AccountingData !== 'undefined' && typeof window.AccountingData.isSaveInFlight === 'function' && window.AccountingData.isSaveInFlight());
+        // Do not pull remote workspace over unsaved local receipt/invoice edits.
+        if (saveBusy) return;
         if (typeof DataStore !== 'undefined' && typeof DataStore.isSupabaseMode === 'function' && DataStore.isSupabaseMode() && typeof DataStore.refreshFromSupabase === 'function') {
             DataStore.refreshFromSupabase().then(function (ok) {
                 if (ok && typeof DataStore.notifyModulesDataLoaded === 'function') DataStore.notifyModulesDataLoaded();
@@ -243,6 +247,9 @@ const app = {
             .then(function (res) { return res.ok ? res.json() : null; })
             .then(function (data) {
                 if (!data || typeof DataStore === 'undefined') return;
+                var stillBusy = (typeof DataStore.isSaveInFlight === 'function' && DataStore.isSaveInFlight())
+                    || (typeof window.AccountingData !== 'undefined' && typeof window.AccountingData.isSaveInFlight === 'function' && window.AccountingData.isSaveInFlight());
+                if (stillBusy) return;
                 if (typeof DataStore.loadFromData === 'function') DataStore.loadFromData(data);
                 else {
                     if (Array.isArray(data.invoices)) DataStore.saveInvoices(data.invoices);
@@ -301,9 +308,7 @@ const app = {
                 if (data.crm && typeof data.crm === 'object') {
                     if (Array.isArray(data.crm.users)) setLocal('andeco_crm_users', data.crm.users);
                 }
-                var saveBusy = (typeof DataStore !== 'undefined' && typeof DataStore.isSaveInFlight === 'function' && DataStore.isSaveInFlight())
-                    || (typeof window.AccountingData !== 'undefined' && typeof window.AccountingData.isSaveInFlight === 'function' && window.AccountingData.isSaveInFlight());
-                if (!saveBusy && typeof window.reloadPayrollFromStorage === 'function') window.reloadPayrollFromStorage();
+                if (typeof window.reloadPayrollFromStorage === 'function') window.reloadPayrollFromStorage();
                 if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
                 if (typeof app.refreshCurrentView === 'function') app.refreshCurrentView();
             })
@@ -2781,7 +2786,9 @@ const app = {
         };
 
         if (!onAccount) {
-            // If editing: revert any unselected invoices (that were on the receipt) back to pending
+            // Batch invoice status updates into one workspace save with the receipt
+            // (avoid intermediate persists that race with background polls).
+            var persistOpts = { persist: false };
             if (existingReceipt && previousInvoiceIds.length > 0) {
                 const unselectedIds = previousInvoiceIds.filter(id => !selectedInvoiceIds.includes(id));
                 unselectedIds.forEach(invoiceId => {
@@ -2789,7 +2796,7 @@ const app = {
                     if (invoice) {
                         invoice.status = 'pending';
                         invoice.updatedAt = new Date().toISOString();
-                        DataStore.saveInvoice(invoice);
+                        DataStore.saveInvoice(invoice, persistOpts);
                     }
                 });
             }
@@ -2798,7 +2805,7 @@ const app = {
                 if (invoice) {
                     invoice.status = 'paid';
                     invoice.updatedAt = new Date().toISOString();
-                    DataStore.saveInvoice(invoice);
+                    DataStore.saveInvoice(invoice, persistOpts);
                 }
             });
         }
