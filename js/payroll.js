@@ -57,6 +57,11 @@ function formatMoney(amount) {
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    if (normalizePayrollDataKeys({ persist: true })) {
+        // Deduped legacy keys (e.g. id_2026_7 vs id_2026_07); persist once after cleanup.
+        try { persistPayrollToCloud(); } catch (e) {}
+    }
+    lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
     loadEmployees();
     var empTable = document.getElementById('employeesTableBody');
     if (empTable) {
@@ -102,10 +107,14 @@ document.addEventListener('DOMContentLoaded', function() {
         payslipEmployeeEl.addEventListener('change', clearPayrollNumberOverrideIfNotEditing);
     }
     
-    // Add event listeners for payslip filters
-    document.getElementById('payslipFilterEmployee').addEventListener('change', loadPayslips);
-    document.getElementById('payslipFilterYear').addEventListener('change', loadPayslips);
-    document.getElementById('payslipFilterMonth').addEventListener('change', loadPayslips);
+    // Add event listeners for payslip filters (ignore rebuild-driven changes)
+    function onPayslipFilterChange() {
+        if (payslipFiltersUpdating) return;
+        loadPayslips();
+    }
+    document.getElementById('payslipFilterEmployee').addEventListener('change', onPayslipFilterChange);
+    document.getElementById('payslipFilterYear').addEventListener('change', onPayslipFilterChange);
+    document.getElementById('payslipFilterMonth').addEventListener('change', onPayslipFilterChange);
 });
 
 function cleanupOldSequenceData() {
@@ -118,6 +127,75 @@ function payrollMonthSegment(month) {
     const m = typeof month === 'string' ? parseInt(month, 10) : Number(month);
     if (Number.isNaN(m) || m < 1 || m > 12) return '00';
     return m.toString().padStart(2, '0');
+}
+
+/** Canonical storage key: employeeId_YYYY_MM */
+function canonicalPayrollKey(employeeId, year, month) {
+    const y = String(year == null ? '' : year).trim();
+    return `${String(employeeId || '').trim()}_${y}_${payrollMonthSegment(month)}`;
+}
+
+/**
+ * Collapse duplicate payslip keys (e.g. id_2026_7 vs id_2026_07) into one canonical entry.
+ * Returns true if the in-memory map changed.
+ */
+function normalizePayrollDataKeys(options) {
+    const opts = options || {};
+    const src = payrollData && typeof payrollData === 'object' ? payrollData : {};
+    const next = {};
+    let changed = false;
+    Object.keys(src).forEach((key) => {
+        const p = src[key];
+        if (!p || typeof p !== 'object') {
+            changed = true;
+            return;
+        }
+        const employeeId = p.employeeId != null ? p.employeeId : String(key).split('_')[0];
+        const year = p.year != null ? p.year : '';
+        const month = p.month != null ? p.month : '';
+        const canon = canonicalPayrollKey(employeeId, year, month);
+        if (!canon.startsWith('_') && employeeId !== '' && year !== '' && payrollMonthSegment(month) !== '00') {
+            const normalized = Object.assign({}, p, {
+                employeeId: String(employeeId),
+                year: typeof year === 'string' && /^\d+$/.test(year) ? parseInt(year, 10) : year,
+                month: payrollMonthSegment(month)
+            });
+            const existing = next[canon];
+            if (!existing) {
+                next[canon] = normalized;
+            } else {
+                const tNew = Number(normalized.savedAt || normalized.updatedAt || 0);
+                const tOld = Number(existing.savedAt || existing.updatedAt || 0);
+                if (tNew >= tOld) next[canon] = normalized;
+            }
+            if (canon !== key) changed = true;
+        } else {
+            next[key] = p;
+        }
+    });
+    if (Object.keys(next).length !== Object.keys(src).length) changed = true;
+    if (changed) {
+        payrollData = next;
+        if (opts.persist) {
+            try { localStorage.setItem('payrollData', JSON.stringify(payrollData)); } catch (e) {}
+        }
+    }
+    return changed;
+}
+
+let payslipFiltersUpdating = false;
+let loadPayslipsRunning = false;
+let reloadPayrollTimer = null;
+let persistPayrollTimer = null;
+let lastPayrollDataFingerprint = '';
+
+function payrollDataFingerprint(data) {
+    try {
+        const empIds = (employees || []).map(function (e) { return e && e.employeeId; }).join(',');
+        return empIds + '#' + JSON.stringify(data || {});
+    } catch (e) {
+        return String(Date.now());
+    }
 }
 
 /** Payroll #: SLR/Year/Month/Sequence (sequence resets each month) */
@@ -1112,15 +1190,27 @@ function generatePayslip() {
     updateElement('payslipBankIBAN', employee.bankIBAN || 'Not Specified');
     
     // Save payroll data (savedAt = first time this payslip was saved; kept on updates for stable sequence order)
-    const payrollKey = `${employeeId}_${year}_${month}`;
-    const priorRecord = payrollData[payrollKey];
-    const savedAt =
-        priorRecord && priorRecord.savedAt != null ? priorRecord.savedAt : Date.now();
-    payrollData[payrollKey] = {
-        employeeId,
-        employeeName: `${employee.firstName} ${employee.lastName}`,
-        month,
-        year,
+        const payrollKey = canonicalPayrollKey(employeeId, year, month);
+        // Drop legacy alternate keys for the same employee/period so the table does not multiply rows.
+        const monthStr = payrollMonthSegment(month);
+        const yearStr = String(year);
+        [
+            `${employeeId}_${yearStr}_${month}`,
+            `${employeeId}_${yearStr}_${Number(monthStr)}`,
+            `${employeeId}_${year}_${monthStr}`,
+            `${employeeId}_${year}_${month}`,
+            `${employeeId}_${year}_${Number(monthStr)}`
+        ].forEach((alt) => {
+            if (alt !== payrollKey && payrollData[alt]) delete payrollData[alt];
+        });
+        const priorRecord = payrollData[payrollKey];
+        const savedAt =
+            priorRecord && priorRecord.savedAt != null ? priorRecord.savedAt : Date.now();
+        payrollData[payrollKey] = {
+            employeeId,
+            employeeName: `${employee.firstName} ${employee.lastName}`,
+            month: monthStr,
+            year: typeof year === 'string' && /^\d+$/.test(year) ? parseInt(year, 10) : year,
         payDate: payDate,
         payrollNumber: payrollNumber,
         savedAt,
@@ -1278,15 +1368,21 @@ function updateElement(id, value) {
 
 // Helper function to find payslip with flexible key matching
 function findPayslip(employeeId, year, month) {
-    const monthStr = month.toString().padStart(2, '0');
-    const yearStr = year.toString();
+    const canon = canonicalPayrollKey(employeeId, year, month);
+    if (payrollData[canon]) {
+        return { key: canon, payslip: payrollData[canon] };
+    }
+    const monthStr = payrollMonthSegment(month);
+    const yearStr = String(year);
     
-    // Try different key formats
+    // Try different legacy key formats
     const possibleKeys = [
         `${employeeId}_${yearStr}_${monthStr}`,
         `${employeeId}_${yearStr}_${month}`,
         `${employeeId}_${year}_${monthStr}`,
-        `${employeeId}_${year}_${month}`
+        `${employeeId}_${year}_${month}`,
+        `${employeeId}_${yearStr}_${Number(monthStr)}`,
+        `${employeeId}_${year}_${Number(monthStr)}`
     ];
     
     for (const key of possibleKeys) {
@@ -1318,19 +1414,27 @@ function updateAllTabs() {
 
 // Payslip Management Functions
 function loadPayslips() {
+    if (loadPayslipsRunning) return;
     const tableBody = document.getElementById('payslipsTableBody');
+    if (!tableBody) return;
+    loadPayslipsRunning = true;
+    try {
     tableBody.innerHTML = '';
     
     // Get filter values
-    const employeeFilter = document.getElementById('payslipFilterEmployee').value;
-    const yearFilter = document.getElementById('payslipFilterYear').value;
-    const monthFilter = document.getElementById('payslipFilterMonth').value;
+    const employeeFilterEl = document.getElementById('payslipFilterEmployee');
+    const yearFilterEl = document.getElementById('payslipFilterYear');
+    const monthFilterEl = document.getElementById('payslipFilterMonth');
+    const employeeFilter = employeeFilterEl ? employeeFilterEl.value : '';
+    const yearFilter = yearFilterEl ? yearFilterEl.value : '';
+    const monthFilter = monthFilterEl ? monthFilterEl.value : '';
     
-    // Filter payroll data
+    // Filter payroll data (one row per canonical employee/period)
     const filteredPayslips = Object.values(payrollData).filter(payslip => {
+        if (!payslip || typeof payslip !== 'object') return false;
         if (employeeFilter && payslip.employeeId !== employeeFilter) return false;
-        if (yearFilter && payslip.year.toString() !== yearFilter) return false;
-        if (monthFilter && payslip.month.toString() !== monthFilter) return false;
+        if (yearFilter && String(payslip.year) !== String(yearFilter)) return false;
+        if (monthFilter && payrollMonthSegment(payslip.month) !== payrollMonthSegment(monthFilter)) return false;
         return true;
     });
     
@@ -1354,8 +1458,6 @@ function loadPayslips() {
         const row = document.createElement('tr');
         const period = `${getMonthName(payslip.month)} ${payslip.year}`;
         const payDate = payslip.payDate ? (window.AndecoDate ? window.AndecoDate.formatDate(payslip.payDate) : new Date(payslip.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })) : 'N/A';
-        
-        console.log('Creating row for payslip:', payslip.employeeId, payslip.year, payslip.month);
         
         // Create table cells
         const payrollCell = document.createElement('td');
@@ -1421,6 +1523,9 @@ function loadPayslips() {
     if (filteredPayslips.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">No payslips found</td></tr>';
     }
+    } finally {
+        loadPayslipsRunning = false;
+    }
 }
 
 function clearPayslipFilters() {
@@ -1431,32 +1536,37 @@ function clearPayslipFilters() {
 }
 
 function updatePayslipFilters() {
-    // Update employee filter
     const employeeFilter = document.getElementById('payslipFilterEmployee');
-    const currentEmployeeValue = employeeFilter.value;
-    employeeFilter.innerHTML = '<option value="">All Employees</option>';
-    
-    employees.forEach(employee => {
-        const option = document.createElement('option');
-        option.value = employee.employeeId;
-        option.textContent = `${employee.firstName} ${employee.lastName}`;
-        employeeFilter.appendChild(option);
-    });
-    employeeFilter.value = currentEmployeeValue;
-    
-    // Update year filter
     const yearFilter = document.getElementById('payslipFilterYear');
-    const currentYearValue = yearFilter.value;
-    yearFilter.innerHTML = '<option value="">All Years</option>';
-    
-    const years = [...new Set(Object.values(payrollData).map(payslip => payslip.year))].sort((a, b) => b - a);
-    years.forEach(year => {
-        const option = document.createElement('option');
-        option.value = year;
-        option.textContent = year;
-        yearFilter.appendChild(option);
-    });
-    yearFilter.value = currentYearValue;
+    if (!employeeFilter || !yearFilter) return;
+
+    payslipFiltersUpdating = true;
+    try {
+        const currentEmployeeValue = employeeFilter.value;
+        employeeFilter.innerHTML = '<option value="">All Employees</option>';
+
+        employees.forEach(employee => {
+            const option = document.createElement('option');
+            option.value = employee.employeeId;
+            option.textContent = `${employee.firstName} ${employee.lastName}`;
+            employeeFilter.appendChild(option);
+        });
+        employeeFilter.value = currentEmployeeValue;
+
+        const currentYearValue = yearFilter.value;
+        yearFilter.innerHTML = '<option value="">All Years</option>';
+
+        const years = [...new Set(Object.values(payrollData).map(payslip => payslip && payslip.year).filter(y => y != null && y !== ''))].sort((a, b) => b - a);
+        years.forEach(year => {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year;
+            yearFilter.appendChild(option);
+        });
+        yearFilter.value = currentYearValue;
+    } finally {
+        payslipFiltersUpdating = false;
+    }
 }
 
 function viewPayslip(employeeId, year, month) {
@@ -4385,18 +4495,39 @@ function saveEmployees() {
 }
 
 function savePayrollData() {
+    normalizePayrollDataKeys({ persist: false });
     localStorage.setItem('payrollData', JSON.stringify(payrollData));
+    lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
     persistPayrollToCloud();
 }
 
 function persistPayrollToCloud() {
-    try {
-        if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll();
-    } catch (e) {}
+    if (persistPayrollTimer) clearTimeout(persistPayrollTimer);
+    persistPayrollTimer = setTimeout(function () {
+        persistPayrollTimer = null;
+        try {
+            if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll();
+            else if (window.DataStore && window.DataStore.persistAll) window.DataStore.persistAll();
+        } catch (e) {}
+    }, 750);
 }
 
-function reloadPayrollFromStorage() {
+function reloadPayrollFromStorage(force) {
+    if (reloadPayrollTimer) clearTimeout(reloadPayrollTimer);
+    reloadPayrollTimer = setTimeout(function () {
+        reloadPayrollTimer = null;
+        reloadPayrollFromStorageNow(!!force);
+    }, 200);
+}
+
+function reloadPayrollFromStorageNow(force) {
     try {
+        if (!force && window.AccountingData && typeof window.AccountingData.isSaveInFlight === 'function' && window.AccountingData.isSaveInFlight()) {
+            return;
+        }
+        if (!force && window.DataStore && typeof window.DataStore.isSaveInFlight === 'function' && window.DataStore.isSaveInFlight()) {
+            return;
+        }
         employees = JSON.parse(localStorage.getItem('employees')) || [];
         payrollData = JSON.parse(localStorage.getItem('payrollData')) || {};
         companySettings = JSON.parse(localStorage.getItem('companySettings')) || {};
@@ -4405,14 +4536,24 @@ function reloadPayrollFromStorage() {
         payrollData = {};
         companySettings = {};
     }
+    normalizePayrollDataKeys({ persist: false });
+    const fp = payrollDataFingerprint(payrollData);
+    if (!force && fp === lastPayrollDataFingerprint) {
+        return;
+    }
+    lastPayrollDataFingerprint = fp;
+    // Single UI refresh path (updateAllTabs already calls loadPayslips once).
     if (typeof loadEmployees === 'function') loadEmployees();
-    if (typeof updateEmployeeDropdowns === 'function') updateEmployeeDropdowns();
-    if (typeof updateYTDDisplay === 'function') updateYTDDisplay();
-    if (typeof loadPayslips === 'function') loadPayslips();
     if (typeof updateSocialInsuranceYTDDisplay === 'function') updateSocialInsuranceYTDDisplay();
     if (typeof updateSocialInsuranceMonthlyDisplay === 'function') updateSocialInsuranceMonthlyDisplay();
-    if (typeof updatePayslipCompanyInfo === 'function') updatePayslipCompanyInfo();
     if (typeof updateAllTabs === 'function') updateAllTabs();
+    else {
+        if (typeof updateEmployeeDropdowns === 'function') updateEmployeeDropdowns();
+        if (typeof updateYTDDisplay === 'function') updateYTDDisplay();
+        if (typeof updatePayslipFilters === 'function') updatePayslipFilters();
+        if (typeof loadPayslips === 'function') loadPayslips();
+        if (typeof updatePayslipCompanyInfo === 'function') updatePayslipCompanyInfo();
+    }
 }
 window.reloadPayrollFromStorage = reloadPayrollFromStorage;
 
