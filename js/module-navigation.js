@@ -15,6 +15,9 @@
         { id: 'proforma', label: 'Proforma invoices' },
         { id: 'drafts', label: 'Drafts' }
       ],
+      'credit-notes': [
+        { id: 'list', label: 'Credit note list' }
+      ],
       receipts: [
         { id: 'list', label: 'Receipt list' },
         { id: 'unmatched', label: 'Unmatched' }

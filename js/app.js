@@ -140,6 +140,7 @@
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'invoices', label: 'Invoices' },
       { id: 'receipts', label: 'Receipts' },
+      { id: 'credit-notes', label: 'Credit Notes' },
       { id: 'payroll', label: 'Payroll' },
       { id: 'subcontractors', label: 'Subcontractors' },
       { id: 'social-insurance', label: 'Social Insurance' },
@@ -401,9 +402,19 @@
     if (sectionId === 'reports') {
       if (reportsContent) reportsContent.style.display = 'block';
       try { if (window.app && window.app.setupStatementForm) window.app.setupStatementForm(); } catch (err) {}
-    } else if (sectionId === 'dashboard' || sectionId === 'invoices' || sectionId === 'receipts') {
+    } else if (sectionId === 'dashboard' || sectionId === 'invoices' || sectionId === 'receipts' || sectionId === 'credit-notes') {
       appEl.style.display = 'block';
-      try { if (window.app && window.app.showPage) window.app.showPage(sectionId); } catch (err) {}
+      try {
+        if (window.app) {
+          if (sectionId === 'credit-notes' && typeof window.app.setCreditNotesSection === 'function') {
+            window.app.setCreditNotesSection();
+          } else if (sectionId === 'invoices' && typeof window.app.setInvoicesSubsection === 'function') {
+            window.app.setInvoicesSubsection('list');
+          } else if (typeof window.app.showPage === 'function') {
+            window.app.showPage(sectionId);
+          }
+        }
+      } catch (err) {}
     } else if (sectionId === 'payroll') {
       if (payrollContent) payrollContent.style.display = 'block';
     } else if (sectionId === 'subcontractors') {
