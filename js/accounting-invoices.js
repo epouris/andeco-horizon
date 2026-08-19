@@ -2458,7 +2458,16 @@ const app = {
 
     // Receipts
     renderReceipts() {
-        const receipts = DataStore.getReceipts();
+        let receipts = DataStore.getReceipts().slice();
+        receipts.sort((a, b) => {
+            const da = String(a.date || '');
+            const db = String(b.date || '');
+            if (da !== db) return db.localeCompare(da); // latest date first
+            const na = parseInt((String(a.receiptNumber || '').match(/\d+/) || ['0'])[0], 10) || 0;
+            const nb = parseInt((String(b.receiptNumber || '').match(/\d+/) || ['0'])[0], 10) || 0;
+            if (na !== nb) return nb - na;
+            return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+        });
         const container = document.getElementById('receipts-list');
         if (!container) return;
         
@@ -2468,38 +2477,73 @@ const app = {
     },
 
     createReceiptCardHTML(receipt) {
+        const safeId = this.escapeJsString(receipt.id);
         const invoiceIds = receipt.invoiceIds || [];
         const invoices = invoiceIds.map(id => DataStore.getInvoice(id)).filter(inv => inv);
         const isOnAccount = !!receipt.onAccountBalance;
-        const invoiceNumbers = invoices.map(inv => inv.invoiceNumber).join(', ');
+        const invoiceNumbers = invoices.map(inv => inv.invoiceNumber).filter(Boolean).join(', ');
         
-        let clientName = 'N/A';
+        let clientName = '—';
         if (receipt.clientId) {
             const client = DataStore.getClient(receipt.clientId);
             if (client) clientName = client.name;
         } else if (invoices.length > 0) {
-            clientName = invoices[0].clientName;
+            clientName = invoices[0].clientName || '—';
         }
+
+        const typeLine = isOnAccount
+            ? 'On account'
+            : (invoiceNumbers || 'No invoices');
+        const method = receipt.paymentMethod ? ` · ${receipt.paymentMethod}` : '';
         
         return `
             <div class="invoice-card">
-                <div class="invoice-info" onclick="app.viewReceipt('${receipt.id}')" style="flex: 1; cursor: pointer;">
-                    <h3>${receipt.receiptNumber}</h3>
-                    <p><strong>Client:</strong> ${clientName}</p>
-                    <p><strong>Date:</strong> ${this.formatDate(receipt.date)}</p>
-                    <p><strong>${isOnAccount ? 'Type:' : 'Invoices:'}</strong> ${isOnAccount ? 'On account balance' : (invoiceNumbers || 'N/A')}</p>
-                    ${receipt.paymentMethod ? `<p><strong>Payment Method:</strong> ${receipt.paymentMethod}</p>` : ''}
+                <div class="invoice-info" onclick="app.viewReceipt('${safeId}')">
+                    <div class="invoice-info-top">
+                        <h3>${this.escapeHtml(receipt.receiptNumber || '—')}</h3>
+                        <span class="invoice-doc-type">Receipt</span>
+                    </div>
+                    <p class="invoice-info-line">${this.escapeHtml(clientName)}</p>
+                    <p class="invoice-info-line invoice-info-dates">${this.escapeHtml(this.formatDate(receipt.date))} · ${this.escapeHtml(typeLine)}${this.escapeHtml(method)}</p>
                 </div>
                 <div class="invoice-meta">
-                    <div class="invoice-amount">${this.formatCurrency(receipt.amount)}</div>
-                    <div class="invoice-actions" style="margin-top: 0.5rem;">
-                        <button class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.viewReceipt('${receipt.id}')">View</button>
-                        <button class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); app.showPage('create-receipt'); app.setupReceiptForm('${receipt.id}')">Edit</button>
-                        <button class="btn btn-danger" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" onclick="event.stopPropagation(); if(confirm('Delete this receipt? The invoices will be changed back to pending status.')) { app.deleteReceiptAndUpdateInvoices('${receipt.id}'); app.renderReceipts(); }">Delete</button>
+                    <div class="invoice-amount">${this.escapeHtml(this.formatCurrency(receipt.amount))}</div>
+                    <div class="invoice-actions">
+                        <button class="btn btn-secondary" onclick="event.stopPropagation(); app.viewReceipt('${safeId}')">View</button>
+                        <button class="btn btn-primary" onclick="event.stopPropagation(); app.showPage('create-receipt'); app.setupReceiptForm('${safeId}')">Edit</button>
+                        <button class="btn btn-danger" onclick="event.stopPropagation(); if(confirm('Delete this receipt? Linked invoices will return to pending.')) { app.deleteReceiptAndUpdateInvoices('${safeId}'); app.renderReceipts(); }">Delete</button>
                     </div>
                 </div>
             </div>
         `;
+    },
+
+    resequenceReceiptsByDate() {
+        const receipts = DataStore.getReceipts() || [];
+        if (!receipts.length) {
+            alert('No receipts to resequence.');
+            return;
+        }
+        if (!confirm(
+            'Resequence all receipts by date?\n\n' +
+            'Keeps the first (lowest) receipt number, sorts by receipt date, and renumbers the rest in order.\n' +
+            'This cannot be undone automatically.'
+        )) return;
+
+        const result = DataStore.resequenceReceiptsByDate();
+        this.renderReceipts();
+        if (!result || !result.count) {
+            alert('Could not resequence receipts.');
+            return;
+        }
+        if (!result.changed) {
+            alert('Receipt numbers already match date order.');
+            return;
+        }
+        alert(
+            `Resequenced ${result.changed} of ${result.count} receipts.\n` +
+            `Series: ${String(result.start).padStart(4, '0')} → ${String(result.end).padStart(4, '0')} (by date).`
+        );
     },
 
     setupReceiptForm(receiptId = null) {
