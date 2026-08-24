@@ -2666,7 +2666,8 @@ const app = {
         }
         if (!isCredit) {
             body += `Payment details:\n`;
-            body += `${bankName || '—'}${bankName || accountHolder ? '  •  ' : ''}${accountHolder}\n`;
+            const bankLine = [bankName, accountHolder].filter(Boolean).join('  •  ') || '—';
+            body += `${bankLine}\n`;
             body += `IBAN: ${iban || '—'}\n`;
             body += `BIC/SWIFT: ${swift || '—'}\n`;
             body += `Payment reference: ${number}\n`;
