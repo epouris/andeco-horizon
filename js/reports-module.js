@@ -184,6 +184,7 @@
         if (noEl) {
           noEl.value = report.reportNo || '';
           noEl.readOnly = false;
+          noEl.removeAttribute('readonly');
         }
         if (notesEl) notesEl.value = report.notes || '';
         populateClientSelect(report.clientId || '');
@@ -198,6 +199,7 @@
       if (nextNoEl) {
         nextNoEl.value = nextNo;
         nextNoEl.readOnly = true;
+        nextNoEl.setAttribute('readonly', 'readonly');
       }
     }
   }
