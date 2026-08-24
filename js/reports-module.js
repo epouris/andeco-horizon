@@ -163,6 +163,14 @@
     render();
   }
 
+  function todayInputDate() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
   function showForm(reportId) {
     var listWrap = document.getElementById('reports-list-wrap');
     var formWrap = document.getElementById('reports-form-wrap');
@@ -180,18 +188,21 @@
       var report = store && store.getServiceReport ? store.getServiceReport(reportId) : null;
       if (report) {
         var noEl = document.getElementById('report-form-number');
+        var dateEl = document.getElementById('report-form-date');
         var notesEl = document.getElementById('report-form-notes');
         if (noEl) {
           noEl.value = report.reportNo || '';
           noEl.readOnly = false;
           noEl.removeAttribute('readonly');
         }
+        if (dateEl) dateEl.value = report.reportDate || '';
         if (notesEl) notesEl.value = report.notes || '';
         populateClientSelect(report.clientId || '');
         populateEmployeeSelect(report.employeeId || '');
       }
     } else {
       var nextNoEl = document.getElementById('report-form-number');
+      var dateNewEl = document.getElementById('report-form-date');
       var storeNew = getDataStore();
       var nextNo = storeNew && storeNew.getNextServiceReportNumber
         ? storeNew.getNextServiceReportNumber()
@@ -201,6 +212,7 @@
         nextNoEl.readOnly = true;
         nextNoEl.setAttribute('readonly', 'readonly');
       }
+      if (dateNewEl) dateNewEl.value = todayInputDate();
     }
   }
 
@@ -212,6 +224,7 @@
       return;
     }
     var reportNo = ((document.getElementById('report-form-number') || {}).value || '').trim();
+    var reportDate = ((document.getElementById('report-form-date') || {}).value || '').trim();
     var clientId = ((document.getElementById('report-form-client') || {}).value || '').trim();
     var employeeId = ((document.getElementById('report-form-employee') || {}).value || '').trim();
     var notes = ((document.getElementById('report-form-notes') || {}).value || '').trim();
@@ -223,6 +236,10 @@
     }
     if (!reportNo) {
       alert('Report No. is required.');
+      return;
+    }
+    if (!reportDate) {
+      alert('Report Date is required.');
       return;
     }
     if (!clientId) {
@@ -245,6 +262,7 @@
     var report = {
       id: existing ? existing.id : generateId(),
       reportNo: reportNo,
+      reportDate: reportDate,
       clientId: clientId,
       employeeId: employeeId,
       notes: notes,
@@ -304,9 +322,12 @@
 
   function sortReports(list) {
     return list.slice().sort(function (a, b) {
-      var da = a && a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      var db = b && b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      if (db !== da) return db - da;
+      var da = a && a.reportDate ? String(a.reportDate) : '';
+      var db = b && b.reportDate ? String(b.reportDate) : '';
+      if (db !== da) return db.localeCompare(da);
+      var ua = a && a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      var ub = b && b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      if (ub !== ua) return ub - ua;
       return String((a && a.reportNo) || '').localeCompare(String((b && b.reportNo) || ''));
     });
   }
@@ -357,12 +378,13 @@
     }
     return '<div class="table-wrap"><table class="data-table reports-directory-table">' +
       '<thead><tr>' +
-      '<th>Report No.</th><th>Client</th><th>Employee</th><th>Status</th><th>Updated</th><th></th>' +
+      '<th>Report No.</th><th>Date</th><th>Client</th><th>Employee</th><th>Status</th><th>Updated</th><th></th>' +
       '</tr></thead><tbody>' +
       reports.map(function (r) {
         var id = escapeHtml(r.id);
         return '<tr>' +
           '<td><strong>' + escapeHtml(r.reportNo || '—') + '</strong></td>' +
+          '<td>' + escapeHtml(formatDate(r.reportDate)) + '</td>' +
           '<td>' + escapeHtml(getClientName(r.clientId)) + '</td>' +
           '<td>' + escapeHtml(getEmployeeName(r.employeeId)) + '</td>' +
           '<td>' + statusBadge(r.status) + '</td>' +
