@@ -397,6 +397,9 @@
     }
     if (moduleId === 'hr' && sectionId === 'overview') {
       if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
+      if (typeof window.HrTools !== 'undefined' && window.HrTools.refreshOverviewLeaveMetric) {
+        window.HrTools.refreshOverviewLeaveMetric();
+      }
     }
     if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'overview') {
       if (typeof window.hrPayrollRefreshYTD === 'function') window.hrPayrollRefreshYTD();
@@ -406,11 +409,6 @@
     }
     if (moduleId === 'hr' && ['leave', 'documents', 'onboarding', 'notes', 'announcements'].indexOf(sectionId) !== -1) {
       if (typeof window.HrTools !== 'undefined' && window.HrTools.render) window.HrTools.render(sectionId);
-    }
-    if (moduleId === 'hr' && sectionId === 'overview') {
-      if (typeof window.HrTools !== 'undefined' && window.HrTools.refreshOverviewLeaveMetric) {
-        window.HrTools.refreshOverviewLeaveMetric();
-      }
     }
     if (moduleId === 'shifts' && typeof window.ShiftsManagement !== 'undefined') {
       if (window.ShiftsManagement.onSubsectionChange) window.ShiftsManagement.onSubsectionChange(sectionId, subsectionId);
