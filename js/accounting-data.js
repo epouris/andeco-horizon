@@ -256,6 +256,8 @@ window.AccountingData = (function () {
         crewAssignments: []
       },
       shifts: { staff: [], shifts: [], requests: [], settings: {} },
+      projectManagement: { calls: [], people: [], seeded: false },
+      hrTools: { leave: [], documents: [], onboarding: [], notes: [], announcements: [] },
       payroll: { employees: [], payrollData: {}, companySettings: {} },
       lms: {
         courses: [],
@@ -316,6 +318,38 @@ window.AccountingData = (function () {
           return r ? JSON.parse(r) : { staff: [], shifts: [], requests: [], settings: {} };
         } catch (e) {
           return { staff: [], shifts: [], requests: [], settings: {} };
+        }
+      })(),
+      projectManagement: (function () {
+        try {
+          if (typeof window !== 'undefined' &&
+              window.ProjectManagement &&
+              typeof window.ProjectManagement.getState === 'function') {
+            var livePm = window.ProjectManagement.getState();
+            if (livePm && typeof livePm === 'object') return livePm;
+          }
+        } catch (e0) {}
+        try {
+          var rpm = localStorage.getItem('andeco_pm_terminal_data');
+          return rpm ? JSON.parse(rpm) : { calls: [], people: [], seeded: false };
+        } catch (e) {
+          return { calls: [], people: [], seeded: false };
+        }
+      })(),
+      hrTools: (function () {
+        try {
+          if (typeof window !== 'undefined' &&
+              window.HrTools &&
+              typeof window.HrTools.getState === 'function') {
+            var liveHr = window.HrTools.getState();
+            if (liveHr && typeof liveHr === 'object') return liveHr;
+          }
+        } catch (e1) {}
+        try {
+          var rhr = localStorage.getItem('andeco_hr_tools');
+          return rhr ? JSON.parse(rhr) : { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
+        } catch (e) {
+          return { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
         }
       })(),
       payroll: {
@@ -379,6 +413,30 @@ window.AccountingData = (function () {
     }
     if (typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) {
       try { window.ShiftsManagement.render(); } catch (e) {}
+    }
+    if (typeof window.ProjectManagement !== 'undefined') {
+      try {
+        if (window.ProjectManagement.applyRemote) {
+          var pmRaw = null;
+          try { pmRaw = localStorage.getItem('andeco_pm_terminal_data'); } catch (ePm) {}
+          if (pmRaw) window.ProjectManagement.applyRemote(JSON.parse(pmRaw));
+          else if (window.ProjectManagement.render) window.ProjectManagement.render();
+        } else if (window.ProjectManagement.render) {
+          window.ProjectManagement.render();
+        }
+      } catch (e) {}
+    }
+    if (typeof window.HrTools !== 'undefined') {
+      try {
+        if (window.HrTools.applyRemote) {
+          var hrRaw = null;
+          try { hrRaw = localStorage.getItem('andeco_hr_tools'); } catch (eHr) {}
+          if (hrRaw) window.HrTools.applyRemote(JSON.parse(hrRaw));
+          else if (window.HrTools.render) window.HrTools.render();
+        } else if (window.HrTools.render) {
+          window.HrTools.render();
+        }
+      } catch (e) {}
     }
     if (typeof window.FleetManagement !== 'undefined' && window.FleetManagement.render) {
       try { window.FleetManagement.render(); } catch (e) {}
@@ -1012,6 +1070,12 @@ window.AccountingData = (function () {
         }
         if (data.shifts && typeof data.shifts === 'object') {
           setLocalStorage('andeco_shifts_data', data.shifts);
+        }
+        if (data.projectManagement && typeof data.projectManagement === 'object') {
+          setLocalStorage('andeco_pm_terminal_data', data.projectManagement);
+        }
+        if (data.hrTools && typeof data.hrTools === 'object') {
+          setLocalStorage('andeco_hr_tools', data.hrTools);
         }
         if (data.lms && typeof data.lms === 'object') {
           setLocalStorage('andeco_lms_data', data.lms);

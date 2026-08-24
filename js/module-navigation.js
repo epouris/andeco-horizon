@@ -91,6 +91,21 @@
         { id: 'metrics', label: 'Metrics' },
         { id: 'details', label: 'Details' }
       ],
+      leave: [
+        { id: 'log', label: 'Leave log' }
+      ],
+      documents: [
+        { id: 'checklist', label: 'Document checklist' }
+      ],
+      onboarding: [
+        { id: 'tracker', label: 'Onboarding tracker' }
+      ],
+      notes: [
+        { id: 'log', label: 'Employee notes' }
+      ],
+      announcements: [
+        { id: 'list', label: 'Company memos' }
+      ],
       payroll: [
         { id: 'overview', label: 'Overview' },
         { id: 'ir63', label: 'IR63 Form' }
@@ -225,6 +240,7 @@
     contacts: '.contacts-section-panel[data-section]',
     clients: '.clients-section-panel[data-section]',
     'report-management': '.reports-mgmt-section-panel[data-section]',
+    'project-management': '.pm-section-panel[data-section]',
     crew: '.crew-section-panel[data-section]',
     lms: '.lms-section-panel[data-section]',
     accounting: '.accounting-section-panel[data-section]'
@@ -381,12 +397,18 @@
     }
     if (moduleId === 'hr' && sectionId === 'overview') {
       if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
+      if (typeof window.HrTools !== 'undefined' && window.HrTools.refreshOverviewLeaveMetric) {
+        window.HrTools.refreshOverviewLeaveMetric();
+      }
     }
     if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'overview') {
       if (typeof window.hrPayrollRefreshYTD === 'function') window.hrPayrollRefreshYTD();
     }
     if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'ir63') {
       if (typeof window.updateEmployeeDropdowns === 'function') window.updateEmployeeDropdowns();
+    }
+    if (moduleId === 'hr' && ['leave', 'documents', 'onboarding', 'notes', 'announcements'].indexOf(sectionId) !== -1) {
+      if (typeof window.HrTools !== 'undefined' && window.HrTools.render) window.HrTools.render(sectionId);
     }
     if (moduleId === 'shifts' && typeof window.ShiftsManagement !== 'undefined') {
       if (window.ShiftsManagement.onSubsectionChange) window.ShiftsManagement.onSubsectionChange(sectionId, subsectionId);
@@ -397,6 +419,9 @@
     }
     if (moduleId === 'report-management' && typeof window.ReportsModule !== 'undefined' && window.ReportsModule.render) {
       window.ReportsModule.render();
+    }
+    if (moduleId === 'project-management' && typeof window.ProjectManagement !== 'undefined' && window.ProjectManagement.render) {
+      window.ProjectManagement.render();
     }
     if (moduleId === 'accounting' && sectionId === 'service-reports' &&
         typeof window.ReportsModule !== 'undefined' && window.ReportsModule.renderAccounting) {

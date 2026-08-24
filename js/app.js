@@ -79,6 +79,7 @@
     { id: 'clients', name: 'Clients' },
     { id: 'report-management', name: 'Report Management' },
     { id: 'fleet', name: 'Fleet Management' },
+    { id: 'project-management', name: 'Project Management' },
     { id: 'distribution', name: 'Distribution' },
     { id: 'hr', name: 'HR' },
     { id: 'crew', name: 'Crew Management' },
@@ -152,6 +153,9 @@
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'vessels', label: 'Vessels' }
     ],
+    'project-management': [
+      { id: 'board', label: 'Operations Board' }
+    ],
     distribution: [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'catalog', label: 'Models & options' },
@@ -162,6 +166,11 @@
     hr: [
       { id: 'overview', label: 'Overview' },
       { id: 'employees', label: 'Employees' },
+      { id: 'leave', label: 'Leave' },
+      { id: 'documents', label: 'Documents' },
+      { id: 'onboarding', label: 'Onboarding' },
+      { id: 'notes', label: 'Notes' },
+      { id: 'announcements', label: 'Announcements' },
       { id: 'payroll', label: 'Payroll' },
       { id: 'history', label: 'History' }
     ],
@@ -618,6 +627,18 @@
     }
   }
 
+  function setProjectManagementSection(sectionId) {
+    if (currentModulePageId !== 'project-management') return;
+    setGenericSectionPanels('#page-project-management', '.pm-section-panel', sectionId);
+    if (window.AndecoModuleNav) {
+      window.AndecoModuleNav.setActiveSectionOnSubtabs('project-management', sectionId);
+      window.AndecoModuleNav.activateSection('project-management', sectionId);
+    }
+    if (typeof window.ProjectManagement !== 'undefined' && window.ProjectManagement.render) {
+      window.ProjectManagement.render();
+    }
+  }
+
   function setCrewSection(sectionId) {
     if (currentModulePageId !== 'crew') return;
     setGenericSectionPanels('#page-crew', '.crew-section-panel', sectionId);
@@ -700,6 +721,7 @@
     if (pageId === 'contacts') setContactsSection(sectionId);
     if (pageId === 'clients') setClientsSection(sectionId);
     if (pageId === 'report-management') setReportManagementSection(sectionId);
+    if (pageId === 'project-management') setProjectManagementSection(sectionId);
     if (pageId === 'crew') setCrewSection(sectionId);
     if (pageId === 'lms') setLmsSection(sectionId);
     if (pageId === 'distribution') setDistributionSection(sectionId);
@@ -741,6 +763,7 @@
       clients: 'Clients',
       'report-management': 'Report Management',
       fleet: 'Fleet Management',
+      'project-management': 'Project Management',
       distribution: 'Distribution',
       hr: 'HR',
       crew: 'Crew Management',
@@ -864,6 +887,9 @@
       if (pageId === 'clients' && typeof window.ClientsModule !== 'undefined' && window.ClientsModule.render) window.ClientsModule.render();
       if (pageId === 'report-management' && typeof window.ReportsModule !== 'undefined' && window.ReportsModule.render) {
         window.ReportsModule.render();
+      }
+      if (pageId === 'project-management' && typeof window.ProjectManagement !== 'undefined' && window.ProjectManagement.render) {
+        window.ProjectManagement.render();
       }
       if (pageId === 'fleet' && typeof window.FleetManagement !== 'undefined' && window.FleetManagement.render) window.FleetManagement.render();
       if (pageId === 'crew' && typeof window.CrewManagement !== 'undefined' && window.CrewManagement.render) window.CrewManagement.render();

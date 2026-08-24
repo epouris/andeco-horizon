@@ -19,6 +19,8 @@
   <link rel="stylesheet" href="css/lms-portal.css">
   <link rel="stylesheet" href="css/distribution.css">
   <link rel="stylesheet" href="css/reports.css">
+  <link rel="stylesheet" href="css/project-management.css">
+  <link rel="stylesheet" href="css/hr-tools.css">
   <script>
     (function () {
       if (location.protocol !== 'file:') return;
@@ -239,6 +241,12 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20c1.5-1 3-1.5 5-1.5s3.5.5 5 1.5 3 1.5 5 1.5 3.5-.5 5-1.5"/><path d="M4 16l1.2-5.5A2 2 0 0 1 7.15 9H16l3 4v3"/><path d="M12 9V5l3 1v3"/><path d="M7 9V7"/></svg>
             </span>
             <span class="module-title" data-short="Fleet">Fleet Management</span>
+          </a>
+          <a href="#project-management" class="module-card module-card--tile" data-module="project-management">
+            <span class="module-icon-tile module-icon--teal" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v4H4z"/><path d="M4 11h10v4H4z"/><path d="M4 17h7v4H4z"/><path d="M16 13l4 2-4 2v-4z"/></svg>
+            </span>
+            <span class="module-title" data-short="Projects">Project Management</span>
           </a>
           <a href="#distribution" class="module-card module-card--tile" data-module="distribution">
             <span class="module-icon-tile module-icon--blue" aria-hidden="true">
@@ -1137,6 +1145,74 @@
         </div>
       </section>
 
+      <!-- Project Management: Oil Terminal Operations Board -->
+      <section id="page-project-management" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Project Management</h1>
+              <div class="module-detail-actions">
+                <button type="button" class="btn btn-primary" id="pm-add-call-btn">+ Vessel call</button>
+              </div>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-project-management" aria-label="Subsections" hidden></nav>
+            <div class="pm-section-panel" data-section="board" data-subsections-ready="1">
+              <p class="module-meta" style="margin-bottom: 0.85rem;">Oil Terminal Operations board — monday.com-style workspace for vessel calls, berthing, cargo transfer, and departure.</p>
+              <div class="pm-metrics">
+                <div class="pm-metric">
+                  <span class="pm-metric-value" id="pm-metric-volume">0</span>
+                  <span class="pm-metric-label">Active product volume pumping</span>
+                </div>
+                <div class="pm-metric">
+                  <span class="pm-metric-value" id="pm-metric-util">0%</span>
+                  <span class="pm-metric-label">Jetty utilization</span>
+                </div>
+                <div class="pm-metric">
+                  <span class="pm-metric-value" id="pm-metric-checklist">0</span>
+                  <span class="pm-metric-label">Open safety checklist items</span>
+                </div>
+              </div>
+              <div class="pm-toolbar">
+                <div class="pm-view-switch" role="tablist" aria-label="Board views">
+                  <button type="button" class="is-active" data-pm-view="board">Board</button>
+                  <button type="button" data-pm-view="timeline">Timeline</button>
+                  <button type="button" data-pm-view="dashboard">Dashboard</button>
+                  <button type="button" data-pm-view="workflows">Role workflows</button>
+                </div>
+                <input type="text" id="pm-search" class="search-input" placeholder="Search vessel, voyage, product, people…">
+                <select id="pm-filter-milestone" aria-label="Filter by milestone">
+                  <option value="all">All milestones</option>
+                  <option value="eta-confirmed">ETA Confirmed</option>
+                  <option value="moored">Moored</option>
+                  <option value="hose-conn">Hose Conn</option>
+                  <option value="pumping">Pumping</option>
+                  <option value="stopped-gauging">Stopped/Gauging</option>
+                  <option value="completed">Completed</option>
+                  <option value="delayed">Delayed/Stuck</option>
+                </select>
+              </div>
+              <div class="pm-view-panel" data-view="board">
+                <div id="pm-board-root" class="pm-board"></div>
+              </div>
+              <div class="pm-view-panel" data-view="timeline" style="display: none;">
+                <div id="pm-timeline-root"></div>
+              </div>
+              <div class="pm-view-panel" data-view="dashboard" style="display: none;">
+                <div id="pm-dashboard-root"></div>
+              </div>
+              <div class="pm-view-panel" data-view="workflows" style="display: none;">
+                <div id="pm-workflows-root"></div>
+              </div>
+            </div>
+          </div>
+          <aside class="module-copilot"><div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div><p class="copilot-prompt">Ask about berthing, cargo ops, or jetty occupancy.</p></aside>
+        </div>
+        <div id="pm-modal-overlay" class="pm-modal-overlay" style="display: none;">
+          <div class="pm-modal" id="pm-modal-body"></div>
+        </div>
+      </section>
+
       <!-- Settings module (admin only): Company Information, Payroll Settings, Accounting Settings, backup/restore -->
       <section id="page-settings" class="page module-detail-page">
         <div class="module-detail-wrap">
@@ -1965,7 +2041,7 @@
             <div class="module-metrics">
               <div class="metric-card metric--blue"><span class="metric-value" id="hr-metric-employees">0</span><span class="metric-label">Employees</span></div>
               <div class="metric-card metric--blue"><span class="metric-value" id="hr-metric-open-roles">0</span><span class="metric-label">Active staff</span></div>
-              <div class="metric-card metric--orange"><span class="metric-value">5</span><span class="metric-label">Leave this week</span></div>
+              <div class="metric-card metric--orange"><span class="metric-value" id="hr-metric-leave">0</span><span class="metric-label">Leave this week</span></div>
               <div class="metric-card metric--green"><span class="metric-value" id="hr-metric-new-month">0</span><span class="metric-label">New this month</span></div>
             </div>
             <div class="module-info-panel">
@@ -1978,7 +2054,7 @@
             </div>
             <div class="module-description-panel">
               <h3 class="panel-title">Description</h3>
-              <p>Human resources and people. Manage employees under <strong>Employees</strong>; payroll summaries are under <strong>Payroll</strong>.</p>
+              <p>Human resources and people. Manage employees under <strong>Employees</strong>; track leave, documents, onboarding, notes, and announcements in the HR tools; payroll summaries are under <strong>Payroll</strong>.</p>
             </div>
             <div class="module-cards-row">
               <div class="module-info-card">
@@ -2064,6 +2140,344 @@
                 <div id="ir63Result" class="ir63-result"></div>
               </div>
             </div>
+
+            <div id="hr-leave-panel" class="hr-section-panel" data-section="leave" style="display: none;" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="log">
+                <div class="page-header">
+                  <h2>Leave &amp; absence</h2>
+                  <div class="header-actions">
+                    <button type="button" class="btn btn-primary" id="hr-leave-add-btn">+ Add leave</button>
+                  </div>
+                </div>
+                <p class="module-meta" style="margin-bottom: 1rem;">Record annual leave, sick leave, and other absences. Approved and pending entries feed the Overview leave metric for the current week.</p>
+                <div class="invoice-form-container hr-tool-form" id="hr-leave-form-wrap" style="display: none;">
+                  <form id="hr-leave-form" class="invoice-form">
+                    <input type="hidden" id="hr-leave-id">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-leave-employee">Employee *</label>
+                        <select id="hr-leave-employee" required></select>
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-leave-type">Type *</label>
+                        <select id="hr-leave-type" required>
+                          <option value="annual">Annual leave</option>
+                          <option value="sick">Sick leave</option>
+                          <option value="unpaid">Unpaid leave</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-leave-status">Status</label>
+                        <select id="hr-leave-status">
+                          <option value="pending">Pending</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-leave-start">Start date *</label>
+                        <input type="date" id="hr-leave-start" required>
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-leave-end">End date *</label>
+                        <input type="date" id="hr-leave-end" required>
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group full-width">
+                        <label for="hr-leave-notes">Notes</label>
+                        <textarea id="hr-leave-notes" rows="2" placeholder="Reason or comments"></textarea>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button type="button" class="btn btn-secondary" id="hr-leave-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save leave</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="module-table-panel">
+                  <div class="table-wrap">
+                    <table class="data-table" id="hr-leave-table">
+                      <thead>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Type</th>
+                          <th>Start</th>
+                          <th>End</th>
+                          <th>Days</th>
+                          <th>Status</th>
+                          <th>Notes</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="hr-leave-tbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="hr-documents-panel" class="hr-section-panel" data-section="documents" style="display: none;" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="checklist">
+                <div class="page-header">
+                  <h2>Document checklist</h2>
+                  <div class="header-actions">
+                    <button type="button" class="btn btn-primary" id="hr-doc-add-btn">+ Add document item</button>
+                  </div>
+                </div>
+                <p class="module-meta" style="margin-bottom: 1rem;">Track required HR documents per employee (contract, ID, bank details, certificates, and more).</p>
+                <div class="invoice-form-container hr-tool-form" id="hr-doc-form-wrap" style="display: none;">
+                  <form id="hr-doc-form" class="invoice-form">
+                    <input type="hidden" id="hr-doc-id">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-doc-employee">Employee *</label>
+                        <select id="hr-doc-employee" required></select>
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-doc-name">Document *</label>
+                        <input type="text" id="hr-doc-name" required placeholder="e.g. Employment contract">
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-doc-status">Status</label>
+                        <select id="hr-doc-status">
+                          <option value="missing">Missing</option>
+                          <option value="requested">Requested</option>
+                          <option value="received">Received</option>
+                          <option value="expired">Expired</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-doc-due">Due date</label>
+                        <input type="date" id="hr-doc-due">
+                      </div>
+                      <div class="form-group full-width">
+                        <label for="hr-doc-notes">Notes</label>
+                        <input type="text" id="hr-doc-notes" placeholder="Optional notes">
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button type="button" class="btn btn-secondary" id="hr-doc-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save document</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="module-table-panel">
+                  <div class="table-wrap">
+                    <table class="data-table" id="hr-doc-table">
+                      <thead>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Document</th>
+                          <th>Status</th>
+                          <th>Due</th>
+                          <th>Notes</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="hr-doc-tbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="hr-onboarding-panel" class="hr-section-panel" data-section="onboarding" style="display: none;" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="tracker">
+                <div class="page-header">
+                  <h2>Onboarding tracker</h2>
+                  <div class="header-actions">
+                    <button type="button" class="btn btn-primary" id="hr-onboard-add-btn">+ Add task</button>
+                  </div>
+                </div>
+                <p class="module-meta" style="margin-bottom: 1rem;">Checklist for new hires — IT access, induction, equipment, and policy acknowledgements.</p>
+                <div class="invoice-form-container hr-tool-form" id="hr-onboard-form-wrap" style="display: none;">
+                  <form id="hr-onboard-form" class="invoice-form">
+                    <input type="hidden" id="hr-onboard-id">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-onboard-employee">Employee *</label>
+                        <select id="hr-onboard-employee" required></select>
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-onboard-task">Task *</label>
+                        <input type="text" id="hr-onboard-task" required placeholder="e.g. Issue laptop">
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-onboard-status">Status</label>
+                        <select id="hr-onboard-status">
+                          <option value="todo">To do</option>
+                          <option value="in_progress">In progress</option>
+                          <option value="done">Done</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-onboard-due">Due date</label>
+                        <input type="date" id="hr-onboard-due">
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-onboard-owner">Owner</label>
+                        <input type="text" id="hr-onboard-owner" placeholder="Who is responsible">
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button type="button" class="btn btn-secondary" id="hr-onboard-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save task</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="module-table-panel">
+                  <div class="table-wrap">
+                    <table class="data-table" id="hr-onboard-table">
+                      <thead>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Task</th>
+                          <th>Status</th>
+                          <th>Due</th>
+                          <th>Owner</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="hr-onboard-tbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="hr-notes-panel" class="hr-section-panel" data-section="notes" style="display: none;" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="log">
+                <div class="page-header">
+                  <h2>Employee notes</h2>
+                  <div class="header-actions">
+                    <button type="button" class="btn btn-primary" id="hr-note-add-btn">+ Add note</button>
+                  </div>
+                </div>
+                <p class="module-meta" style="margin-bottom: 1rem;">Internal HR notes for meetings, performance follow-ups, and people records.</p>
+                <div class="invoice-form-container hr-tool-form" id="hr-note-form-wrap" style="display: none;">
+                  <form id="hr-note-form" class="invoice-form">
+                    <input type="hidden" id="hr-note-id">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-note-employee">Employee *</label>
+                        <select id="hr-note-employee" required></select>
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-note-category">Category</label>
+                        <select id="hr-note-category">
+                          <option value="general">General</option>
+                          <option value="performance">Performance</option>
+                          <option value="meeting">Meeting</option>
+                          <option value="disciplinary">Disciplinary</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-note-date">Date</label>
+                        <input type="date" id="hr-note-date">
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group full-width">
+                        <label for="hr-note-text">Note *</label>
+                        <textarea id="hr-note-text" rows="3" required placeholder="Write the note"></textarea>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button type="button" class="btn btn-secondary" id="hr-note-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save note</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="module-table-panel">
+                  <div class="table-wrap">
+                    <table class="data-table" id="hr-note-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Employee</th>
+                          <th>Category</th>
+                          <th>Note</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="hr-note-tbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="hr-announcements-panel" class="hr-section-panel" data-section="announcements" style="display: none;" data-subsections-ready="1">
+              <div class="module-subsection-panel active" data-subsection="list">
+                <div class="page-header">
+                  <h2>Announcements &amp; memos</h2>
+                  <div class="header-actions">
+                    <button type="button" class="btn btn-primary" id="hr-announce-add-btn">+ Add announcement</button>
+                  </div>
+                </div>
+                <p class="module-meta" style="margin-bottom: 1rem;">Company-wide HR notices for policy updates, holidays, and internal communications.</p>
+                <div class="invoice-form-container hr-tool-form" id="hr-announce-form-wrap" style="display: none;">
+                  <form id="hr-announce-form" class="invoice-form">
+                    <input type="hidden" id="hr-announce-id">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label for="hr-announce-title">Title *</label>
+                        <input type="text" id="hr-announce-title" required placeholder="Announcement title">
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-announce-date">Date</label>
+                        <input type="date" id="hr-announce-date">
+                      </div>
+                      <div class="form-group">
+                        <label for="hr-announce-audience">Audience</label>
+                        <select id="hr-announce-audience">
+                          <option value="all">All staff</option>
+                          <option value="office">Office</option>
+                          <option value="operations">Operations</option>
+                          <option value="managers">Managers</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group full-width">
+                        <label for="hr-announce-body">Message *</label>
+                        <textarea id="hr-announce-body" rows="4" required placeholder="Announcement text"></textarea>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button type="button" class="btn btn-secondary" id="hr-announce-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save announcement</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="module-table-panel">
+                  <div class="table-wrap">
+                    <table class="data-table" id="hr-announce-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Title</th>
+                          <th>Audience</th>
+                          <th>Message</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="hr-announce-tbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div id="hr-history-panel" class="hr-section-panel" data-section="history" style="display: none;">
               <p class="module-meta">History and audit trail. (Placeholder.)</p>
             </div>
@@ -2460,6 +2874,7 @@
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="clients"> Clients</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="report-management"> Report Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="fleet"> Fleet Management</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="project-management"> Project Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="hr"> HR</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="crew"> Crew Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="shifts"> Shifts</label>
@@ -2574,12 +2989,14 @@
   <script src="js/clients-module.js" defer></script>
   <script src="js/reports-module.js" defer></script>
   <script src="js/hr-employees.js" defer></script>
+  <script src="js/hr-tools.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
   <script src="js/payroll.js" defer></script>
   <script src="js/fleet-management.js" defer></script>
   <script src="js/crew-management.js" defer></script>
   <script src="js/shifts-management.js" defer></script>
+  <script src="js/project-management.js" defer></script>
   <script src="js/lms-module.js" defer></script>
   <script src="js/lms-portal.js" defer></script>
   <script src="js/distribution-module.js" defer></script>
