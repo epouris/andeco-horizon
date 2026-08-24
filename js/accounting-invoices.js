@@ -2586,41 +2586,107 @@ const app = {
         return String(fromClient || invoice.clientEmail || '').trim();
     },
 
+    getInvoiceServiceDescription(invoice) {
+        const items = Array.isArray(invoice && invoice.items) ? invoice.items : [];
+        const descs = items
+            .filter((item) => item && !item.isHeader && item.description)
+            .map((item) => String(item.description).trim())
+            .filter(Boolean);
+        if (descs.length === 1) return descs[0];
+        if (descs.length > 1) {
+            const joined = descs.slice(0, 3).join('; ');
+            return descs.length > 3 ? `${joined}; …` : joined;
+        }
+        const noteLine = String((invoice && invoice.notes) || '').trim().split(/\n/)[0] || '';
+        return noteLine || 'services provided';
+    },
+
+    getInvoiceEmailSenderName() {
+        try {
+            const raw = localStorage.getItem('andeco_crm_session');
+            if (!raw) return '';
+            const session = JSON.parse(raw);
+            return String((session && (session.displayName || session.username)) || '').trim();
+        } catch (_) {
+            return '';
+        }
+    },
+
     buildInvoiceEmailTemplate(invoice) {
         const settings = DataStore.getCompanySettings() || {};
         const client = this.findClientForInvoice(invoice);
         const docLabel = this.getDocumentTypeLabel(invoice);
         const number = (invoice.status === 'draft' && !invoice.invoiceNumber) ? 'Draft' : (invoice.invoiceNumber || '—');
         const company = settings.companyName || 'Andeco Marine';
-        const contact = (client && (client.contactPerson || client.name)) || invoice.clientName || 'Client';
-        const greetingName = (client && client.contactPerson) ? client.contactPerson : (invoice.clientName || 'Client');
-        const invoiceDate = invoice.date
-            ? (window.AndecoDate ? window.AndecoDate.formatDate(new Date(invoice.date)) : this.formatDate(invoice.date))
-            : '';
-        const dueDate = (!this.isProformaDoc(invoice) && !this.isCreditNoteDoc(invoice) && invoice.dueDate)
-            ? (window.AndecoDate ? window.AndecoDate.formatDate(new Date(invoice.dueDate)) : this.formatDate(invoice.dueDate))
-            : '';
+        const contact = (client && (DataStore.getClientContactPerson
+            ? DataStore.getClientContactPerson(client)
+            : client.contactPerson)) || '';
+        const greetingName = contact || invoice.clientName || 'Client';
+        const fmtDate = (value) => {
+            if (!value) return '';
+            return window.AndecoDate
+                ? window.AndecoDate.formatDate(new Date(value))
+                : this.formatDate(value);
+        };
+        const invoiceDate = fmtDate(invoice.date);
+        const dueDate = fmtDate(invoice.dueDate);
+        const currency = settings.currency || 'EUR';
         const amount = this.formatCurrency(invoice.total);
-        const subject = `${docLabel} ${number} from ${company}`;
+        const serviceDescription = this.getInvoiceServiceDescription(invoice);
+        const banks = Array.isArray(settings.banks) ? settings.banks : [];
+        const bank = banks.find((b) => b && (b.name || b.iban || b.swift)) || null;
+        const bankName = (bank && bank.name) || '';
+        const accountHolder = company;
+        const iban = (bank && bank.iban) || '';
+        const swift = (bank && bank.swift) || '';
+        const senderName = this.getInvoiceEmailSenderName();
+        const phone = settings.companyPhone || '';
+        const email = settings.companyEmail || '';
+        const website = settings.companyWebsite || '';
+        const contactLine = [phone, email, website].filter(Boolean).join('  •  ');
+        const isCredit = this.isCreditNoteDoc(invoice);
+        const isProforma = this.isProformaDoc(invoice);
+        const attachedLabel = isCredit ? 'Credit Note' : (isProforma ? 'Proforma Invoice' : 'Invoice');
+        const summaryTitle = isCredit ? 'Credit note summary:' : (isProforma ? 'Proforma summary:' : 'Invoice summary:');
+        const numberLabel = isCredit ? 'Credit note number' : (isProforma ? 'Proforma number' : 'Invoice number');
+        const dateLabel = isCredit ? 'Credit note date' : (isProforma ? 'Proforma date' : 'Invoice date');
+        const amountLabel = isCredit ? 'Total amount' : 'Total amount due';
+        const subject = `${attachedLabel} ${number} from ${company}`;
+
         let body = `Dear ${greetingName},\n\n`;
-        if (this.isCreditNoteDoc(invoice)) {
-            body += `Please find attached credit note ${number}`;
-        } else if (this.isProformaDoc(invoice)) {
-            body += `Please find attached proforma invoice ${number}`;
-        } else {
-            body += `Please find attached invoice ${number}`;
+        body += `I hope this message finds you well.\n\n`;
+        body += `Please find attached ${attachedLabel} ${number} for the ${serviceDescription} provided under our agreement.\n\n`;
+        body += `${summaryTitle}\n\n`;
+        body += `${numberLabel}: ${number}\n`;
+        body += `${dateLabel}: ${invoiceDate || '—'}\n`;
+        body += `Description: ${serviceDescription}\n`;
+        body += `${amountLabel}: ${amount} ${currency}\n`;
+        if (!isCredit && !isProforma) {
+            body += `Payment due date: ${dueDate || '—'}\n`;
         }
-        if (invoiceDate) body += ` dated ${invoiceDate}`;
-        body += ` for the amount of ${amount}.\n`;
-        if (dueDate) body += `\nPayment is due by ${dueDate}.\n`;
-        body += `\nIf you have any questions, please reply to this email or contact us.\n\nKind regards,\n${company}`;
-        if (settings.companyEmail) body += `\n${settings.companyEmail}`;
-        if (settings.companyPhone) body += `\n${settings.companyPhone}`;
+        if (!isCredit) {
+            body += `Payment details:\n`;
+            body += `${bankName || '—'}${bankName || accountHolder ? '  •  ' : ''}${accountHolder}\n`;
+            body += `IBAN: ${iban || '—'}\n`;
+            body += `BIC/SWIFT: ${swift || '—'}\n`;
+            body += `Payment reference: ${number}\n`;
+        }
+        body += `\nIf you have any questions regarding this ${isCredit ? 'credit note' : (isProforma ? 'proforma' : 'invoice')}, please feel free to reach out.`;
+        if (!isCredit) {
+            body += ` Thank you for your business — we appreciate your prompt attention to this payment.`;
+        } else {
+            body += ` Thank you for your business.`;
+        }
+        body += `\n\nBest regards,\n`;
+        if (senderName) body += `${senderName}\n`;
+        body += `${company}`;
+        if (contactLine) body += `\n${contactLine}`;
+
         return {
             to: this.getInvoiceSendToEmail(invoice),
             subject,
             body,
-            contactName: contact,
+            contactName: greetingName,
             docLabel,
             number
         };
