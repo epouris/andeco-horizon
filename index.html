@@ -913,7 +913,7 @@
                   </div>
                 </div>
                 <div id="clients" class="page"><div class="page-header"><h2>Clients</h2><div class="header-actions"><input type="text" id="client-search" placeholder="Search clients..." class="search-input"><button type="button" class="btn btn-primary" data-action="show-client-form">➕ Add Client</button></div></div><div id="clients-list" class="invoices-grid"></div></div>
-                <div id="client-form-section" class="page" style="display:none;"><div class="page-header"><h2 id="client-form-title">Add New Client</h2><div class="header-actions"><button type="button" class="btn btn-secondary" data-action="show-clients-list">← Back</button></div></div><div class="invoice-form-container"><form id="client-form" class="invoice-form"><div class="form-section"><h3>Client Information</h3><div class="form-row"><div class="form-group"><label>Customer ID</label><input type="text" id="client-form-customer-id" placeholder="Auto-assigned next ID"></div><div class="form-group"><label>Company name *</label><input type="text" id="client-form-name" required placeholder="Client company name"></div></div><div class="form-row"><div class="form-group full-width"><label>Contact person</label><input type="text" id="client-form-contact" placeholder="Primary contact at this company"></div></div><div class="form-row"><div class="form-group full-width"><label>Address</label><textarea id="client-form-address" rows="3"></textarea></div></div><div class="form-row"><div class="form-group"><label>Email</label><input type="email" id="client-form-email"></div><div class="form-group"><label>Phone</label><input type="tel" id="client-form-phone"></div></div><div class="form-row"><div class="form-group"><label>Tax ID / VAT Number</label><input type="text" id="client-form-tax-id"></div><div class="form-group"><label>Website</label><input type="url" id="client-form-website"></div></div></div><div class="form-section"><h3>Additional Notes</h3><div class="form-row"><div class="form-group full-width"><label>Notes</label><textarea id="client-form-notes" rows="3"></textarea></div></div></div><div class="form-actions"><button type="button" class="btn btn-secondary" data-action="show-clients-list">Cancel</button><button type="submit" class="btn btn-primary">Save Client</button></div></form></div></div>
+                <div id="client-form-section" class="page" style="display:none;"><div class="page-header"><h2 id="client-form-title">Add New Client</h2><div class="header-actions"><button type="button" class="btn btn-secondary" data-action="show-clients-list">← Back</button></div></div><div class="invoice-form-container"><form id="client-form" class="invoice-form"><div class="form-section"><h3>Client Information</h3><div class="form-row"><div class="form-group"><label>Customer ID</label><input type="text" id="client-form-customer-id" placeholder="Auto-assigned next ID"></div><div class="form-group"><label>Company name *</label><input type="text" id="client-form-name" required placeholder="Client company name"></div></div><div class="form-row"><div class="form-group full-width"><label>Contact person</label><input type="text" id="client-form-contact" placeholder="Primary contact at this company"></div></div><div class="form-row"><div class="form-group full-width"><label>Address</label><textarea id="client-form-address" rows="3"></textarea></div></div><div class="form-row"><div class="form-group"><label>Email</label><input type="email" id="client-form-email"></div><div class="form-group"><label>Invoice Email</label><input type="email" id="client-form-invoice-email" placeholder="Address for sending invoices"></div></div><div class="form-row"><div class="form-group"><label>Phone</label><input type="tel" id="client-form-phone"></div></div><div class="form-row"><div class="form-group"><label>Tax ID / VAT Number</label><input type="text" id="client-form-tax-id"></div><div class="form-group"><label>Website</label><input type="url" id="client-form-website"></div></div></div><div class="form-section"><h3>Additional Notes</h3><div class="form-row"><div class="form-group full-width"><label>Notes</label><textarea id="client-form-notes" rows="3"></textarea></div></div></div><div class="form-actions"><button type="button" class="btn btn-secondary" data-action="show-clients-list">Cancel</button><button type="submit" class="btn btn-primary">Save Client</button></div></form></div></div>
                 <div id="receipts" class="page"><div class="page-header"><h2>Receipts</h2><div class="header-actions"><input type="text" id="receipt-search" placeholder="Search receipts..." class="search-input"><button type="button" class="btn btn-secondary" data-action="resequence-receipts">Resequence by date</button><button type="button" class="btn btn-primary" data-action="show-create-receipt">➕ New Receipt</button></div></div><div id="receipts-list" class="invoices-grid"></div></div>
                 <div id="create-receipt" class="page"><div class="page-header"><h2 id="receipt-form-title">Create New Receipt</h2><div class="header-actions"><button type="button" class="btn btn-secondary" data-action="show-receipts">← Back</button></div></div><div class="invoice-form-container"><form id="receipt-form" class="invoice-form"><div class="form-section"><h3>Receipt Information</h3><div class="form-row"><div class="form-group"><label>Receipt Number</label><input type="text" id="receipt-number" required></div><div class="form-group"><label>Receipt Date</label><input type="date" id="receipt-date" required></div></div></div><div class="form-section"><h3>Client</h3><div class="form-row"><div class="form-group full-width"><label>Select Client</label><select id="receipt-client-select" onchange="typeof app!=='undefined'&&app.filterInvoicesByClient(this.value)"><option value="">-- Select a client --</option></select></div></div></div><div class="form-section"><h3>Payment for</h3><div class="form-row"><div class="form-group"><label><input type="radio" name="receipt-payment-type" id="receipt-type-invoices" value="invoices" checked> Specific invoices</label></div><div class="form-group"><label><input type="radio" name="receipt-payment-type" id="receipt-type-on-account" value="onAccount"> On account balance</label></div></div><div id="receipt-invoices-section"><div class="form-row"><div class="form-group full-width"><label>Pending Invoices Included in Payment</label><div id="invoice-selection-list" class="invoice-selection-container"><p class="invoice-selection-empty">Please select a client first to see pending invoices.</p></div></div></div></div><div class="form-section"><h3>Payment Details</h3><div class="form-row"><div class="form-group"><label>Payment Amount</label><input type="number" id="receipt-amount" min="0" step="0.01" required></div><div class="form-group"><label>Payment Method</label><select id="receipt-payment-method"><option value="">-- Select --</option><option value="cash">Cash</option><option value="check">Check</option><option value="bank-transfer">Bank Transfer</option><option value="credit-card">Credit Card</option><option value="paypal">PayPal</option><option value="other">Other</option></select></div></div><div class="form-row"><div class="form-group full-width"><label>Notes</label><textarea id="receipt-notes" rows="3"></textarea></div></div></div><div class="form-actions"><button type="button" class="btn btn-secondary" data-action="show-receipts">Cancel</button><button type="submit" class="btn btn-primary">Save Receipt</button></div></form></div></div>
               </div>
@@ -1012,6 +1012,9 @@
                     <div class="form-row"><div class="form-group full-width"><label>Address</label><textarea id="crm-client-address" rows="3"></textarea></div></div>
                     <div class="form-row">
                       <div class="form-group"><label>Email</label><input type="email" id="crm-client-email"></div>
+                      <div class="form-group"><label>Invoice Email</label><input type="email" id="crm-client-invoice-email" placeholder="Address for sending invoices"></div>
+                    </div>
+                    <div class="form-row">
                       <div class="form-group"><label>Phone</label><input type="tel" id="crm-client-phone"></div>
                     </div>
                     <div class="form-row">
@@ -2416,11 +2419,41 @@
         <div class="modal-actions" id="modal-actions">
           <button type="button" class="btn btn-primary" id="modal-edit-btn">✏️ Edit</button>
           <button type="button" class="btn btn-secondary" id="modal-print-btn">🖨️ Print</button>
+          <button type="button" class="btn btn-secondary" id="modal-email-btn">✉️ Email</button>
           <button type="button" class="btn btn-danger" id="modal-delete-btn">🗑️ Delete</button>
           <button type="button" class="btn btn-secondary" id="modal-close-btn" onclick="window.app&&app.closeInvoiceModal()">✕ Close</button>
         </div>
       </div>
       <div id="invoice-preview-content"></div>
+    </div>
+  </div>
+
+  <div id="invoice-email-modal" class="modal accounting-modal" style="display:none;">
+    <div class="modal-content invoice-email-modal-content">
+      <div class="modal-header">
+        <h2>Email invoice</h2>
+        <button type="button" class="btn btn-secondary" onclick="window.app&&app.closeInvoiceEmailModal()">✕ Close</button>
+      </div>
+      <div class="invoice-email-form">
+        <p id="invoice-email-hint" class="invoice-email-hint"></p>
+        <div class="form-group">
+          <label for="invoice-email-to">To (Invoice Email)</label>
+          <input type="email" id="invoice-email-to" placeholder="client@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="invoice-email-subject">Subject</label>
+          <input type="text" id="invoice-email-subject">
+        </div>
+        <div class="form-group">
+          <label for="invoice-email-body">Message</label>
+          <textarea id="invoice-email-body" rows="10"></textarea>
+        </div>
+        <div class="form-actions invoice-email-actions">
+          <button type="button" class="btn btn-primary" onclick="window.app&&app.sendInvoiceEmailFromModal('eml')">Download email with invoice</button>
+          <button type="button" class="btn btn-secondary" onclick="window.app&&app.sendInvoiceEmailFromModal('mailto')">Open email app</button>
+          <button type="button" class="btn btn-secondary" onclick="window.app&&app.sendInvoiceEmailFromModal('attach')">Download invoice only</button>
+        </div>
+      </div>
     </div>
   </div>
 

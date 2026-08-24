@@ -57,6 +57,7 @@
           setEl('crm-client-contact', normalized.contactPerson);
           setEl('crm-client-address', client.address);
           setEl('crm-client-email', client.email);
+          setEl('crm-client-invoice-email', client.invoiceEmail);
           setEl('crm-client-phone', client.phone);
           setEl('crm-client-tax-id', client.taxId);
           setEl('crm-client-website', client.website);
@@ -103,6 +104,7 @@
       company: '',
       address: (document.getElementById('crm-client-address') || {}).value.trim(),
       email: (document.getElementById('crm-client-email') || {}).value.trim(),
+      invoiceEmail: (document.getElementById('crm-client-invoice-email') || {}).value.trim(),
       phone: (document.getElementById('crm-client-phone') || {}).value.trim(),
       taxId: (document.getElementById('crm-client-tax-id') || {}).value.trim(),
       website: (document.getElementById('crm-client-website') || {}).value.trim(),
@@ -149,6 +151,7 @@
           getContactPerson(c).toLowerCase().indexOf(term) !== -1 ||
           String((c && c.company) || '').toLowerCase().indexOf(term) !== -1 ||
           String((c && c.email) || '').toLowerCase().indexOf(term) !== -1 ||
+          String((c && c.invoiceEmail) || '').toLowerCase().indexOf(term) !== -1 ||
           String((c && c.customerId) || '').toLowerCase().indexOf(term) !== -1 ||
           String((c && c.phone) || '').toLowerCase().indexOf(term) !== -1;
       });
@@ -163,7 +166,7 @@
     listEl.innerHTML =
       '<div class="table-wrap"><table class="data-table clients-directory-table">' +
       '<thead><tr>' +
-      '<th>Customer ID</th><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th></th>' +
+      '<th>Customer ID</th><th>Company</th><th>Contact</th><th>Email</th><th>Invoice Email</th><th>Phone</th><th></th>' +
       '</tr></thead><tbody>' +
       clients.map(function (c) {
         var cid = escapeHtml(String(c.id != null ? c.id : ''));
@@ -172,6 +175,7 @@
           '<td>' + escapeHtml(getCompanyName(c) || '—') + '</td>' +
           '<td>' + escapeHtml(getContactPerson(c) || '—') + '</td>' +
           '<td>' + escapeHtml(c.email || '—') + '</td>' +
+          '<td>' + escapeHtml(c.invoiceEmail || '—') + '</td>' +
           '<td>' + escapeHtml(c.phone || '—') + '</td>' +
           '<td class="clients-row-actions">' +
           '<button type="button" class="btn btn-primary btn-sm" data-crm-edit-client="' + cid + '">Edit</button> ' +

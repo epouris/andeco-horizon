@@ -1049,3 +1049,48 @@
   .stat-card { padding: 0.85rem 0.7rem; }
   .stat-content h3 { font-size: 1.1rem; }
 }
+
+/* Invoice email composer */
+.invoice-email-modal-content {
+  max-width: 640px;
+}
+.invoice-email-form {
+  padding: 16px 20px 20px;
+}
+.invoice-email-hint {
+  margin: 0 0 1rem;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.invoice-email-form .form-group {
+  margin-bottom: 0.85rem;
+}
+.invoice-email-form label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.invoice-email-form input,
+.invoice-email-form textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+  font: inherit;
+  background: var(--bg-input, #fff);
+  color: inherit;
+  box-sizing: border-box;
+}
+.invoice-email-form textarea {
+  resize: vertical;
+  min-height: 10rem;
+  line-height: 1.45;
+}
+.invoice-email-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
