@@ -1674,6 +1674,7 @@ const app = {
                     <span class="invoice-status status-${status}">${status}</span>
                     <div class="invoice-actions">
                         <button class="btn btn-secondary" onclick="event.stopPropagation(); app.viewInvoice('${safeId}')">View</button>
+                        <button class="btn btn-secondary" onclick="event.stopPropagation(); app.openInvoiceEmailComposer('${safeId}')">Email</button>
                         <button class="btn btn-primary" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">Edit</button>
                         ${convertBtn}
                         <button class="btn btn-danger" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isCreditNoteDoc(invoice) ? 'credit note' : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice')}?')) { DataStore.deleteInvoice('${safeId}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
@@ -1738,6 +1739,7 @@ const app = {
         
         const editBtn = document.getElementById('modal-edit-btn');
         const printBtn = document.getElementById('modal-print-btn');
+        const emailBtn = document.getElementById('modal-email-btn');
         const deleteBtn = document.getElementById('modal-delete-btn');
         
         if (editBtn) {
@@ -1747,6 +1749,11 @@ const app = {
         if (printBtn) {
             printBtn.onclick = () => app.printInvoice();
             printBtn.textContent = '🖨️ Print';
+        }
+        if (emailBtn) {
+            emailBtn.style.display = '';
+            emailBtn.onclick = () => app.openInvoiceEmailComposer(id);
+            emailBtn.textContent = '✉️ Email';
         }
         if (deleteBtn) {
             deleteBtn.onclick = () => app.deleteCurrentInvoice();
@@ -1945,28 +1952,20 @@ const app = {
         }
     },
 
-    printInvoice() {
-        if (!this.currentInvoiceId) return;
-        
-        const invoice = DataStore.getInvoice(this.currentInvoiceId);
-        if (!invoice) return;
-        
+    buildInvoicePrintHtml(invoice, autoPrint = false) {
         const settings = DataStore.getCompanySettings();
         const docLabel = this.getDocumentTypeLabel(invoice);
         const logoKind = this.isCreditNoteDoc(invoice) ? 'creditNote' : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice');
         const invoiceLogoHtml = (typeof DataStore !== 'undefined' && DataStore.getDocumentLogoHtml)
             ? DataStore.getDocumentLogoHtml(logoKind)
             : (settings.logo ? `<img src="${settings.logo}" alt="Logo" class="company-logo-print">` : '');
-        
-        // Format dates
+
         const invoiceDate = new Date(invoice.date);
         const dueDate = new Date(invoice.dueDate);
         const formattedInvoiceDate = (window.AndecoDate ? window.AndecoDate.formatDate(invoiceDate) : invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         const formattedDueDate = (window.AndecoDate ? window.AndecoDate.formatDate(dueDate) : dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
-        
-        // Create print window
-        const printWindow = window.open('', '_blank', 'width=800,height=600');
-        printWindow.document.write(`
+
+        return `
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -2530,15 +2529,237 @@ const app = {
                     </div>
 
                 </div>
-                <script>
+                ${autoPrint ? `<script>
                     window.onload = function() {
                         window.print();
                     };
-                </script>
+                </script>` : ''}
             </body>
             </html>
-        `);
+`;
+    },
+
+    printInvoice() {
+        if (!this.currentInvoiceId) return;
+
+        const invoice = DataStore.getInvoice(this.currentInvoiceId);
+        if (!invoice) return;
+
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        if (!printWindow) {
+            alert('Please allow pop-ups to print the invoice.');
+            return;
+        }
+        printWindow.document.write(this.buildInvoicePrintHtml(invoice, true));
         printWindow.document.close();
+    },
+
+    findClientForInvoice(invoice) {
+        if (!invoice || typeof DataStore === 'undefined' || !DataStore.getClients) return null;
+        const clients = DataStore.getClients();
+        if (!Array.isArray(clients) || !clients.length) return null;
+        if (invoice.clientCustomerId) {
+            const byCust = clients.find((c) => c && c.customerId && c.customerId === invoice.clientCustomerId);
+            if (byCust) return byCust;
+        }
+        if (invoice.clientName) {
+            const byName = clients.find((c) => c && (
+                c.name === invoice.clientName ||
+                (DataStore.getClientCompanyName && DataStore.getClientCompanyName(c) === invoice.clientName)
+            ));
+            if (byName) return byName;
+        }
+        if (invoice.clientEmail) {
+            const email = String(invoice.clientEmail).trim().toLowerCase();
+            const byEmail = clients.find((c) => c && (
+                (c.invoiceEmail && String(c.invoiceEmail).trim().toLowerCase() === email) ||
+                (c.email && String(c.email).trim().toLowerCase() === email)
+            ));
+            if (byEmail) return byEmail;
+        }
+        return null;
+    },
+
+    getInvoiceSendToEmail(invoice) {
+        const client = this.findClientForInvoice(invoice);
+        const fromClient = client && (client.invoiceEmail || client.email);
+        return String(fromClient || invoice.clientEmail || '').trim();
+    },
+
+    buildInvoiceEmailTemplate(invoice) {
+        const settings = DataStore.getCompanySettings() || {};
+        const client = this.findClientForInvoice(invoice);
+        const docLabel = this.getDocumentTypeLabel(invoice);
+        const number = (invoice.status === 'draft' && !invoice.invoiceNumber) ? 'Draft' : (invoice.invoiceNumber || '—');
+        const company = settings.companyName || 'Andeco Marine';
+        const contact = (client && (client.contactPerson || client.name)) || invoice.clientName || 'Client';
+        const greetingName = (client && client.contactPerson) ? client.contactPerson : (invoice.clientName || 'Client');
+        const invoiceDate = invoice.date
+            ? (window.AndecoDate ? window.AndecoDate.formatDate(new Date(invoice.date)) : this.formatDate(invoice.date))
+            : '';
+        const dueDate = (!this.isProformaDoc(invoice) && !this.isCreditNoteDoc(invoice) && invoice.dueDate)
+            ? (window.AndecoDate ? window.AndecoDate.formatDate(new Date(invoice.dueDate)) : this.formatDate(invoice.dueDate))
+            : '';
+        const amount = this.formatCurrency(invoice.total);
+        const subject = `${docLabel} ${number} from ${company}`;
+        let body = `Dear ${greetingName},\n\n`;
+        if (this.isCreditNoteDoc(invoice)) {
+            body += `Please find attached credit note ${number}`;
+        } else if (this.isProformaDoc(invoice)) {
+            body += `Please find attached proforma invoice ${number}`;
+        } else {
+            body += `Please find attached invoice ${number}`;
+        }
+        if (invoiceDate) body += ` dated ${invoiceDate}`;
+        body += ` for the amount of ${amount}.\n`;
+        if (dueDate) body += `\nPayment is due by ${dueDate}.\n`;
+        body += `\nIf you have any questions, please reply to this email or contact us.\n\nKind regards,\n${company}`;
+        if (settings.companyEmail) body += `\n${settings.companyEmail}`;
+        if (settings.companyPhone) body += `\n${settings.companyPhone}`;
+        return {
+            to: this.getInvoiceSendToEmail(invoice),
+            subject,
+            body,
+            contactName: contact,
+            docLabel,
+            number
+        };
+    },
+
+    getInvoiceAttachmentFilename(invoice) {
+        const label = this.isCreditNoteDoc(invoice) ? 'CreditNote' : (this.isProformaDoc(invoice) ? 'Proforma' : 'Invoice');
+        const number = (invoice.invoiceNumber || invoice.id || 'draft').toString().replace(/[^\w.-]+/g, '_');
+        return `${label}-${number}.html`;
+    },
+
+    downloadInvoiceAttachment(invoice) {
+        const html = this.buildInvoicePrintHtml(invoice, false);
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = this.getInvoiceAttachmentFilename(invoice);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return this.getInvoiceAttachmentFilename(invoice);
+    },
+
+    downloadInvoiceEmailEml(invoice, to, subject, body) {
+        const filename = this.getInvoiceAttachmentFilename(invoice);
+        const html = this.buildInvoicePrintHtml(invoice, false);
+        const boundary = 'AndecoHorizon_' + Date.now().toString(36);
+        const toSafe = String(to || '').trim();
+        const subjectSafe = String(subject || '').replace(/[\r\n]+/g, ' ').trim();
+        const bodySafe = String(body || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const b64 = (typeof btoa === 'function')
+            ? btoa(unescape(encodeURIComponent(html)))
+            : '';
+        const foldedB64 = b64.replace(/(.{76})/g, '$1\r\n');
+        const eml =
+            `MIME-Version: 1.0\r\n` +
+            `To: ${toSafe}\r\n` +
+            `Subject: ${subjectSafe}\r\n` +
+            `X-Unsent: 1\r\n` +
+            `Content-Type: multipart/mixed; boundary="${boundary}"\r\n` +
+            `\r\n` +
+            `--${boundary}\r\n` +
+            `Content-Type: text/plain; charset="UTF-8"\r\n` +
+            `Content-Transfer-Encoding: 8bit\r\n` +
+            `\r\n` +
+            `${bodySafe}\r\n` +
+            `\r\n` +
+            `--${boundary}\r\n` +
+            `Content-Type: text/html; charset="UTF-8"; name="${filename}"\r\n` +
+            `Content-Transfer-Encoding: base64\r\n` +
+            `Content-Disposition: attachment; filename="${filename}"\r\n` +
+            `\r\n` +
+            `${foldedB64}\r\n` +
+            `--${boundary}--\r\n`;
+        const blob = new Blob([eml], { type: 'message/rfc822' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const emlName = filename.replace(/\.html$/i, '') + '.eml';
+        a.download = emlName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return emlName;
+    },
+
+    openInvoiceEmailComposer(invoiceId) {
+        const invoice = DataStore.getInvoice(invoiceId);
+        if (!invoice) {
+            alert('Invoice not found.');
+            return;
+        }
+        this._emailInvoiceId = invoiceId;
+        const tpl = this.buildInvoiceEmailTemplate(invoice);
+        const modal = document.getElementById('invoice-email-modal');
+        const toEl = document.getElementById('invoice-email-to');
+        const subjectEl = document.getElementById('invoice-email-subject');
+        const bodyEl = document.getElementById('invoice-email-body');
+        const hintEl = document.getElementById('invoice-email-hint');
+        if (toEl) toEl.value = tpl.to;
+        if (subjectEl) subjectEl.value = tpl.subject;
+        if (bodyEl) bodyEl.value = tpl.body;
+        if (hintEl) {
+            if (!tpl.to) {
+                hintEl.textContent = 'No Invoice Email is set for this client. Add one in Clients, or type an address below.';
+            } else {
+                hintEl.textContent = 'Uses the client Invoice Email when set (otherwise the general email). Download the ready-to-send email (with invoice attached) or open your email app.';
+            }
+        }
+        if (modal) {
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
+        if (toEl && !tpl.to) toEl.focus();
+    },
+
+    closeInvoiceEmailModal() {
+        const modal = document.getElementById('invoice-email-modal');
+        if (modal) {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
+        this._emailInvoiceId = null;
+    },
+
+    sendInvoiceEmailFromModal(mode) {
+        const invoiceId = this._emailInvoiceId || this.currentInvoiceId;
+        const invoice = invoiceId ? DataStore.getInvoice(invoiceId) : null;
+        if (!invoice) {
+            alert('Invoice not found.');
+            return;
+        }
+        const to = (document.getElementById('invoice-email-to') || {}).value.trim();
+        const subject = (document.getElementById('invoice-email-subject') || {}).value.trim();
+        const body = (document.getElementById('invoice-email-body') || {}).value || '';
+        if (!to) {
+            alert('Please enter an email address to send to. You can save a default under Clients → Invoice Email.');
+            return;
+        }
+        if (mode === 'eml') {
+            const name = this.downloadInvoiceEmailEml(invoice, to, subject, body);
+            alert('Downloaded "' + name + '". Open it in your email app to review and send — the invoice is already attached.');
+            return;
+        }
+        if (mode === 'attach') {
+            const name = this.downloadInvoiceAttachment(invoice);
+            alert('Downloaded "' + name + '". Attach this file in your email before sending.');
+            return;
+        }
+        // mailto
+        this.downloadInvoiceAttachment(invoice);
+        const mailto = 'mailto:' + encodeURIComponent(to) +
+            '?subject=' + encodeURIComponent(subject) +
+            '&body=' + encodeURIComponent(body);
+        window.location.href = mailto;
+        alert('Invoice file downloaded. Attach it in your email app before sending. Your email app should open with the message ready.');
     },
 
     // Receipts
@@ -2967,6 +3188,7 @@ const app = {
         
         const editBtn = document.getElementById('modal-edit-btn');
         const printBtn = document.getElementById('modal-print-btn');
+        const emailBtn = document.getElementById('modal-email-btn');
         const deleteBtn = document.getElementById('modal-delete-btn');
         
         if (editBtn) {
@@ -2976,6 +3198,10 @@ const app = {
         if (printBtn) {
             printBtn.onclick = () => app.printReceipt();
             printBtn.textContent = '🖨️ Print';
+        }
+        if (emailBtn) {
+            emailBtn.style.display = 'none';
+            emailBtn.onclick = null;
         }
         if (deleteBtn) {
             deleteBtn.onclick = () => app.deleteCurrentReceipt();
@@ -3611,6 +3837,8 @@ const app = {
         document.getElementById('client-form-contact').value = normalized.contactPerson || '';
         document.getElementById('client-form-address').value = client.address || '';
         document.getElementById('client-form-email').value = client.email || '';
+        const invoiceEmailEl = document.getElementById('client-form-invoice-email');
+        if (invoiceEmailEl) invoiceEmailEl.value = client.invoiceEmail || '';
         document.getElementById('client-form-phone').value = client.phone || '';
         document.getElementById('client-form-tax-id').value = client.taxId || '';
         document.getElementById('client-form-website').value = client.website || '';
@@ -3629,6 +3857,7 @@ const app = {
         if (!customerId && DataStore.getNextCustomerId) {
             customerId = DataStore.getNextCustomerId();
         }
+        const invoiceEmailEl = document.getElementById('client-form-invoice-email');
         const client = {
             id: this.currentClientId || this.generateId(),
             customerId: customerId,
@@ -3637,6 +3866,7 @@ const app = {
             company: '',
             address: document.getElementById('client-form-address').value,
             email: document.getElementById('client-form-email').value,
+            invoiceEmail: invoiceEmailEl ? invoiceEmailEl.value.trim() : (existing && existing.invoiceEmail) || '',
             phone: document.getElementById('client-form-phone').value,
             taxId: document.getElementById('client-form-tax-id').value,
             website: document.getElementById('client-form-website').value,
@@ -3667,9 +3897,10 @@ const app = {
                     : (client.name || client.company || '')).toString().toLowerCase();
                 const contact = (client.contactPerson || '').toString().toLowerCase();
                 const email = (client.email || '').toString().toLowerCase();
+                const invoiceEmail = (client.invoiceEmail || '').toString().toLowerCase();
                 const customerId = (client.customerId || '').toString().toLowerCase();
                 return company.includes(term) || contact.includes(term) ||
-                    email.includes(term) || customerId.includes(term);
+                    email.includes(term) || invoiceEmail.includes(term) || customerId.includes(term);
             });
         }
 
@@ -3702,6 +3933,7 @@ const app = {
                     <th>Company</th>
                     <th>Contact</th>
                     <th>Email</th>
+                    <th>Invoice Email</th>
                     <th>Phone</th>
                     <th></th>
                   </tr>
@@ -3729,6 +3961,7 @@ const app = {
                 <td>${esc(companyName || '—')}</td>
                 <td>${esc(contactPerson || '—')}</td>
                 <td>${esc(client.email || '—')}</td>
+                <td>${esc(client.invoiceEmail || '—')}</td>
                 <td>${esc(client.phone || '—')}</td>
                 <td class="clients-row-actions">
                     <button type="button" class="btn btn-primary btn-sm" onclick="app.showClientForm('${id}')">Edit</button>
