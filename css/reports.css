@@ -1,0 +1,68 @@
+/* Report Management */
+.reports-directory-table td,
+.reports-directory-table th {
+  vertical-align: middle;
+}
+
+.reports-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.reports-row-actions .btn {
+  margin: 0.1rem 0.1rem;
+}
+
+.reports-status {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  line-height: 1.3;
+}
+
+.reports-status--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.reports-status--scanned {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.reports-status--invoiced {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.reports-status--sent {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.reports-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.reports-toolbar .search-input,
+.reports-toolbar select {
+  max-width: 240px;
+}
+
+.accounting-service-reports-content .reports-subsection-desc {
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary, #64748b);
+}
+
+#accounting-service-reports-summary {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #64748b);
+  margin-bottom: 0.85rem;
+}

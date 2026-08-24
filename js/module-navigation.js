@@ -38,11 +38,19 @@
       reports: [
         { id: 'statements', label: 'Statements' },
         { id: 'exports', label: 'Exports' }
+      ],
+      'service-reports': [
+        { id: 'queue', label: 'Accounting queue' }
       ]
     },
     clients: {
       list: [
         { id: 'directory', label: 'Client directory' }
+      ]
+    },
+    'report-management': {
+      list: [
+        { id: 'directory', label: 'Report list' }
       ]
     },
     fleet: {
@@ -216,6 +224,7 @@
     documents: '.docs-section-panel[data-section]',
     contacts: '.contacts-section-panel[data-section]',
     clients: '.clients-section-panel[data-section]',
+    'report-management': '.reports-mgmt-section-panel[data-section]',
     crew: '.crew-section-panel[data-section]',
     lms: '.lms-section-panel[data-section]',
     accounting: '.accounting-section-panel[data-section]'
@@ -385,6 +394,13 @@
     }
     if (moduleId === 'clients' && typeof window.ClientsModule !== 'undefined' && window.ClientsModule.render) {
       window.ClientsModule.render();
+    }
+    if (moduleId === 'report-management' && typeof window.ReportsModule !== 'undefined' && window.ReportsModule.render) {
+      window.ReportsModule.render();
+    }
+    if (moduleId === 'accounting' && sectionId === 'service-reports' &&
+        typeof window.ReportsModule !== 'undefined' && window.ReportsModule.renderAccounting) {
+      window.ReportsModule.renderAccounting();
     }
   }
 

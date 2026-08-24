@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="css/lms.css">
   <link rel="stylesheet" href="css/lms-portal.css">
   <link rel="stylesheet" href="css/distribution.css">
+  <link rel="stylesheet" href="css/reports.css">
   <script>
     (function () {
       if (location.protocol !== 'file:') return;
@@ -226,6 +227,12 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01M15 10h.01"/></svg>
             </span>
             <span class="module-title">Clients</span>
+          </a>
+          <a href="#report-management" class="module-card module-card--tile" data-module="report-management">
+            <span class="module-icon-tile module-icon--orange" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/><path d="M8 9h2"/></svg>
+            </span>
+            <span class="module-title" data-short="Reports">Report Management</span>
           </a>
           <a href="#fleet" class="module-card module-card--tile" data-module="fleet">
             <span class="module-icon-tile module-icon--green" aria-hidden="true">
@@ -821,6 +828,23 @@
                 <div id="statement-content" style="display: none; margin-top: 1rem;"></div>
               </section>
             </div>
+            <div id="accounting-service-reports-content" class="accounting-service-reports-content" style="display: none;">
+              <div class="page-header"><h2>Service Reports</h2></div>
+              <p class="reports-subsection-desc">Reports that are scanned are ready for invoicing. After the invoice is created, mark Invoiced; after it is emailed to the client, mark Sent.</p>
+              <div id="accounting-service-reports-summary"></div>
+              <div class="reports-toolbar">
+                <input type="text" id="accounting-service-reports-search" placeholder="Search reports..." class="search-input">
+                <select id="accounting-service-reports-filter">
+                  <option value="attention">Needs attention (Scanned / Invoiced)</option>
+                  <option value="scanned">Scanned only</option>
+                  <option value="invoiced">Invoiced only</option>
+                  <option value="sent">Sent</option>
+                  <option value="pending">Pending</option>
+                  <option value="all">All statuses</option>
+                </select>
+              </div>
+              <div id="accounting-service-reports-list"></div>
+            </div>
             <!-- Invoices & Receipts (embedded in CRM) -->
             <div id="accounting-invoice-app" class="accounting-embed" style="display:none;">
               <div class="accounting-embed-inner">
@@ -1030,6 +1054,80 @@
                 </form>
               </div>
             </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Report Management: service operation reports -->
+      <section id="page-report-management" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Report Management</h1>
+              <div class="module-detail-actions">
+                <button type="button" class="btn btn-primary" id="reports-add-btn">➕ Add Report</button>
+              </div>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-report-management" aria-label="Subsections" hidden></nav>
+            <div class="reports-mgmt-section-panel" data-section="list">
+              <div id="reports-list-wrap" class="accounting-embed-inner">
+                <div class="reports-toolbar">
+                  <input type="text" id="reports-search" placeholder="Search reports..." class="search-input">
+                  <select id="reports-status-filter">
+                    <option value="all">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="scanned">Scanned</option>
+                    <option value="invoiced">Invoiced</option>
+                    <option value="sent">Sent</option>
+                  </select>
+                </div>
+                <div id="reports-list"></div>
+              </div>
+              <div id="reports-form-wrap" style="display: none;">
+                <div class="page-header">
+                  <h2 id="reports-form-title">Add Report</h2>
+                  <button type="button" class="btn btn-secondary" id="reports-back-btn">← Back</button>
+                </div>
+                <div class="invoice-form-container">
+                  <form id="report-form" class="invoice-form">
+                    <div class="form-section">
+                      <h3>Service report</h3>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label for="report-form-number">Report No. *</label>
+                          <input type="text" id="report-form-number" required placeholder="e.g. RPT-1001">
+                        </div>
+                        <div class="form-group">
+                          <label for="report-form-client">Client *</label>
+                          <select id="report-form-client" required>
+                            <option value="">-- Select client --</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group full-width">
+                          <label for="report-form-employee">Employee (did the job) *</label>
+                          <select id="report-form-employee" required>
+                            <option value="">-- Select employee --</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group full-width">
+                          <label for="report-form-notes">Notes</label>
+                          <textarea id="report-form-notes" rows="3" placeholder="Optional notes about the operation"></textarea>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button type="button" class="btn btn-secondary" id="reports-cancel-btn">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Save Report</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2356,6 +2454,7 @@
               <div class="admin-module-checkboxes">
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="accounting"> Accounting</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="clients"> Clients</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="report-management"> Report Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="fleet"> Fleet Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="hr"> HR</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="crew"> Crew Management</label>
@@ -2469,6 +2568,7 @@
   <script src="js/accounting-invoices.js" defer></script>
   <script src="js/accounting-subcontractors.js" defer></script>
   <script src="js/clients-module.js" defer></script>
+  <script src="js/reports-module.js" defer></script>
   <script src="js/hr-employees.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
