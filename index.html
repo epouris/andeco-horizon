@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/lms-portal.css">
   <link rel="stylesheet" href="css/distribution.css">
   <link rel="stylesheet" href="css/reports.css">
+  <link rel="stylesheet" href="css/project-management.css">
   <script>
     (function () {
       if (location.protocol !== 'file:') return;
@@ -239,6 +240,12 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20c1.5-1 3-1.5 5-1.5s3.5.5 5 1.5 3 1.5 5 1.5 3.5-.5 5-1.5"/><path d="M4 16l1.2-5.5A2 2 0 0 1 7.15 9H16l3 4v3"/><path d="M12 9V5l3 1v3"/><path d="M7 9V7"/></svg>
             </span>
             <span class="module-title" data-short="Fleet">Fleet Management</span>
+          </a>
+          <a href="#project-management" class="module-card module-card--tile" data-module="project-management">
+            <span class="module-icon-tile module-icon--teal" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v4H4z"/><path d="M4 11h10v4H4z"/><path d="M4 17h7v4H4z"/><path d="M16 13l4 2-4 2v-4z"/></svg>
+            </span>
+            <span class="module-title" data-short="Projects">Project Management</span>
           </a>
           <a href="#distribution" class="module-card module-card--tile" data-module="distribution">
             <span class="module-icon-tile module-icon--blue" aria-hidden="true">
@@ -1134,6 +1141,74 @@
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Project Management: Oil Terminal Operations Board -->
+      <section id="page-project-management" class="page module-detail-page">
+        <div class="module-detail-wrap">
+          <div class="module-detail">
+            <div class="module-detail-bar">
+              <a href="#home" class="module-back">← Back</a>
+              <h1 class="module-detail-title">Project Management</h1>
+              <div class="module-detail-actions">
+                <button type="button" class="btn btn-primary" id="pm-add-call-btn">+ Vessel call</button>
+              </div>
+            </div>
+            <nav class="module-subtabs" id="module-subtabs-project-management" aria-label="Subsections" hidden></nav>
+            <div class="pm-section-panel" data-section="board" data-subsections-ready="1">
+              <p class="module-meta" style="margin-bottom: 0.85rem;">Oil Terminal Operations board — monday.com-style workspace for vessel calls, berthing, cargo transfer, and departure.</p>
+              <div class="pm-metrics">
+                <div class="pm-metric">
+                  <span class="pm-metric-value" id="pm-metric-volume">0</span>
+                  <span class="pm-metric-label">Active product volume pumping</span>
+                </div>
+                <div class="pm-metric">
+                  <span class="pm-metric-value" id="pm-metric-util">0%</span>
+                  <span class="pm-metric-label">Jetty utilization</span>
+                </div>
+                <div class="pm-metric">
+                  <span class="pm-metric-value" id="pm-metric-checklist">0</span>
+                  <span class="pm-metric-label">Open safety checklist items</span>
+                </div>
+              </div>
+              <div class="pm-toolbar">
+                <div class="pm-view-switch" role="tablist" aria-label="Board views">
+                  <button type="button" class="is-active" data-pm-view="board">Board</button>
+                  <button type="button" data-pm-view="timeline">Timeline</button>
+                  <button type="button" data-pm-view="dashboard">Dashboard</button>
+                  <button type="button" data-pm-view="workflows">Role workflows</button>
+                </div>
+                <input type="text" id="pm-search" class="search-input" placeholder="Search vessel, voyage, product, people…">
+                <select id="pm-filter-milestone" aria-label="Filter by milestone">
+                  <option value="all">All milestones</option>
+                  <option value="eta-confirmed">ETA Confirmed</option>
+                  <option value="moored">Moored</option>
+                  <option value="hose-conn">Hose Conn</option>
+                  <option value="pumping">Pumping</option>
+                  <option value="stopped-gauging">Stopped/Gauging</option>
+                  <option value="completed">Completed</option>
+                  <option value="delayed">Delayed/Stuck</option>
+                </select>
+              </div>
+              <div class="pm-view-panel" data-view="board">
+                <div id="pm-board-root" class="pm-board"></div>
+              </div>
+              <div class="pm-view-panel" data-view="timeline" style="display: none;">
+                <div id="pm-timeline-root"></div>
+              </div>
+              <div class="pm-view-panel" data-view="dashboard" style="display: none;">
+                <div id="pm-dashboard-root"></div>
+              </div>
+              <div class="pm-view-panel" data-view="workflows" style="display: none;">
+                <div id="pm-workflows-root"></div>
+              </div>
+            </div>
+          </div>
+          <aside class="module-copilot"><div class="copilot-header"><span class="copilot-logo">◇</span> Copilot</div><p class="copilot-prompt">Ask about berthing, cargo ops, or jetty occupancy.</p></aside>
+        </div>
+        <div id="pm-modal-overlay" class="pm-modal-overlay" style="display: none;">
+          <div class="pm-modal" id="pm-modal-body"></div>
         </div>
       </section>
 
@@ -2460,6 +2535,7 @@
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="clients"> Clients</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="report-management"> Report Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="fleet"> Fleet Management</label>
+                <label class="admin-check-label"><input type="checkbox" name="admin-module" value="project-management"> Project Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="hr"> HR</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="crew"> Crew Management</label>
                 <label class="admin-check-label"><input type="checkbox" name="admin-module" value="shifts"> Shifts</label>
@@ -2580,6 +2656,7 @@
   <script src="js/fleet-management.js" defer></script>
   <script src="js/crew-management.js" defer></script>
   <script src="js/shifts-management.js" defer></script>
+  <script src="js/project-management.js" defer></script>
   <script src="js/lms-module.js" defer></script>
   <script src="js/lms-portal.js" defer></script>
   <script src="js/distribution-module.js" defer></script>

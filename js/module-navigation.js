@@ -225,6 +225,7 @@
     contacts: '.contacts-section-panel[data-section]',
     clients: '.clients-section-panel[data-section]',
     'report-management': '.reports-mgmt-section-panel[data-section]',
+    'project-management': '.pm-section-panel[data-section]',
     crew: '.crew-section-panel[data-section]',
     lms: '.lms-section-panel[data-section]',
     accounting: '.accounting-section-panel[data-section]'
@@ -397,6 +398,9 @@
     }
     if (moduleId === 'report-management' && typeof window.ReportsModule !== 'undefined' && window.ReportsModule.render) {
       window.ReportsModule.render();
+    }
+    if (moduleId === 'project-management' && typeof window.ProjectManagement !== 'undefined' && window.ProjectManagement.render) {
+      window.ProjectManagement.render();
     }
     if (moduleId === 'accounting' && sectionId === 'service-reports' &&
         typeof window.ReportsModule !== 'undefined' && window.ReportsModule.renderAccounting) {
