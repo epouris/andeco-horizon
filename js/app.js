@@ -77,6 +77,7 @@
   var MODULES = [
     { id: 'accounting', name: 'Accounting' },
     { id: 'clients', name: 'Clients' },
+    { id: 'report-management', name: 'Report Management' },
     { id: 'fleet', name: 'Fleet Management' },
     { id: 'distribution', name: 'Distribution' },
     { id: 'hr', name: 'HR' },
@@ -144,6 +145,7 @@
       { id: 'payroll', label: 'Payroll' },
       { id: 'subcontractors', label: 'Subcontractors' },
       { id: 'social-insurance', label: 'Social Insurance' },
+      { id: 'service-reports', label: 'Service Reports' },
       { id: 'reports', label: 'Reports' }
     ],
     fleet: [
@@ -187,6 +189,9 @@
     ],
     clients: [
       { id: 'list', label: 'Clients' }
+    ],
+    'report-management': [
+      { id: 'list', label: 'Reports' }
     ],
     lms: [
       { id: 'dashboard', label: 'Dashboard' },
@@ -383,6 +388,7 @@
     var appEl = document.getElementById('accounting-invoice-app');
     var placeholder = document.querySelector('#page-accounting .accounting-placeholder');
     var reportsContent = document.getElementById('accounting-reports-content');
+    var serviceReportsContent = document.getElementById('accounting-service-reports-content');
     var payrollContent = document.getElementById('accounting-payroll-content');
     var scContent = document.getElementById('accounting-subcontractors-content');
     var siPanel = document.getElementById('accounting-social-insurance-content');
@@ -392,6 +398,7 @@
       appEl.style.display = 'none';
       placeholder.style.display = 'none';
       if (reportsContent) reportsContent.style.display = 'none';
+      if (serviceReportsContent) serviceReportsContent.style.display = 'none';
       if (payrollContent) payrollContent.style.display = 'none';
       if (scContent) scContent.style.display = 'none';
       if (siPanel) siPanel.style.display = 'none';
@@ -402,6 +409,13 @@
     if (sectionId === 'reports') {
       if (reportsContent) reportsContent.style.display = 'block';
       try { if (window.app && window.app.setupStatementForm) window.app.setupStatementForm(); } catch (err) {}
+    } else if (sectionId === 'service-reports') {
+      if (serviceReportsContent) serviceReportsContent.style.display = 'block';
+      try {
+        if (window.ReportsModule && window.ReportsModule.renderAccounting) {
+          window.ReportsModule.renderAccounting();
+        }
+      } catch (err) {}
     } else if (sectionId === 'dashboard' || sectionId === 'invoices' || sectionId === 'receipts' || sectionId === 'credit-notes') {
       appEl.style.display = 'block';
       try {
@@ -592,6 +606,18 @@
     }
   }
 
+  function setReportManagementSection(sectionId) {
+    if (currentModulePageId !== 'report-management') return;
+    setGenericSectionPanels('#page-report-management', '.reports-mgmt-section-panel', sectionId);
+    if (window.AndecoModuleNav) {
+      window.AndecoModuleNav.setActiveSectionOnSubtabs('report-management', sectionId);
+      window.AndecoModuleNav.activateSection('report-management', sectionId);
+    }
+    if (typeof window.ReportsModule !== 'undefined' && window.ReportsModule.render) {
+      window.ReportsModule.render();
+    }
+  }
+
   function setCrewSection(sectionId) {
     if (currentModulePageId !== 'crew') return;
     setGenericSectionPanels('#page-crew', '.crew-section-panel', sectionId);
@@ -673,6 +699,7 @@
     if (pageId === 'documents') setDocumentsSection(sectionId);
     if (pageId === 'contacts') setContactsSection(sectionId);
     if (pageId === 'clients') setClientsSection(sectionId);
+    if (pageId === 'report-management') setReportManagementSection(sectionId);
     if (pageId === 'crew') setCrewSection(sectionId);
     if (pageId === 'lms') setLmsSection(sectionId);
     if (pageId === 'distribution') setDistributionSection(sectionId);
@@ -712,6 +739,7 @@
     var sectionTitles = {
       accounting: 'Accounting',
       clients: 'Clients',
+      'report-management': 'Report Management',
       fleet: 'Fleet Management',
       distribution: 'Distribution',
       hr: 'HR',
@@ -834,6 +862,9 @@
       if (pageId === 'admin') renderAdminUserList();
       if (pageId === 'settings' && typeof window.app !== 'undefined' && window.app.loadSettingsForm) window.app.loadSettingsForm();
       if (pageId === 'clients' && typeof window.ClientsModule !== 'undefined' && window.ClientsModule.render) window.ClientsModule.render();
+      if (pageId === 'report-management' && typeof window.ReportsModule !== 'undefined' && window.ReportsModule.render) {
+        window.ReportsModule.render();
+      }
       if (pageId === 'fleet' && typeof window.FleetManagement !== 'undefined' && window.FleetManagement.render) window.FleetManagement.render();
       if (pageId === 'crew' && typeof window.CrewManagement !== 'undefined' && window.CrewManagement.render) window.CrewManagement.render();
       if (pageId === 'shifts' && typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) window.ShiftsManagement.render();

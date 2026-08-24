@@ -172,6 +172,7 @@ window.AccountingData = (function () {
     invoices: [],
     receipts: [],
     clients: [],
+    serviceReports: [],
     companySettings: null,
     products: [],
     subcontractors: [],
@@ -234,6 +235,7 @@ window.AccountingData = (function () {
       invoices: [],
       receipts: [],
       clients: [],
+      serviceReports: [],
       companySettings: Object.assign({}, defaultSettings),
       products: [],
       subcontractors: [],
@@ -288,6 +290,7 @@ window.AccountingData = (function () {
       invoices: memory.invoices,
       receipts: memory.receipts,
       clients: memory.clients,
+      serviceReports: memory.serviceReports,
       companySettings: memory.companySettings || defaultSettings,
       products: memory.products,
       subcontractors: memory.subcontractors,
@@ -414,6 +417,15 @@ window.AccountingData = (function () {
             }
           }
         }
+      } catch (e) {}
+    }
+    if (typeof window.ClientsModule !== 'undefined' && window.ClientsModule.render) {
+      try { window.ClientsModule.render(); } catch (e) {}
+    }
+    if (typeof window.ReportsModule !== 'undefined') {
+      try {
+        if (window.ReportsModule.render) window.ReportsModule.render();
+        if (window.ReportsModule.renderAccounting) window.ReportsModule.renderAccounting();
       } catch (e) {}
     }
     if (typeof window.AccountingSubcontractors !== 'undefined' && window.AccountingSubcontractors.render) {
@@ -637,6 +649,7 @@ window.AccountingData = (function () {
     mergeList('receipts');
     mergeList('invoices');
     mergeList('clients');
+    mergeList('serviceReports');
     return merged;
   }
 
@@ -708,6 +721,41 @@ window.AccountingData = (function () {
       return Promise.resolve(true);
     }
     mirrorLocalAccounting('clients', list);
+    return Promise.resolve(true);
+  }
+
+  function getServiceReports() {
+    if (useFileStorage) {
+      if (!Array.isArray(memory.serviceReports)) memory.serviceReports = [];
+      if (memory.serviceReports.length === 0) {
+        try {
+          var rawLocal = localStorage.getItem(PREFIX + 'serviceReports');
+          var parsedLocal = rawLocal ? JSON.parse(rawLocal) : [];
+          if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
+            memory.serviceReports = parsedLocal;
+          }
+        } catch (e) {}
+      }
+      return memory.serviceReports.slice();
+    }
+    try {
+      var raw = localStorage.getItem(PREFIX + 'serviceReports');
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {}
+    return [];
+  }
+
+  function saveServiceReports(reports) {
+    var list = Array.isArray(reports) ? reports : [];
+    if (useFileStorage) {
+      memory.serviceReports = list;
+      mirrorLocalAccounting('serviceReports', list);
+      markLocalDirty();
+      if (persistSuppressCount === 0) return persistToFile();
+      return Promise.resolve(true);
+    }
+    mirrorLocalAccounting('serviceReports', list);
     return Promise.resolve(true);
   }
 
@@ -837,6 +885,7 @@ window.AccountingData = (function () {
     if (!localStorage.getItem(PREFIX + 'invoices')) saveInvoices([]);
     if (!localStorage.getItem(PREFIX + 'receipts')) saveReceipts([]);
     if (!localStorage.getItem(PREFIX + 'clients')) saveClients([]);
+    if (!localStorage.getItem(PREFIX + 'serviceReports')) saveServiceReports([]);
     if (!localStorage.getItem(PREFIX + 'companySettings')) saveCompanySettings(defaultSettings);
     if (!localStorage.getItem(PREFIX + 'products')) saveProducts([]);
     if (!localStorage.getItem(PREFIX + 'subcontractors')) saveSubcontractors([]);
@@ -864,6 +913,7 @@ window.AccountingData = (function () {
     memory.invoices = getLocalStorage(PREFIX + 'invoices', []);
     memory.receipts = getLocalStorage(PREFIX + 'receipts', []);
     memory.clients = getLocalStorage(PREFIX + 'clients', []);
+    memory.serviceReports = getLocalStorage(PREFIX + 'serviceReports', []);
     memory.companySettings = getLocalStorage(PREFIX + 'companySettings', null) || defaultSettings;
     memory.products = getLocalStorage(PREFIX + 'products', []);
     memory.subcontractors = getLocalStorage(PREFIX + 'subcontractors', []);
@@ -880,6 +930,7 @@ window.AccountingData = (function () {
         invoices: memory.invoices,
         receipts: memory.receipts,
         clients: memory.clients,
+        serviceReports: memory.serviceReports,
         companySettings: memory.companySettings,
         products: memory.products,
         subcontractors: memory.subcontractors,
@@ -889,6 +940,7 @@ window.AccountingData = (function () {
       memory.invoices = saved.invoices;
       memory.receipts = saved.receipts;
       memory.clients = saved.clients;
+      memory.serviceReports = saved.serviceReports;
       memory.companySettings = saved.companySettings;
       memory.products = saved.products;
       memory.subcontractors = saved.subcontractors;
@@ -909,6 +961,7 @@ window.AccountingData = (function () {
     mirrorLocalAccounting('receipts', memory.receipts || []);
     mirrorLocalAccounting('invoices', memory.invoices || []);
     mirrorLocalAccounting('clients', memory.clients || []);
+    mirrorLocalAccounting('serviceReports', memory.serviceReports || []);
     if (needsRepersist) {
       markLocalDirty();
       persistToFile();
@@ -925,6 +978,13 @@ window.AccountingData = (function () {
           if (data.clients.length > 0 || memory.clients.length === 0) {
             memory.clients = data.clients;
           }
+        }
+        if (Array.isArray(data.serviceReports)) {
+          if (data.serviceReports.length > 0 || !memory.serviceReports || memory.serviceReports.length === 0) {
+            memory.serviceReports = data.serviceReports;
+          }
+        } else if (!Array.isArray(memory.serviceReports)) {
+          memory.serviceReports = [];
         }
         memory.companySettings = data.companySettings && typeof data.companySettings === 'object'
           ? data.companySettings
@@ -1356,6 +1416,11 @@ window.AccountingData = (function () {
           memory.clients = data.clients;
         }
       }
+      if (Array.isArray(data.serviceReports)) {
+        if (data.serviceReports.length > 0 || !memory.serviceReports || memory.serviceReports.length === 0) {
+          memory.serviceReports = data.serviceReports;
+        }
+      }
       if (data.companySettings && typeof data.companySettings === 'object') memory.companySettings = data.companySettings;
       memory.products = Array.isArray(data.products) ? data.products : memory.products;
       memory.subcontractors = Array.isArray(data.subcontractors) ? data.subcontractors : memory.subcontractors;
@@ -1364,6 +1429,7 @@ window.AccountingData = (function () {
       if (Array.isArray(data.invoices)) saveInvoices(data.invoices);
       if (Array.isArray(data.receipts)) saveReceipts(data.receipts);
       if (Array.isArray(data.clients)) saveClients(data.clients);
+      if (Array.isArray(data.serviceReports)) saveServiceReports(data.serviceReports);
       if (data.companySettings && typeof data.companySettings === 'object') saveCompanySettings(data.companySettings);
       if (Array.isArray(data.products)) saveProducts(data.products);
       if (Array.isArray(data.subcontractors)) saveSubcontractors(data.subcontractors);
@@ -1578,6 +1644,20 @@ window.AccountingData = (function () {
     saveReceipts: saveReceipts,
     getClients: getClients,
     saveClients: saveClients,
+    getServiceReports: getServiceReports,
+    saveServiceReports: saveServiceReports,
+    getServiceReport: function (id) {
+      return getServiceReports().filter(function (r) { return r.id === id; })[0];
+    },
+    saveServiceReport: function (report) {
+      var list = getServiceReports();
+      var idx = list.map(function (r) { return r.id; }).indexOf(report.id);
+      if (idx >= 0) list[idx] = report; else list.push(report);
+      saveServiceReports(list);
+    },
+    deleteServiceReport: function (id) {
+      saveServiceReports(getServiceReports().filter(function (r) { return r.id !== id; }));
+    },
     getCompanySettings: getCompanySettings,
     saveCompanySettings: saveCompanySettings,
     formatCurrency: formatCurrency,
