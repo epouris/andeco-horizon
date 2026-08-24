@@ -2013,16 +2013,15 @@ const app = {
                     }
 
                     .invoice-copy-stamp {
-                        position: absolute;
-                        top: 8mm;
-                        right: 2mm;
-                        z-index: 20;
+                        flex: 0 0 auto;
+                        align-self: center;
+                        margin-left: 1rem;
                         color: #c62828;
                         border: 3px solid #c62828;
                         border-radius: 4px;
                         padding: 4px 10px;
                         font-family: Arial Black, Arial, Helvetica, sans-serif;
-                        font-size: 18pt;
+                        font-size: 16pt;
                         font-weight: 900;
                         letter-spacing: 0.12em;
                         line-height: 1;
@@ -2034,6 +2033,7 @@ const app = {
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
                         background: transparent;
+                        white-space: nowrap;
                     }
                     
                     /* Header Section */
@@ -2124,6 +2124,15 @@ const app = {
                     /* Bill To Section */
                     .bill-to-section-print {
                         margin-bottom: 12px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-start;
+                        gap: 1rem;
+                    }
+
+                    .bill-to-main {
+                        flex: 1 1 auto;
+                        min-width: 0;
                     }
                     
                     .section-title {
@@ -2435,7 +2444,6 @@ const app = {
             <body>
                 ${printCopies ? `
                 <div class="invoice-print-page">
-                    <div class="invoice-copy-stamp" aria-hidden="true">ORIGINAL</div>
                     <div class="invoice-container">
                     <div class="invoice-header-print">
                         <div class="company-logo-wrap">${invoiceLogoHtml}</div>
@@ -2480,11 +2488,14 @@ const app = {
                     </div>
 
                     <div class="bill-to-section-print">
+                        <div class="bill-to-main">
                         <h3 class="section-title">Bill To</h3>
                         <div class="bill-to-content">
                             <p class="client-name">${invoice.clientName}</p>
                             ${invoice.clientAddress ? `<p class="client-address">${invoice.clientAddress.replace(/\n/g, '<br>')}</p>` : ''}
                         </div>
+                        </div>
+                        <div class="invoice-copy-stamp" aria-hidden="true">ORIGINAL</div>
                     </div>
 
                     ${this.buildInvoiceItemsTableHtml(invoice)}
@@ -2572,7 +2583,6 @@ const app = {
                     </div>
                 </div>
                 <div class="invoice-print-page">
-                    <div class="invoice-copy-stamp" aria-hidden="true">COPY</div>
                     <div class="invoice-container">
                     <div class="invoice-header-print">
                         <div class="company-logo-wrap">${invoiceLogoHtml}</div>
@@ -2617,11 +2627,14 @@ const app = {
                     </div>
 
                     <div class="bill-to-section-print">
+                        <div class="bill-to-main">
                         <h3 class="section-title">Bill To</h3>
                         <div class="bill-to-content">
                             <p class="client-name">${invoice.clientName}</p>
                             ${invoice.clientAddress ? `<p class="client-address">${invoice.clientAddress.replace(/\n/g, '<br>')}</p>` : ''}
                         </div>
+                        </div>
+                        <div class="invoice-copy-stamp" aria-hidden="true">COPY</div>
                     </div>
 
                     ${this.buildInvoiceItemsTableHtml(invoice)}
@@ -2753,10 +2766,12 @@ const app = {
                     </div>
 
                     <div class="bill-to-section-print">
+                        <div class="bill-to-main">
                         <h3 class="section-title">Bill To</h3>
                         <div class="bill-to-content">
                             <p class="client-name">${invoice.clientName}</p>
                             ${invoice.clientAddress ? `<p class="client-address">${invoice.clientAddress.replace(/\n/g, '<br>')}</p>` : ''}
+                        </div>
                         </div>
                     </div>
 
