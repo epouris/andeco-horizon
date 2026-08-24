@@ -181,10 +181,23 @@
       if (report) {
         var noEl = document.getElementById('report-form-number');
         var notesEl = document.getElementById('report-form-notes');
-        if (noEl) noEl.value = report.reportNo || '';
+        if (noEl) {
+          noEl.value = report.reportNo || '';
+          noEl.readOnly = false;
+        }
         if (notesEl) notesEl.value = report.notes || '';
         populateClientSelect(report.clientId || '');
         populateEmployeeSelect(report.employeeId || '');
+      }
+    } else {
+      var nextNoEl = document.getElementById('report-form-number');
+      var storeNew = getDataStore();
+      var nextNo = storeNew && storeNew.getNextServiceReportNumber
+        ? storeNew.getNextServiceReportNumber()
+        : ('AMS/SUR/' + new Date().getFullYear() + '/001');
+      if (nextNoEl) {
+        nextNoEl.value = nextNo;
+        nextNoEl.readOnly = true;
       }
     }
   }
@@ -200,6 +213,12 @@
     var clientId = ((document.getElementById('report-form-client') || {}).value || '').trim();
     var employeeId = ((document.getElementById('report-form-employee') || {}).value || '').trim();
     var notes = ((document.getElementById('report-form-notes') || {}).value || '').trim();
+    if (!currentEditId && store.getNextServiceReportNumber) {
+      // Always assign the latest sequence on create so concurrent adds stay ordered.
+      reportNo = store.getNextServiceReportNumber();
+      var noField = document.getElementById('report-form-number');
+      if (noField) noField.value = reportNo;
+    }
     if (!reportNo) {
       alert('Report No. is required.');
       return;

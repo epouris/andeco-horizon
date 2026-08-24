@@ -1245,6 +1245,24 @@ window.AccountingData = (function () {
     return 'CN-' + (max + 1).toString().padStart(4, '0');
   }
 
+  function getNextServiceReportNumber(forYear) {
+    var year = parseInt(forYear, 10);
+    if (!Number.isFinite(year) || year < 2000) {
+      year = new Date().getFullYear();
+    }
+    var prefix = 'AMS/SUR/' + year + '/';
+    var max = 0;
+    getServiceReports().forEach(function (r) {
+      if (!r || !r.reportNo) return;
+      var m = String(r.reportNo).trim().match(/^AMS\/SUR\/(\d{4})\/(\d+)$/i);
+      if (!m) return;
+      if (parseInt(m[1], 10) !== year) return;
+      var n = parseInt(m[2], 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    });
+    return prefix + String(max + 1).padStart(3, '0');
+  }
+
   function getNextReceiptNumber() {
     var settings = getCompanySettings();
     var start = settings.receiptSequenceNumber || 1000;
@@ -1667,6 +1685,7 @@ window.AccountingData = (function () {
     getNextPaymentOrderNumber: getNextPaymentOrderNumber,
     getNextProformaNumber: getNextProformaNumber,
     getNextCreditNoteNumber: getNextCreditNoteNumber,
+    getNextServiceReportNumber: getNextServiceReportNumber,
     getNextCustomerId: getNextCustomerId,
     getDocumentLogo: getDocumentLogo,
     getDocumentLogoHtml: getDocumentLogoHtml,
