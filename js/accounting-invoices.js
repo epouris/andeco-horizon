@@ -1952,7 +1952,7 @@ const app = {
         }
     },
 
-    buildInvoicePrintHtml(invoice, autoPrint = false) {
+    buildInvoicePrintHtml(invoice, autoPrint = false, options = {}) {
         const settings = DataStore.getCompanySettings();
         const docLabel = this.getDocumentTypeLabel(invoice);
         const logoKind = this.isCreditNoteDoc(invoice) ? 'creditNote' : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice');
@@ -1964,6 +1964,7 @@ const app = {
         const dueDate = new Date(invoice.dueDate);
         const formattedInvoiceDate = (window.AndecoDate ? window.AndecoDate.formatDate(invoiceDate) : invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         const formattedDueDate = (window.AndecoDate ? window.AndecoDate.formatDate(dueDate) : dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
+        const printCopies = !!(options && options.printCopies);
 
         return `
             <!DOCTYPE html>
@@ -1996,6 +1997,43 @@ const app = {
                         max-width: 210mm;
                         margin: 0 auto;
                         padding: 0;
+                    }
+
+                    .invoice-print-page {
+                        position: relative;
+                        max-width: 210mm;
+                        margin: 0 auto;
+                        padding: 0;
+                    }
+
+                    .invoice-print-page + .invoice-print-page {
+                        page-break-before: always;
+                        break-before: page;
+                        margin-top: 0;
+                    }
+
+                    .invoice-copy-stamp {
+                        position: absolute;
+                        top: 8mm;
+                        right: 2mm;
+                        z-index: 20;
+                        color: #c62828;
+                        border: 3px solid #c62828;
+                        border-radius: 4px;
+                        padding: 4px 10px;
+                        font-family: Arial Black, Arial, Helvetica, sans-serif;
+                        font-size: 18pt;
+                        font-weight: 900;
+                        letter-spacing: 0.12em;
+                        line-height: 1;
+                        text-transform: uppercase;
+                        transform: rotate(18deg);
+                        transform-origin: center center;
+                        opacity: 0.88;
+                        pointer-events: none;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                        background: transparent;
                     }
                     
                     /* Header Section */
@@ -2395,6 +2433,282 @@ const app = {
                 </style>
             </head>
             <body>
+                ${printCopies ? `
+                <div class="invoice-print-page">
+                    <div class="invoice-copy-stamp" aria-hidden="true">ORIGINAL</div>
+                    <div class="invoice-container">
+                    <div class="invoice-header-print">
+                        <div class="company-logo-wrap">${invoiceLogoHtml}</div>
+                        <div class="company-info-print">
+                            <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
+                            ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}
+                            ${settings.companyPhone ? `<p class="company-contact-info"><strong>Telephone:</strong> ${settings.companyPhone}</p>` : ''}
+                            ${settings.companyEmail ? `<p class="company-contact-info"><strong>E-mail:</strong> ${settings.companyEmail}</p>` : ''}
+                            ${settings.companyWebsite ? `<p class="company-contact-info"><strong>Web:</strong> ${settings.companyWebsite}</p>` : ''}
+                        </div>
+                        <div class="invoice-title-section">
+                            <h2 class="invoice-title">${docLabel}</h2>
+                            <table class="invoice-details-table">
+                                <tr>
+                                    <td class="label-cell">Date:</td>
+                                    <td class="value-cell">${formattedInvoiceDate}</td>
+                                </tr>
+                                <tr>
+                                    <td class="label-cell">${this.isCreditNoteDoc(invoice) ? 'Credit Note #' : (this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #')}:</td>
+                                    <td class="value-cell">${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</td>
+                                </tr>
+                                ${invoice.clientCustomerId ? `
+                                <tr>
+                                    <td class="label-cell">Customer ID:</td>
+                                    <td class="value-cell">${invoice.clientCustomerId}</td>
+                                </tr>
+                                ` : ''}
+                                ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
+                                <tr>
+                                    <td class="label-cell">Payment Due by:</td>
+                                    <td class="value-cell">${formattedDueDate}</td>
+                                </tr>
+                                `}
+                                ${settings.companyTaxId ? `
+                                <tr>
+                                    <td class="label-cell">V.A.T Registration No:</td>
+                                    <td class="value-cell">${settings.companyTaxId}</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bill-to-section-print">
+                        <h3 class="section-title">Bill To</h3>
+                        <div class="bill-to-content">
+                            <p class="client-name">${invoice.clientName}</p>
+                            ${invoice.clientAddress ? `<p class="client-address">${invoice.clientAddress.replace(/\n/g, '<br>')}</p>` : ''}
+                        </div>
+                    </div>
+
+                    ${this.buildInvoiceItemsTableHtml(invoice)}
+
+                    <div class="invoice-summary-section">
+                        <div class="summary-notes-box">
+                            ${invoice.notes ? `<div class="summary-notes-content">${invoice.notes.replace(/\n/g, '<br>')}</div>` : '<div class="summary-notes-placeholder">&nbsp;</div>'}
+                        </div>
+                        <table class="summary-table">
+                            <tr>
+                                <td class="summary-label">Subtotal:</td>
+                                <td class="summary-value">${this.formatCurrency(invoice.subtotal)}</td>
+                            </tr>
+                            <tr>
+                                <td class="summary-label">VAT Rate:</td>
+                                <td class="summary-value">${invoice.taxRate.toFixed(2)} %</td>
+                            </tr>
+                            <tr>
+                                <td class="summary-label">VAT:</td>
+                                <td class="summary-value">${invoice.taxAmount > 0 ? this.formatCurrency(invoice.taxAmount) : this.formatCurrency(0)}</td>
+                            </tr>
+                            <tr>
+                                <td class="summary-label">Total:</td>
+                                <td class="summary-value summary-total">${this.formatCurrency(invoice.total)}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
+                <div class="signatures-section">
+                        <table class="signatures-table">
+                            <tr>
+                                <td class="signature-cell">
+                                    <div class="signature-wrapper">
+                                        <div class="signature-line"></div>
+                                        <div class="signature-label">ISSUED BY</div>
+                                    </div>
+                                </td>
+                                <td class="signature-cell">
+                                    <div class="signature-wrapper">
+                                        <div class="signature-line"></div>
+                                        <div class="signature-label">CHECKED BY</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                `}
+
+                    <div class="payment-instructions payment-instructions-small">
+                        <p><strong>Make all checks payable to ${settings.companyName || 'Your Company'}</strong></p>
+                    </div>
+
+                    ${settings.banks && settings.banks.length > 0 ? `
+                    <div class="bank-details-section">
+                        <h4 class="bank-title">Bank Account Details</h4>
+                        <table class="bank-accounts-table">
+                            <thead>
+                                <tr>
+                                    <th class="bank-th">Bank</th>
+                                    <th class="bank-th">IBAN</th>
+                                    <th class="bank-th">SWIFT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${(function() {
+                                    const validBanks = settings.banks.filter(bank => bank.name || bank.iban || bank.swift);
+                                    return validBanks.map(bank => `
+                                        <tr>
+                                            <td class="bank-cell">${bank.name || '—'}</td>
+                                            <td class="bank-cell">${bank.iban || '—'}</td>
+                                            <td class="bank-cell">${bank.swift || '—'}</td>
+                                        </tr>
+                                    `).join('');
+                                })()}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : ''}
+
+                    <div class="thank-you-message">
+                        <p>Thank you for your business!</p>
+                    </div>
+
+                    </div>
+                </div>
+                <div class="invoice-print-page">
+                    <div class="invoice-copy-stamp" aria-hidden="true">COPY</div>
+                    <div class="invoice-container">
+                    <div class="invoice-header-print">
+                        <div class="company-logo-wrap">${invoiceLogoHtml}</div>
+                        <div class="company-info-print">
+                            <h1 class="company-name-print">${settings.companyName || 'Your Company'}</h1>
+                            ${settings.companyAddress ? `<p class="company-contact-info">${settings.companyAddress.replace(/\n/g, ', ')}</p>` : ''}
+                            ${settings.companyPhone ? `<p class="company-contact-info"><strong>Telephone:</strong> ${settings.companyPhone}</p>` : ''}
+                            ${settings.companyEmail ? `<p class="company-contact-info"><strong>E-mail:</strong> ${settings.companyEmail}</p>` : ''}
+                            ${settings.companyWebsite ? `<p class="company-contact-info"><strong>Web:</strong> ${settings.companyWebsite}</p>` : ''}
+                        </div>
+                        <div class="invoice-title-section">
+                            <h2 class="invoice-title">${docLabel}</h2>
+                            <table class="invoice-details-table">
+                                <tr>
+                                    <td class="label-cell">Date:</td>
+                                    <td class="value-cell">${formattedInvoiceDate}</td>
+                                </tr>
+                                <tr>
+                                    <td class="label-cell">${this.isCreditNoteDoc(invoice) ? 'Credit Note #' : (this.isProformaDoc(invoice) ? 'Proforma #' : 'Invoice #')}:</td>
+                                    <td class="value-cell">${invoice.status === 'draft' && !invoice.invoiceNumber ? 'Draft' : (invoice.invoiceNumber || '—')}</td>
+                                </tr>
+                                ${invoice.clientCustomerId ? `
+                                <tr>
+                                    <td class="label-cell">Customer ID:</td>
+                                    <td class="value-cell">${invoice.clientCustomerId}</td>
+                                </tr>
+                                ` : ''}
+                                ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
+                                <tr>
+                                    <td class="label-cell">Payment Due by:</td>
+                                    <td class="value-cell">${formattedDueDate}</td>
+                                </tr>
+                                `}
+                                ${settings.companyTaxId ? `
+                                <tr>
+                                    <td class="label-cell">V.A.T Registration No:</td>
+                                    <td class="value-cell">${settings.companyTaxId}</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bill-to-section-print">
+                        <h3 class="section-title">Bill To</h3>
+                        <div class="bill-to-content">
+                            <p class="client-name">${invoice.clientName}</p>
+                            ${invoice.clientAddress ? `<p class="client-address">${invoice.clientAddress.replace(/\n/g, '<br>')}</p>` : ''}
+                        </div>
+                    </div>
+
+                    ${this.buildInvoiceItemsTableHtml(invoice)}
+
+                    <div class="invoice-summary-section">
+                        <div class="summary-notes-box">
+                            ${invoice.notes ? `<div class="summary-notes-content">${invoice.notes.replace(/\n/g, '<br>')}</div>` : '<div class="summary-notes-placeholder">&nbsp;</div>'}
+                        </div>
+                        <table class="summary-table">
+                            <tr>
+                                <td class="summary-label">Subtotal:</td>
+                                <td class="summary-value">${this.formatCurrency(invoice.subtotal)}</td>
+                            </tr>
+                            <tr>
+                                <td class="summary-label">VAT Rate:</td>
+                                <td class="summary-value">${invoice.taxRate.toFixed(2)} %</td>
+                            </tr>
+                            <tr>
+                                <td class="summary-label">VAT:</td>
+                                <td class="summary-value">${invoice.taxAmount > 0 ? this.formatCurrency(invoice.taxAmount) : this.formatCurrency(0)}</td>
+                            </tr>
+                            <tr>
+                                <td class="summary-label">Total:</td>
+                                <td class="summary-value summary-total">${this.formatCurrency(invoice.total)}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                ${(this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice)) ? '' : `
+                <div class="signatures-section">
+                        <table class="signatures-table">
+                            <tr>
+                                <td class="signature-cell">
+                                    <div class="signature-wrapper">
+                                        <div class="signature-line"></div>
+                                        <div class="signature-label">ISSUED BY</div>
+                                    </div>
+                                </td>
+                                <td class="signature-cell">
+                                    <div class="signature-wrapper">
+                                        <div class="signature-line"></div>
+                                        <div class="signature-label">CHECKED BY</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                `}
+
+                    <div class="payment-instructions payment-instructions-small">
+                        <p><strong>Make all checks payable to ${settings.companyName || 'Your Company'}</strong></p>
+                    </div>
+
+                    ${settings.banks && settings.banks.length > 0 ? `
+                    <div class="bank-details-section">
+                        <h4 class="bank-title">Bank Account Details</h4>
+                        <table class="bank-accounts-table">
+                            <thead>
+                                <tr>
+                                    <th class="bank-th">Bank</th>
+                                    <th class="bank-th">IBAN</th>
+                                    <th class="bank-th">SWIFT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${(function() {
+                                    const validBanks = settings.banks.filter(bank => bank.name || bank.iban || bank.swift);
+                                    return validBanks.map(bank => `
+                                        <tr>
+                                            <td class="bank-cell">${bank.name || '—'}</td>
+                                            <td class="bank-cell">${bank.iban || '—'}</td>
+                                            <td class="bank-cell">${bank.swift || '—'}</td>
+                                        </tr>
+                                    `).join('');
+                                })()}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : ''}
+
+                    <div class="thank-you-message">
+                        <p>Thank you for your business!</p>
+                    </div>
+
+                    </div>
+                </div>
+                ` : `
                 <div class="invoice-container">
                     <div class="invoice-header-print">
                         <div class="company-logo-wrap">${invoiceLogoHtml}</div>
@@ -2529,6 +2843,7 @@ const app = {
                     </div>
 
                 </div>
+                `}
                 ${autoPrint ? `<script>
                     window.onload = function() {
                         window.print();
@@ -2550,7 +2865,7 @@ const app = {
             alert('Please allow pop-ups to print the invoice.');
             return;
         }
-        printWindow.document.write(this.buildInvoicePrintHtml(invoice, true));
+        printWindow.document.write(this.buildInvoicePrintHtml(invoice, true, { printCopies: true }));
         printWindow.document.close();
     },
 
