@@ -72,6 +72,9 @@
     var newMonthEl = document.getElementById('hr-metric-new-month');
     if (openRoles) openRoles.textContent = String(active);
     if (newMonthEl) newMonthEl.textContent = String(newMonth);
+    if (window.HrTools && typeof window.HrTools.refreshOverviewLeaveMetric === 'function') {
+      window.HrTools.refreshOverviewLeaveMetric();
+    }
   }
 
   function refreshOverviewTeam() {

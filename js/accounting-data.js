@@ -257,6 +257,7 @@ window.AccountingData = (function () {
       },
       shifts: { staff: [], shifts: [], requests: [], settings: {} },
       projectManagement: { calls: [], people: [], seeded: false },
+      hrTools: { leave: [], documents: [], onboarding: [], notes: [], announcements: [] },
       payroll: { employees: [], payrollData: {}, companySettings: {} },
       lms: {
         courses: [],
@@ -335,6 +336,22 @@ window.AccountingData = (function () {
           return { calls: [], people: [], seeded: false };
         }
       })(),
+      hrTools: (function () {
+        try {
+          if (typeof window !== 'undefined' &&
+              window.HrTools &&
+              typeof window.HrTools.getState === 'function') {
+            var liveHr = window.HrTools.getState();
+            if (liveHr && typeof liveHr === 'object') return liveHr;
+          }
+        } catch (e1) {}
+        try {
+          var rhr = localStorage.getItem('andeco_hr_tools');
+          return rhr ? JSON.parse(rhr) : { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
+        } catch (e) {
+          return { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
+        }
+      })(),
       payroll: {
         employees: getLocalStorage('employees', []),
         payrollData: getLocalStorage('payrollData', {}),
@@ -406,6 +423,18 @@ window.AccountingData = (function () {
           else if (window.ProjectManagement.render) window.ProjectManagement.render();
         } else if (window.ProjectManagement.render) {
           window.ProjectManagement.render();
+        }
+      } catch (e) {}
+    }
+    if (typeof window.HrTools !== 'undefined') {
+      try {
+        if (window.HrTools.applyRemote) {
+          var hrRaw = null;
+          try { hrRaw = localStorage.getItem('andeco_hr_tools'); } catch (eHr) {}
+          if (hrRaw) window.HrTools.applyRemote(JSON.parse(hrRaw));
+          else if (window.HrTools.render) window.HrTools.render();
+        } else if (window.HrTools.render) {
+          window.HrTools.render();
         }
       } catch (e) {}
     }
@@ -1044,6 +1073,9 @@ window.AccountingData = (function () {
         }
         if (data.projectManagement && typeof data.projectManagement === 'object') {
           setLocalStorage('andeco_pm_terminal_data', data.projectManagement);
+        }
+        if (data.hrTools && typeof data.hrTools === 'object') {
+          setLocalStorage('andeco_hr_tools', data.hrTools);
         }
         if (data.lms && typeof data.lms === 'object') {
           setLocalStorage('andeco_lms_data', data.lms);

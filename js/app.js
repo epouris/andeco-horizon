@@ -166,6 +166,11 @@
     hr: [
       { id: 'overview', label: 'Overview' },
       { id: 'employees', label: 'Employees' },
+      { id: 'leave', label: 'Leave' },
+      { id: 'documents', label: 'Documents' },
+      { id: 'onboarding', label: 'Onboarding' },
+      { id: 'notes', label: 'Notes' },
+      { id: 'announcements', label: 'Announcements' },
       { id: 'payroll', label: 'Payroll' },
       { id: 'history', label: 'History' }
     ],

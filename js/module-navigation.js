@@ -91,6 +91,21 @@
         { id: 'metrics', label: 'Metrics' },
         { id: 'details', label: 'Details' }
       ],
+      leave: [
+        { id: 'log', label: 'Leave log' }
+      ],
+      documents: [
+        { id: 'checklist', label: 'Document checklist' }
+      ],
+      onboarding: [
+        { id: 'tracker', label: 'Onboarding tracker' }
+      ],
+      notes: [
+        { id: 'log', label: 'Employee notes' }
+      ],
+      announcements: [
+        { id: 'list', label: 'Company memos' }
+      ],
       payroll: [
         { id: 'overview', label: 'Overview' },
         { id: 'ir63', label: 'IR63 Form' }
@@ -388,6 +403,14 @@
     }
     if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'ir63') {
       if (typeof window.updateEmployeeDropdowns === 'function') window.updateEmployeeDropdowns();
+    }
+    if (moduleId === 'hr' && ['leave', 'documents', 'onboarding', 'notes', 'announcements'].indexOf(sectionId) !== -1) {
+      if (typeof window.HrTools !== 'undefined' && window.HrTools.render) window.HrTools.render(sectionId);
+    }
+    if (moduleId === 'hr' && sectionId === 'overview') {
+      if (typeof window.HrTools !== 'undefined' && window.HrTools.refreshOverviewLeaveMetric) {
+        window.HrTools.refreshOverviewLeaveMetric();
+      }
     }
     if (moduleId === 'shifts' && typeof window.ShiftsManagement !== 'undefined') {
       if (window.ShiftsManagement.onSubsectionChange) window.ShiftsManagement.onSubsectionChange(sectionId, subsectionId);
