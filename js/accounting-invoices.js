@@ -2586,30 +2586,10 @@ const app = {
         return String(fromClient || invoice.clientEmail || '').trim();
     },
 
-    getInvoiceServiceDescription(invoice) {
+    getInvoiceFirstSectionHeader(invoice) {
         const items = Array.isArray(invoice && invoice.items) ? invoice.items : [];
-        const descs = items
-            .filter((item) => item && !item.isHeader && item.description)
-            .map((item) => String(item.description).trim())
-            .filter(Boolean);
-        if (descs.length === 1) return descs[0];
-        if (descs.length > 1) {
-            const joined = descs.slice(0, 3).join('; ');
-            return descs.length > 3 ? `${joined}; …` : joined;
-        }
-        const noteLine = String((invoice && invoice.notes) || '').trim().split(/\n/)[0] || '';
-        return noteLine || 'services provided';
-    },
-
-    getInvoiceEmailSenderName() {
-        try {
-            const raw = localStorage.getItem('andeco_crm_session');
-            if (!raw) return '';
-            const session = JSON.parse(raw);
-            return String((session && (session.displayName || session.username)) || '').trim();
-        } catch (_) {
-            return '';
-        }
+        const header = items.find((item) => item && item.isHeader && String(item.description || '').trim());
+        return header ? String(header.description).trim() : '';
     },
 
     buildInvoiceEmailTemplate(invoice) {
@@ -2632,18 +2612,10 @@ const app = {
         const dueDate = fmtDate(invoice.dueDate);
         const currency = settings.currency || 'EUR';
         const amount = this.formatCurrency(invoice.total);
-        const serviceDescription = this.getInvoiceServiceDescription(invoice);
-        const banks = Array.isArray(settings.banks) ? settings.banks : [];
-        const bank = banks.find((b) => b && (b.name || b.iban || b.swift)) || null;
-        const bankName = (bank && bank.name) || '';
-        const accountHolder = company;
-        const iban = (bank && bank.iban) || '';
-        const swift = (bank && bank.swift) || '';
-        const senderName = this.getInvoiceEmailSenderName();
-        const phone = settings.companyPhone || '';
-        const email = settings.companyEmail || '';
-        const website = settings.companyWebsite || '';
-        const contactLine = [phone, email, website].filter(Boolean).join('  •  ');
+        const sectionHeader = this.getInvoiceFirstSectionHeader(invoice);
+        const serviceOn = sectionHeader || 'the services';
+        const banks = (Array.isArray(settings.banks) ? settings.banks : [])
+            .filter((b) => b && (b.name || b.iban || b.swift));
         const isCredit = this.isCreditNoteDoc(invoice);
         const isProforma = this.isProformaDoc(invoice);
         const attachedLabel = isCredit ? 'Credit Note' : (isProforma ? 'Proforma Invoice' : 'Invoice');
@@ -2655,21 +2627,30 @@ const app = {
 
         let body = `Dear ${greetingName},\n\n`;
         body += `I hope this message finds you well.\n\n`;
-        body += `Please find attached ${attachedLabel} ${number} for the ${serviceDescription} provided under our agreement.\n\n`;
+        body += `Please find attached ${attachedLabel} ${number} for the render services on ${serviceOn} provided under our agreement.\n\n`;
         body += `${summaryTitle}\n\n`;
         body += `${numberLabel}: ${number}\n`;
         body += `${dateLabel}: ${invoiceDate || '—'}\n`;
-        body += `Description: ${serviceDescription}\n`;
+        body += `Description: ${sectionHeader || '—'}\n`;
         body += `${amountLabel}: ${amount} ${currency}\n`;
         if (!isCredit && !isProforma) {
             body += `Payment due date: ${dueDate || '—'}\n`;
         }
         if (!isCredit) {
             body += `Payment details:\n`;
-            const bankLine = [bankName, accountHolder].filter(Boolean).join('  •  ') || '—';
-            body += `${bankLine}\n`;
-            body += `IBAN: ${iban || '—'}\n`;
-            body += `BIC/SWIFT: ${swift || '—'}\n`;
+            if (banks.length === 0) {
+                body += `${company}\n`;
+                body += `IBAN: —\n`;
+                body += `BIC/SWIFT: —\n`;
+            } else {
+                banks.forEach((bank, index) => {
+                    if (index > 0) body += `\n`;
+                    const bankLine = [bank.name || '', company].filter(Boolean).join('  •  ') || company;
+                    body += `${bankLine}\n`;
+                    body += `IBAN: ${bank.iban || '—'}\n`;
+                    body += `BIC/SWIFT: ${bank.swift || '—'}\n`;
+                });
+            }
             body += `Payment reference: ${number}\n`;
         }
         body += `\nIf you have any questions regarding this ${isCredit ? 'credit note' : (isProforma ? 'proforma' : 'invoice')}, please feel free to reach out.`;
@@ -2678,10 +2659,6 @@ const app = {
         } else {
             body += ` Thank you for your business.`;
         }
-        body += `\n\nBest regards,\n`;
-        if (senderName) body += `${senderName}\n`;
-        body += `${company}`;
-        if (contactLine) body += `\n${contactLine}`;
 
         return {
             to: this.getInvoiceSendToEmail(invoice),
