@@ -171,7 +171,6 @@
       { id: 'onboarding', label: 'Onboarding' },
       { id: 'notes', label: 'Notes' },
       { id: 'announcements', label: 'Announcements' },
-      { id: 'payroll', label: 'Payroll' },
       { id: 'history', label: 'History' }
     ],
     crew: [
@@ -687,6 +686,9 @@
     });
     if (subId === 'ytd' && typeof window.updateYTDDisplay === 'function') window.updateYTDDisplay();
     if (subId === 'payslips' && typeof window.loadPayslips === 'function') window.loadPayslips();
+    if (subId === 'ir63') {
+      if (typeof window.updateEmployeeDropdowns === 'function') window.updateEmployeeDropdowns();
+    }
   }
   window.setPayrollSubsection = setPayrollSubsection;
 
