@@ -25,7 +25,8 @@
       payroll: [
         { id: 'ytd', label: 'Year to date' },
         { id: 'payslip', label: 'Generate payslip' },
-        { id: 'payslips', label: 'Payslip management' }
+        { id: 'payslips', label: 'Payslip management' },
+        { id: 'ir63', label: 'IR63 Form' }
       ],
       subcontractors: [
         { id: 'directory', label: 'Subcontractor directory' },
@@ -105,10 +106,6 @@
       ],
       announcements: [
         { id: 'list', label: 'Company memos' }
-      ],
-      payroll: [
-        { id: 'overview', label: 'Overview' },
-        { id: 'ir63', label: 'IR63 Form' }
       ],
       history: [
         { id: 'audit', label: 'Audit trail' },
@@ -401,14 +398,11 @@
         window.HrTools.refreshOverviewLeaveMetric();
       }
     }
-    if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'overview') {
-      if (typeof window.hrPayrollRefreshYTD === 'function') window.hrPayrollRefreshYTD();
-    }
-    if (moduleId === 'hr' && sectionId === 'payroll' && subsectionId === 'ir63') {
-      if (typeof window.updateEmployeeDropdowns === 'function') window.updateEmployeeDropdowns();
-    }
     if (moduleId === 'hr' && ['leave', 'documents', 'onboarding', 'notes', 'announcements'].indexOf(sectionId) !== -1) {
       if (typeof window.HrTools !== 'undefined' && window.HrTools.render) window.HrTools.render(sectionId);
+    }
+    if (moduleId === 'accounting' && sectionId === 'payroll' && subsectionId === 'ir63') {
+      if (typeof window.updateEmployeeDropdowns === 'function') window.updateEmployeeDropdowns();
     }
     if (moduleId === 'shifts' && typeof window.ShiftsManagement !== 'undefined') {
       if (window.ShiftsManagement.onSubsectionChange) window.ShiftsManagement.onSubsectionChange(sectionId, subsectionId);
