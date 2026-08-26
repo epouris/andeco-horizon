@@ -13,9 +13,9 @@
     sent: 'Sent'
   };
   var NEXT_ACTION_LABELS = {
-    pending: 'Mark Scanned',
-    scanned: 'Mark Invoiced',
-    invoiced: 'Mark Sent',
+    pending: 'Scanned',
+    scanned: 'Invoiced',
+    invoiced: 'Sent',
     sent: 'Sent'
   };
 
