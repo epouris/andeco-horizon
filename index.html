@@ -1344,6 +1344,28 @@
                     </div>
                   </div>
                 </div>
+                <div class="form-section data-management payroll-xls-import" style="margin-top: 2rem;">
+                  <h3>Import past payrolls (Excel)</h3>
+                  <p class="module-meta" style="margin-bottom: 1rem;">Download the template, fill one row per employee per month (including past years), then import. Employee IDs must already exist in HR / Payroll.</p>
+                  <div class="form-row" style="align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
+                    <div class="form-group">
+                      <button type="button" class="btn btn-primary" id="payrollXlsDownloadTemplateBtn">Download Excel template</button>
+                      <p class="module-meta">.xlsx with Instructions + Payroll sheets.</p>
+                    </div>
+                    <div class="form-group">
+                      <input type="file" id="payrollXlsImportFile" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display: none;">
+                      <button type="button" class="btn btn-secondary" id="payrollXlsImportBtn">Import payroll Excel</button>
+                      <p class="module-meta">Imports payslip amounts as entered (no recalculation).</p>
+                    </div>
+                    <div class="form-group">
+                      <label class="payroll-xls-overwrite-label" for="payrollXlsOverwrite">
+                        <input type="checkbox" id="payrollXlsOverwrite">
+                        Overwrite existing payslips for the same employee / month
+                      </label>
+                    </div>
+                  </div>
+                  <p id="payrollXlsImportStatus" class="module-meta payroll-xls-status" aria-live="polite"></p>
+                </div>
                 <div class="form-section company-preview" style="margin-top: 2rem;">
                   <h3>Payslip header preview</h3>
                   <div class="preview-container" style="border: 1px solid var(--border-color, #dee2e6); border-radius: 8px; padding: 1rem; background: var(--surface, #fff);">
@@ -2972,7 +2994,9 @@
   <script src="js/hr-tools.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
   <script src="js/payroll.js" defer></script>
+  <script src="js/payroll-xls-import.js" defer></script>
   <script src="js/fleet-management.js" defer></script>
   <script src="js/crew-management.js" defer></script>
   <script src="js/shifts-management.js" defer></script>

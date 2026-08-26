@@ -1499,6 +1499,33 @@
     border: 1px solid #bee5eb;
 }
 
+.payroll-xls-import .payroll-xls-overwrite-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    cursor: pointer;
+    max-width: 22rem;
+}
+.payroll-xls-import .payroll-xls-overwrite-label input {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+}
+.payroll-xls-status {
+    margin-top: 0.75rem;
+    min-height: 1.25em;
+}
+.payroll-xls-status--success {
+    color: #155724;
+}
+.payroll-xls-status--error {
+    color: #721c24;
+}
+.payroll-xls-status--info {
+    color: #0c5460;
+}
+
 /* Payslip income tax bracket breakdown — hidden on screen and print */
 #accounting-payroll-content .payslip-income-tax-breakdown-row {
     display: none !important;
