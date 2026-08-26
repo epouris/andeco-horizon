@@ -1127,6 +1127,22 @@
                         </div>
                       </div>
                       <div class="form-row">
+                        <div class="form-group">
+                          <label for="report-form-vessel">Vessel</label>
+                          <input type="text" id="report-form-vessel" list="report-vessel-datalist" placeholder="Vessel name" autocomplete="off">
+                          <datalist id="report-vessel-datalist"></datalist>
+                        </div>
+                        <div class="form-group">
+                          <label for="report-form-berth">Berth</label>
+                          <input type="text" id="report-form-berth" list="report-berth-datalist" placeholder="e.g. Jetty 1, Jetty 2, Sea Berth" autocomplete="off">
+                          <datalist id="report-berth-datalist">
+                            <option value="Jetty 1"></option>
+                            <option value="Jetty 2"></option>
+                            <option value="Sea Berth"></option>
+                          </datalist>
+                        </div>
+                      </div>
+                      <div class="form-row">
                         <div class="form-group full-width">
                           <label for="report-form-notes">Notes</label>
                           <textarea id="report-form-notes" rows="3" placeholder="Optional notes about the operation"></textarea>
