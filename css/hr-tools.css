@@ -1,17 +1,100 @@
-/* HR Tools — Leave, Documents, Onboarding, Notes, Announcements */
+/* HR module — compact lists/tables, no text wrapping */
+#page-hr .data-table {
+  font-size: 0.78rem;
+  width: max-content;
+  min-width: 100%;
+}
+
+#page-hr .data-table th,
+#page-hr .data-table td {
+  padding: 0.3rem 0.5rem;
+  line-height: 1.2;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+#page-hr .data-table th {
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+}
+
+#page-hr .table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#page-hr .page-header {
+  margin-bottom: 0.65rem;
+  gap: 0.5rem;
+}
+
+#page-hr .page-header h2 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+#page-hr .module-meta {
+  font-size: 0.8rem;
+  margin-bottom: 0.55rem !important;
+}
+
+#page-hr .module-table-panel {
+  margin-top: 0.75rem;
+}
+
+#page-hr .module-table-panel .panel-title,
+#page-hr .employees-list .panel-title {
+  font-size: 0.9rem;
+  margin-bottom: 0.45rem;
+}
+
+#page-hr .module-metrics {
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+#page-hr .metric-card {
+  padding: 0.65rem 0.75rem;
+}
+
+#page-hr .metric-value {
+  font-size: 1.25rem;
+}
+
+#page-hr .metric-label {
+  font-size: 0.72rem;
+}
+
+/* Employee list action buttons */
+#page-hr #employeesTable .btn-sm,
+#page-hr .hr-tool-actions .btn-sm {
+  padding: 0.12rem 0.38rem;
+  font-size: 0.68rem;
+  line-height: 1.15;
+  min-height: 0;
+  white-space: nowrap;
+}
+
+#page-hr .hr-tool-actions {
+  white-space: nowrap;
+}
+
+/* Status badges */
 .hr-tool-form {
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.85rem;
   max-width: 100%;
 }
 
 .hr-tool-badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.15rem 0.55rem;
+  padding: 0.06rem 0.38rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   text-transform: capitalize;
+  line-height: 1.2;
+  white-space: nowrap;
   background: #e2e8f0;
   color: #334155;
 }
@@ -42,13 +125,54 @@
   color: #075985;
 }
 
-.hr-tool-actions {
+/* YTD / overview tables */
+#page-hr .hr-overview-ytd-header {
+  gap: 0.45rem 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+#page-hr .hr-overview-ytd-year-wrap label {
+  font-size: 0.72rem;
+  margin-bottom: 0.2rem;
+}
+
+#page-hr .hr-overview-ytd-year-wrap select {
+  min-height: 1.9rem;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.78rem;
+}
+
+#page-hr .hr-overview-ytd-table tfoot .hr-overview-ytd-total-row th,
+#page-hr .hr-overview-ytd-table tfoot .hr-overview-ytd-total-row td {
+  padding: 0.35rem 0.5rem;
   white-space: nowrap;
 }
 
-.hr-tool-actions .btn-sm {
-  padding: 0.2rem 0.45rem;
-  font-size: 0.75rem;
+#page-hr .info-grid {
+  font-size: 0.8rem;
+  gap: 0.4rem 1rem;
+}
+
+#page-hr .module-info-panel,
+#page-hr .module-description-panel,
+#page-hr .module-cards-row,
+#page-hr .module-table-panel {
+  margin-bottom: 0.75rem;
+}
+
+#page-hr .module-description-panel p {
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+#page-hr .module-status-row {
+  margin-bottom: 0.65rem;
+  gap: 0.45rem;
+}
+
+/* Keep action columns from wrapping even when many buttons */
+#page-hr td:last-child {
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
