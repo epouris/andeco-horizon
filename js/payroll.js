@@ -4906,6 +4906,26 @@ function clearAllData() {
     }
 }
 
+/** Used by payroll Excel import (Settings) to merge historical payslips into the live map. */
+function getPayrollDataMap() {
+    return payrollData && typeof payrollData === 'object' ? payrollData : {};
+}
+
+function mergeImportedPayrollRecords(recordsByKey) {
+    if (!recordsByKey || typeof recordsByKey !== 'object') return 0;
+    let count = 0;
+    Object.keys(recordsByKey).forEach((key) => {
+        const rec = recordsByKey[key];
+        if (!rec || typeof rec !== 'object') return;
+        payrollData[key] = rec;
+        count += 1;
+    });
+    savePayrollData();
+    if (typeof updateAllTabs === 'function') updateAllTabs();
+    if (typeof loadPayslips === 'function') loadPayslips();
+    return count;
+}
+
 // Add event listeners for real-time preview updates
 document.addEventListener('DOMContentLoaded', function() {
     const companyFields = ['companyName', 'companyAddress', 'companyPhone', 'companyEmail'];
