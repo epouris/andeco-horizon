@@ -125,6 +125,8 @@ CREATE TABLE IF NOT EXISTS service_reports (
   report_date TEXT NOT NULL DEFAULT '',
   client_id TEXT NOT NULL DEFAULT '',
   employee_id TEXT NOT NULL DEFAULT '',
+  vessel TEXT NOT NULL DEFAULT '',
+  berth TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ,
@@ -132,6 +134,10 @@ CREATE TABLE IF NOT EXISTS service_reports (
 );
 ALTER TABLE service_reports
   ADD COLUMN IF NOT EXISTS report_date TEXT NOT NULL DEFAULT '';
+ALTER TABLE service_reports
+  ADD COLUMN IF NOT EXISTS vessel TEXT NOT NULL DEFAULT '';
+ALTER TABLE service_reports
+  ADD COLUMN IF NOT EXISTS berth TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS service_reports_status_idx ON service_reports (status);
 CREATE INDEX IF NOT EXISTS service_reports_client_id_idx ON service_reports (client_id);
 

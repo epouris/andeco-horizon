@@ -154,6 +154,35 @@
     if (selectedId) select.value = selectedId;
   }
 
+  function populateVesselDatalist() {
+    var list = document.getElementById('report-vessel-datalist');
+    if (!list) return;
+    var names = {};
+    try {
+      if (window.FleetManagement && typeof window.FleetManagement.getVessels === 'function') {
+        (window.FleetManagement.getVessels() || []).forEach(function (v) {
+          if (v && v.name) names[String(v.name).trim()] = true;
+        });
+      } else {
+        var raw = localStorage.getItem('andeco_fleet_vessels');
+        var vessels = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(vessels)) {
+          vessels.forEach(function (v) {
+            if (v && v.name) names[String(v.name).trim()] = true;
+          });
+        }
+      }
+    } catch (e) {}
+    getReports().forEach(function (r) {
+      if (r && r.vessel) names[String(r.vessel).trim()] = true;
+    });
+    list.innerHTML = Object.keys(names).filter(Boolean).sort(function (a, b) {
+      return a.localeCompare(b);
+    }).map(function (name) {
+      return '<option value="' + escapeHtml(name) + '"></option>';
+    }).join('');
+  }
+
   function showList() {
     var listWrap = document.getElementById('reports-list-wrap');
     var formWrap = document.getElementById('reports-form-wrap');
@@ -182,6 +211,7 @@
     if (form) form.reset();
     populateClientSelect();
     populateEmployeeSelect();
+    populateVesselDatalist();
     if (titleEl) titleEl.textContent = reportId ? 'Edit Report' : 'Add Report';
     if (reportId) {
       var store = getDataStore();
@@ -189,6 +219,8 @@
       if (report) {
         var noEl = document.getElementById('report-form-number');
         var dateEl = document.getElementById('report-form-date');
+        var vesselEl = document.getElementById('report-form-vessel');
+        var berthEl = document.getElementById('report-form-berth');
         var notesEl = document.getElementById('report-form-notes');
         if (noEl) {
           noEl.value = report.reportNo || '';
@@ -196,6 +228,8 @@
           noEl.removeAttribute('readonly');
         }
         if (dateEl) dateEl.value = report.reportDate || '';
+        if (vesselEl) vesselEl.value = report.vessel || '';
+        if (berthEl) berthEl.value = report.berth || '';
         if (notesEl) notesEl.value = report.notes || '';
         populateClientSelect(report.clientId || '');
         populateEmployeeSelect(report.employeeId || '');
@@ -203,6 +237,8 @@
     } else {
       var nextNoEl = document.getElementById('report-form-number');
       var dateNewEl = document.getElementById('report-form-date');
+      var vesselNewEl = document.getElementById('report-form-vessel');
+      var berthNewEl = document.getElementById('report-form-berth');
       var storeNew = getDataStore();
       var nextNo = storeNew && storeNew.getNextServiceReportNumber
         ? storeNew.getNextServiceReportNumber()
@@ -213,6 +249,8 @@
         nextNoEl.setAttribute('readonly', 'readonly');
       }
       if (dateNewEl) dateNewEl.value = todayInputDate();
+      if (vesselNewEl) vesselNewEl.value = '';
+      if (berthNewEl) berthNewEl.value = '';
     }
   }
 
@@ -227,6 +265,8 @@
     var reportDate = ((document.getElementById('report-form-date') || {}).value || '').trim();
     var clientId = ((document.getElementById('report-form-client') || {}).value || '').trim();
     var employeeId = ((document.getElementById('report-form-employee') || {}).value || '').trim();
+    var vessel = ((document.getElementById('report-form-vessel') || {}).value || '').trim();
+    var berth = ((document.getElementById('report-form-berth') || {}).value || '').trim();
     var notes = ((document.getElementById('report-form-notes') || {}).value || '').trim();
     if (!currentEditId && store.getNextServiceReportNumber) {
       // Always assign the latest sequence on create so concurrent adds stay ordered.
@@ -265,6 +305,8 @@
       reportDate: reportDate,
       clientId: clientId,
       employeeId: employeeId,
+      vessel: vessel,
+      berth: berth,
       notes: notes,
       status: existing ? normalizeStatus(existing.status) : 'pending',
       createdAt: existing && existing.createdAt ? existing.createdAt : new Date().toISOString(),
@@ -343,6 +385,8 @@
         return String((r && r.reportNo) || '').toLowerCase().indexOf(t) !== -1 ||
           getClientName(r.clientId).toLowerCase().indexOf(t) !== -1 ||
           getEmployeeName(r.employeeId).toLowerCase().indexOf(t) !== -1 ||
+          String((r && r.vessel) || '').toLowerCase().indexOf(t) !== -1 ||
+          String((r && r.berth) || '').toLowerCase().indexOf(t) !== -1 ||
           String((r && r.status) || '').toLowerCase().indexOf(t) !== -1 ||
           String((r && r.notes) || '').toLowerCase().indexOf(t) !== -1;
       });
@@ -378,7 +422,7 @@
     }
     return '<div class="table-wrap"><table class="data-table reports-directory-table">' +
       '<thead><tr>' +
-      '<th>Report No.</th><th>Date</th><th>Client</th><th>Employee</th><th>Status</th><th>Updated</th><th></th>' +
+      '<th>Report No.</th><th>Date</th><th>Client</th><th>Employee</th><th>Vessel</th><th>Berth</th><th>Status</th><th>Updated</th><th></th>' +
       '</tr></thead><tbody>' +
       reports.map(function (r) {
         var id = escapeHtml(r.id);
@@ -387,6 +431,8 @@
           '<td>' + escapeHtml(formatDate(r.reportDate)) + '</td>' +
           '<td>' + escapeHtml(getClientName(r.clientId)) + '</td>' +
           '<td>' + escapeHtml(getEmployeeName(r.employeeId)) + '</td>' +
+          '<td>' + escapeHtml(r.vessel || '—') + '</td>' +
+          '<td>' + escapeHtml(r.berth || '—') + '</td>' +
           '<td>' + statusBadge(r.status) + '</td>' +
           '<td>' + escapeHtml(formatDate(r.updatedAt || r.createdAt)) + '</td>' +
           '<td class="reports-row-actions">' +
