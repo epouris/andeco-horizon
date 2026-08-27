@@ -210,6 +210,7 @@
 }
 .status-draft { background-color: #f1f5f9; color: #475569; }
 .status-pending { background-color: #fef3c7; color: #92400e; }
+.status-sent { background-color: #dbeafe; color: #1e40af; }
 .status-paid { background-color: #d1fae5; color: #065f46; }
 .status-overdue { background-color: #fee2e2; color: #991b1b; }
 .invoice-actions {
@@ -896,6 +897,7 @@
 .invoice-selection-amount { font-weight: 600; color: var(--primary-color); text-align: right; min-width: 100px; margin-left: auto; }
 .invoice-selection-status { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; text-transform: capitalize; }
 .invoice-selection-status.status-pending { background-color: rgba(245, 158, 11, 0.1); color: #d97706; }
+.invoice-selection-status.status-sent { background-color: rgba(37, 99, 235, 0.1); color: #1d4ed8; }
 .invoice-selection-status.status-paid { background-color: rgba(16, 185, 129, 0.1); color: #059669; }
 .invoice-selection-status.status-draft { background-color: rgba(100, 116, 139, 0.1); color: #475569; }
 .invoice-selection-status.status-overdue { background-color: rgba(239, 68, 68, 0.1); color: #dc2626; }
