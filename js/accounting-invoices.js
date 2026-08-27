@@ -55,6 +55,55 @@ const app = {
         return 'Invoice';
     },
 
+    formatInvoiceStatusLabel(status) {
+        const key = String(status || '').toLowerCase();
+        const labels = {
+            draft: 'Draft',
+            pending: 'Pending',
+            sent: 'Sent Out',
+            paid: 'Paid',
+            overdue: 'Overdue'
+        };
+        return labels[key] || (status ? String(status) : '—');
+    },
+
+    /** Unpaid invoices eligible for receipts / outstanding balance. */
+    isUnpaidInvoiceStatus(status) {
+        const key = String(status || '').toLowerCase();
+        return key === 'pending' || key === 'sent' || key === 'overdue';
+    },
+
+    markInvoiceSentOut(id) {
+        const invoice = DataStore.getInvoice(id);
+        if (!invoice) {
+            alert('Invoice not found.');
+            return false;
+        }
+        if (invoice.status === 'draft') {
+            alert('Save the invoice as Pending before marking it Sent Out.');
+            return false;
+        }
+        if (invoice.status === 'paid') {
+            alert('This invoice is already paid.');
+            return false;
+        }
+        if (invoice.status === 'sent') {
+            return true;
+        }
+        invoice.status = 'sent';
+        invoice.sentAt = new Date().toISOString();
+        invoice.updatedAt = new Date().toISOString();
+        DataStore.saveInvoice(invoice);
+        const search = document.getElementById('invoice-search');
+        if (typeof this.renderInvoices === 'function') {
+            this.renderInvoices(search ? search.value : '');
+        }
+        if (typeof this.renderDashboard === 'function' && document.getElementById('dashboard')?.classList.contains('active')) {
+            this.renderDashboard();
+        }
+        return true;
+    },
+
     setCreditNotesSection() {
         this.invoiceListMode = 'creditNote';
         this.applyInvoiceModeUi();
@@ -1512,9 +1561,13 @@ const app = {
             total: total,
             notes: document.getElementById('invoice-notes').value,
             status: status,
+            sentAt: status === 'sent'
+                ? ((existing && existing.sentAt) || new Date().toISOString())
+                : (existing && existing.sentAt ? existing.sentAt : undefined),
             createdAt: this.currentInvoiceId ? DataStore.getInvoice(this.currentInvoiceId)?.createdAt || new Date().toISOString() : new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
+        if (!invoice.sentAt) delete invoice.sentAt;
 
         DataStore.saveInvoice(invoice);
         const savedLabel = documentType === 'creditNote'
@@ -1554,6 +1607,7 @@ const app = {
                 (inv.invoiceNumber || '').toLowerCase().includes(term) ||
                 (inv.clientName || '').toLowerCase().includes(term) ||
                 (inv.status || '').toLowerCase().includes(term) ||
+                (this.formatInvoiceStatusLabel(inv.status) || '').toLowerCase().includes(term) ||
                 (this.getDocumentTypeLabel(inv) || '').toLowerCase().includes(term)
             );
         }
@@ -1648,7 +1702,8 @@ const app = {
         const safeId = this.escapeJsString(invoice.id);
         const displayNumber = (invoice.status === 'draft' && !invoice.invoiceNumber) ? 'Draft' : (invoice.invoiceNumber || '—');
         const label = this.getDocumentTypeLabel(invoice);
-        const status = this.escapeHtml(invoice.status || '');
+        const statusKey = String(invoice.status || '').toLowerCase();
+        const statusLabel = this.escapeHtml(this.formatInvoiceStatusLabel(invoice.status));
         const dateLine = (this.isProformaDoc(invoice) || this.isCreditNoteDoc(invoice))
             ? this.escapeHtml(this.formatDate(invoice.date))
             : `${this.escapeHtml(this.formatDate(invoice.date))} · due ${this.escapeHtml(this.formatDate(invoice.dueDate))}`;
@@ -1657,6 +1712,9 @@ const app = {
             : '';
         const convertBtn = this.isProformaDoc(invoice) && !invoice.convertedToInvoiceId && invoice.status !== 'draft'
             ? `<button class="btn btn-secondary" onclick="event.stopPropagation(); app.convertProformaToInvoice('${safeId}')">Convert</button>`
+            : '';
+        const markSentBtn = statusKey === 'pending'
+            ? `<button type="button" class="btn btn-secondary" title="Mark as sent to the client" onclick="event.stopPropagation(); app.markInvoiceSentOut('${safeId}')">Sent Out</button>`
             : '';
         return `
             <div class="invoice-card">
@@ -1671,10 +1729,11 @@ const app = {
                 </div>
                 <div class="invoice-meta">
                     <div class="invoice-amount">${this.escapeHtml(this.formatCurrency(invoice.total))}</div>
-                    <span class="invoice-status status-${status}">${status}</span>
+                    <span class="invoice-status status-${this.escapeHtml(statusKey)}">${statusLabel}</span>
                     <div class="invoice-actions">
                         <button class="btn btn-secondary" onclick="event.stopPropagation(); app.viewInvoice('${safeId}')">View</button>
                         <button class="btn btn-secondary" onclick="event.stopPropagation(); app.openInvoiceEmailComposer('${safeId}')">Email</button>
+                        ${markSentBtn}
                         <button class="btn btn-primary" onclick="event.stopPropagation(); app.showPage('create-invoice'); app.setupInvoiceForm('${safeId}')">Edit</button>
                         ${convertBtn}
                         <button class="btn btn-danger" onclick="event.stopPropagation(); if(confirm('Delete this ${this.isCreditNoteDoc(invoice) ? 'credit note' : (this.isProformaDoc(invoice) ? 'proforma' : 'invoice')}?')) { DataStore.deleteInvoice('${safeId}'); app.renderInvoices(document.getElementById('invoice-search')?.value || ''); }">Delete</button>
@@ -1740,6 +1799,7 @@ const app = {
         const editBtn = document.getElementById('modal-edit-btn');
         const printBtn = document.getElementById('modal-print-btn');
         const emailBtn = document.getElementById('modal-email-btn');
+        const markSentBtn = document.getElementById('modal-mark-sent-btn');
         const deleteBtn = document.getElementById('modal-delete-btn');
         
         if (editBtn) {
@@ -1754,6 +1814,16 @@ const app = {
             emailBtn.style.display = '';
             emailBtn.onclick = () => app.openInvoiceEmailComposer(id);
             emailBtn.textContent = '✉️ Email';
+        }
+        if (markSentBtn) {
+            const canMarkSent = invoice.status === 'pending';
+            markSentBtn.style.display = canMarkSent ? '' : 'none';
+            markSentBtn.onclick = () => {
+                if (app.markInvoiceSentOut(id)) {
+                    app.viewInvoice(id);
+                }
+            };
+            markSentBtn.textContent = 'Sent Out';
         }
         if (deleteBtn) {
             deleteBtn.onclick = () => app.deleteCurrentInvoice();
@@ -3346,7 +3416,7 @@ const app = {
                 (client.email && inv.clientEmail === client.email);
             if (!clientMatch) return false;
             const isInThisReceipt = receiptInvoiceIds.includes(inv.id);
-            return inv.status === 'pending' || isInThisReceipt;
+            return this.isUnpaidInvoiceStatus(inv.status) || isInThisReceipt;
         });
         
         if (invoices.length === 0) {
@@ -3375,7 +3445,7 @@ const app = {
                             <strong class="invoice-selection-number">${invoice.invoiceNumber}</strong>
                             <span class="invoice-selection-date">${this.formatDate(invoice.date)}</span>
                             <span class="invoice-selection-amount">${this.formatCurrency(invoice.total)}</span>
-                            <span class="invoice-selection-status status-${invoice.status}">${invoice.status}</span>
+                            <span class="invoice-selection-status status-${invoice.status}">${this.formatInvoiceStatusLabel(invoice.status)}</span>
                         </div>
                     </div>
                 </label>
@@ -3485,7 +3555,8 @@ const app = {
                 unselectedIds.forEach(invoiceId => {
                     const invoice = DataStore.getInvoice(invoiceId);
                     if (invoice) {
-                        invoice.status = 'pending';
+                        // Already issued to the client before payment — restore as Sent Out
+                        invoice.status = 'sent';
                         invoice.updatedAt = new Date().toISOString();
                         DataStore.saveInvoice(invoice, persistOpts);
                     }
@@ -3719,9 +3790,9 @@ const app = {
                         r.id !== receiptId && r.invoiceIds && r.invoiceIds.includes(invoiceId)
                     );
                     
-                    // Only change to pending if not in another receipt
+                    // Already issued to the client — restore as Sent Out (not Pending)
                     if (!isInOtherReceipt) {
-                        invoice.status = 'pending';
+                        invoice.status = 'sent';
                         invoice.updatedAt = new Date().toISOString();
                         DataStore.saveInvoice(invoice);
                     }
