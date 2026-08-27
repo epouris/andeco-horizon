@@ -3634,6 +3634,7 @@ const app = {
         const editBtn = document.getElementById('modal-edit-btn');
         const printBtn = document.getElementById('modal-print-btn');
         const emailBtn = document.getElementById('modal-email-btn');
+        const markSentBtn = document.getElementById('modal-mark-sent-btn');
         const deleteBtn = document.getElementById('modal-delete-btn');
         
         if (editBtn) {
@@ -3647,6 +3648,10 @@ const app = {
         if (emailBtn) {
             emailBtn.style.display = 'none';
             emailBtn.onclick = null;
+        }
+        if (markSentBtn) {
+            markSentBtn.style.display = 'none';
+            markSentBtn.onclick = null;
         }
         if (deleteBtn) {
             deleteBtn.onclick = () => app.deleteCurrentReceipt();
