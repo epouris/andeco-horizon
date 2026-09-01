@@ -436,6 +436,22 @@
     if (check) check.textContent = String(m.checklistOpen);
   }
 
+  function formatTsDisplay(val) {
+    if (!val) return '';
+    if (window.AndecoDate && window.AndecoDate.formatDateTime) {
+      return window.AndecoDate.formatDateTime(val) || '';
+    }
+    return String(val).replace('T', ' ');
+  }
+
+  function normalizeTsStorage(val) {
+    if (!val) return '';
+    if (window.AndecoDate && window.AndecoDate.toLocalDateTime) {
+      return window.AndecoDate.toLocalDateTime(val) || '';
+    }
+    return String(val).trim();
+  }
+
   function rowHtml(call) {
     var ms = milestoneMeta(call.milestone);
     return (
@@ -461,10 +477,10 @@
         '<td>' +
           '<select class="pm-cell-select pm-badge pm-badge--' + ms.css + '" data-field="milestone">' + milestoneOptions(call.milestone) + '</select>' +
         '</td>' +
-        '<td><input class="pm-cell-input pm-ts" type="datetime-local" data-field="eta" value="' + escapeHtml(call.eta) + '"></td>' +
-        '<td><input class="pm-cell-input pm-ts" type="datetime-local" data-field="norTendered" value="' + escapeHtml(call.norTendered) + '"></td>' +
-        '<td><input class="pm-cell-input pm-ts" type="datetime-local" data-field="commencedLoading" value="' + escapeHtml(call.commencedLoading) + '"></td>' +
-        '<td><input class="pm-cell-input pm-ts" type="datetime-local" data-field="completedLoading" value="' + escapeHtml(call.completedLoading) + '"></td>' +
+        '<td><input class="pm-cell-input pm-ts app-datetime-input" type="text" inputmode="numeric" placeholder="dd/mm/yyyy HH:mm" title="24-hour time (dd/mm/yyyy HH:mm)" data-field="eta" value="' + escapeHtml(formatTsDisplay(call.eta)) + '"></td>' +
+        '<td><input class="pm-cell-input pm-ts app-datetime-input" type="text" inputmode="numeric" placeholder="dd/mm/yyyy HH:mm" title="24-hour time (dd/mm/yyyy HH:mm)" data-field="norTendered" value="' + escapeHtml(formatTsDisplay(call.norTendered)) + '"></td>' +
+        '<td><input class="pm-cell-input pm-ts app-datetime-input" type="text" inputmode="numeric" placeholder="dd/mm/yyyy HH:mm" title="24-hour time (dd/mm/yyyy HH:mm)" data-field="commencedLoading" value="' + escapeHtml(formatTsDisplay(call.commencedLoading)) + '"></td>' +
+        '<td><input class="pm-cell-input pm-ts app-datetime-input" type="text" inputmode="numeric" placeholder="dd/mm/yyyy HH:mm" title="24-hour time (dd/mm/yyyy HH:mm)" data-field="completedLoading" value="' + escapeHtml(formatTsDisplay(call.completedLoading)) + '"></td>' +
         '<td><input class="pm-cell-input" type="number" min="0" step="1" data-field="checklistOpen" value="' + escapeHtml(call.checklistOpen) + '" title="Open safety checklist items" style="width:3.5rem"></td>' +
         '<td><div class="pm-row-actions">' +
           '<button type="button" class="pm-icon-btn" data-action="move-group" title="Move group">⇄</button>' +
@@ -661,7 +677,7 @@
       target = calls.find(function (c) { return c.milestone === 'pumping' || c.milestone === 'hose-conn'; });
       if (!target) return alert('No active cargo vessel for Superintendent review.');
       if (action === 'review-rate') {
-        updateCall(target.id, { notes: (target.notes ? target.notes + ' · ' : '') + 'Loading rate reviewed ' + new Date().toLocaleString() });
+        updateCall(target.id, { notes: (target.notes ? target.notes + ' · ' : '') + 'Loading rate reviewed ' + (window.AndecoDate ? window.AndecoDate.formatDateTime(new Date()) : new Date().toISOString().slice(0, 16).replace('T', ' ')) });
         alert('Loading rate review logged on ' + target.vesselName);
       }
       if (action === 'inventory') {
@@ -831,6 +847,10 @@
       var callId = row.getAttribute('data-call-id');
       var field = fieldEl.getAttribute('data-field');
       var val = fieldEl.type === 'number' ? Number(fieldEl.value) : fieldEl.value;
+      if (fieldEl.classList.contains('pm-ts') || fieldEl.classList.contains('app-datetime-input')) {
+        val = normalizeTsStorage(val);
+        if (val) fieldEl.value = formatTsDisplay(val);
+      }
       var patch = {};
       patch[field] = val;
       // Auto-move groups based on milestone for smoother ops flow

@@ -1030,7 +1030,14 @@ const app = {
     formatInvoiceItemDescription(item) {
         const base = (item && item.description) || '';
         // Date has its own column on the printed invoice — only append start/finish times here.
-        const timePart = [item && item.serviceStart, item && item.serviceEnd].filter(Boolean).join(' – ');
+    const timePart = [item && item.serviceStart, item && item.serviceEnd]
+            .map(function (t) {
+                return window.AndecoDate && window.AndecoDate.normalizeTime
+                    ? window.AndecoDate.normalizeTime(t)
+                    : t;
+            })
+            .filter(Boolean)
+            .join(' – ');
         if (!timePart) return base;
         if (base && base.indexOf(timePart) !== -1) return base;
         return base ? (base + ' (' + timePart + ')') : timePart;
@@ -1111,11 +1118,11 @@ const app = {
             <div class="item-service-schedule">
                 <div class="svc-field">
                     <label>Start</label>
-                    <input type="time" class="item-service-start" value="${serviceStart}">
+                    <input type="text" class="item-service-start app-time-input" inputmode="numeric" placeholder="HH:mm" maxlength="8" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" title="24-hour time (HH:mm)" value="${serviceStart}">
                 </div>
                 <div class="svc-field">
                     <label>Finish</label>
-                    <input type="time" class="item-service-end" value="${serviceEnd}">
+                    <input type="text" class="item-service-end app-time-input" inputmode="numeric" placeholder="HH:mm" maxlength="8" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" title="24-hour time (HH:mm)" value="${serviceEnd}">
                 </div>
                 <span class="item-service-hint">Hours are calculated from start → finish (uses the Date column)</span>
             </div>
@@ -1541,8 +1548,12 @@ const app = {
                 hours: parseFloat((item.querySelector('.item-hours') || {}).value) || 0,
                 price: parseFloat((item.querySelector('.item-price') || {}).value) || 0,
                 serviceDate: (item.querySelector('.item-service-date') || {}).value || '',
-                serviceStart: (item.querySelector('.item-service-start') || {}).value || '',
-                serviceEnd: (item.querySelector('.item-service-end') || {}).value || '',
+                serviceStart: (typeof window.AndecoDate !== 'undefined' && window.AndecoDate.normalizeTime
+                    ? window.AndecoDate.normalizeTime((item.querySelector('.item-service-start') || {}).value || '')
+                    : ((item.querySelector('.item-service-start') || {}).value || '')),
+                serviceEnd: (typeof window.AndecoDate !== 'undefined' && window.AndecoDate.normalizeTime
+                    ? window.AndecoDate.normalizeTime((item.querySelector('.item-service-end') || {}).value || '')
+                    : ((item.querySelector('.item-service-end') || {}).value || '')),
                 isService: !!(product && product.isService) ||
                     !!((item.querySelector('.item-service-date') || {}).value) ||
                     !!((item.querySelector('.item-service-start') || {}).value) ||

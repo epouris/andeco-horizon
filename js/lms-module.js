@@ -1902,14 +1902,16 @@
         '</tr></thead><tbody>' +
         (applicants.length ? applicants.map(function (a) {
           var course = findCourse(a.courseId);
-          var when = (a.finishedAt || a.startedAt || a.createdAt || '').slice(0, 16).replace('T', ' ');
+          var when = window.AndecoDate
+            ? (window.AndecoDate.formatDateTime(a.finishedAt || a.startedAt || a.createdAt) || '—')
+            : ((a.finishedAt || a.startedAt || a.createdAt || '').slice(0, 16).replace('T', ' ') || '—');
           return '<tr><td><strong>' + escapeHtml(a.fullName || '—') + '</strong>' +
             '<div class="lms-meta">' + escapeHtml(a.email || '') + '</div></td>' +
             '<td>' + escapeHtml(a.positionApplied || '—') + '</td>' +
             '<td>' + escapeHtml(course ? course.title : '—') + '</td>' +
             '<td>' + statusBadge(a.status) + '</td>' +
             '<td>' + (a.score != null ? escapeHtml(String(a.score)) + '%' : '—') + '</td>' +
-            '<td>' + escapeHtml(when || '—') + '</td></tr>';
+            '<td>' + escapeHtml(when) + '</td></tr>';
         }).join('') : '<tr><td colspan="6">No hiring applicant sessions yet.</td></tr>') +
         '</tbody></table></div>' +
       '</div>' +
@@ -1920,7 +1922,10 @@
         ((data.attempts || []).length ? data.attempts.slice().reverse().slice(0, 25).map(function (a) {
           var course = findCourse(a.courseId);
           var en = data.enrollments.filter(function (e) { return e.id === a.enrollmentId; })[0];
-          return '<tr><td>' + escapeHtml((a.finishedAt || '').slice(0, 16).replace('T', ' ')) + '</td>' +
+          var attemptWhen = window.AndecoDate
+            ? (window.AndecoDate.formatDateTime(a.finishedAt) || '—')
+            : ((a.finishedAt || '').slice(0, 16).replace('T', ' ') || '—');
+          return '<tr><td>' + escapeHtml(attemptWhen) + '</td>' +
             '<td>' + escapeHtml(en ? en.userName : a.userId) + '</td>' +
             '<td>' + escapeHtml(course ? course.title : '—') + '</td>' +
             '<td>' + escapeHtml(String(a.score)) + '%</td>' +
