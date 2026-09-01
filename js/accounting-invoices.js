@@ -949,8 +949,45 @@ const app = {
         if (cols.hours) metrics += 'minmax(3.75rem, 4.5rem) ';
         wrap.style.setProperty(
             '--item-grid',
-            `minmax(4.75rem, 5.75rem) minmax(9.75rem, 10.75rem) minmax(11rem, 1fr) ${metrics}minmax(6rem, 7.25rem) minmax(5rem, 6.5rem) 2rem`
+            `minmax(4.75rem, 5.75rem) minmax(9.75rem, 10.75rem) minmax(11rem, 1fr) ${metrics}minmax(6rem, 7.25rem) minmax(5rem, 6.5rem) minmax(5.25rem, 5.75rem)`
         );
+    },
+
+    itemRowActionsHtml() {
+        return `<div class="item-row-actions">
+                <button type="button" class="btn-move-item" data-dir="up" title="Move up" aria-label="Move up" onclick="app.moveInvoiceItem(this, -1)">↑</button>
+                <button type="button" class="btn-move-item" data-dir="down" title="Move down" aria-label="Move down" onclick="app.moveInvoiceItem(this, 1)">↓</button>
+                <button type="button" class="btn-remove-item" title="Remove" aria-label="Remove" onclick="app.removeItem(this)">×</button>
+            </div>`;
+    },
+
+    moveInvoiceItem(button, direction) {
+        const row = button && button.closest ? button.closest('.invoice-item') : null;
+        const container = document.getElementById('invoice-items');
+        if (!row || !container || !container.contains(row)) return;
+        const dir = Number(direction) < 0 ? -1 : 1;
+        if (dir < 0) {
+            const prev = row.previousElementSibling;
+            if (prev && prev.classList.contains('invoice-item')) {
+                container.insertBefore(row, prev);
+            }
+        } else {
+            const next = row.nextElementSibling;
+            if (next && next.classList.contains('invoice-item')) {
+                container.insertBefore(next, row);
+            }
+        }
+        this.updateInvoiceItemReorderButtons();
+    },
+
+    updateInvoiceItemReorderButtons() {
+        const rows = document.querySelectorAll('#invoice-items > .invoice-item');
+        rows.forEach((row, index) => {
+            const up = row.querySelector('.btn-move-item[data-dir="up"]');
+            const down = row.querySelector('.btn-move-item[data-dir="down"]');
+            if (up) up.disabled = index === 0;
+            if (down) down.disabled = index === rows.length - 1;
+        });
     },
 
     lineItemAmount(item, cols) {
@@ -1069,7 +1106,7 @@ const app = {
                 <input type="number" placeholder="Hours" class="item-hours" min="0" step="0.01" value="${hours}">
                 <input type="number" placeholder="Unit Price" class="item-price" min="0" step="0.01" value="${price}" required>
                 <div class="item-total">${this.formatCurrency(amount)}</div>
-                <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
+                ${this.itemRowActionsHtml()}
             </div>
             <div class="item-service-schedule">
                 <div class="svc-field">
@@ -1183,6 +1220,7 @@ const app = {
             
             this.applyInvoiceModeUi();
             this.calculateTotals();
+            this.updateInvoiceItemReorderButtons();
         }
         
         // Populate client dropdown for invoice mode only
@@ -1245,7 +1283,7 @@ const app = {
                     const desc = (item.description || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     return `<div class="invoice-item invoice-item--header">
                         <input type="text" placeholder="Section header (e.g. Labour, Parts)" class="item-header-text" value="${desc}">
-                        <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
+                        ${this.itemRowActionsHtml()}
                     </div>`;
                 }
                 return `<div class="invoice-item${(item.isService || item.serviceDate || item.serviceStart || item.serviceEnd) ? ' show-schedule' : ''}">${this.buildInvoiceItemRowHtml(item)}</div>`;
@@ -1253,6 +1291,7 @@ const app = {
         }
         this.applyItemColumnVisibility();
         this.calculateTotals();
+        this.updateInvoiceItemReorderButtons();
     },
 
     addInvoiceItem() {
@@ -1262,6 +1301,7 @@ const app = {
         newItem.innerHTML = this.buildInvoiceItemRowHtml({ quantity: 1, persons: 1, hours: 0, price: '' });
         itemsContainer.appendChild(newItem);
         this.applyItemColumnVisibility();
+        this.updateInvoiceItemReorderButtons();
     },
 
     addInvoiceItemHeader() {
@@ -1270,9 +1310,10 @@ const app = {
         newRow.className = 'invoice-item invoice-item--header';
         newRow.innerHTML = `
             <input type="text" placeholder="Section header (e.g. Labour, Parts)" class="item-header-text">
-            <button type="button" class="btn-remove-item" onclick="app.removeItem(this)">×</button>
+            ${this.itemRowActionsHtml()}
         `;
         itemsContainer.appendChild(newRow);
+        this.updateInvoiceItemReorderButtons();
     },
 
     fillProductInItem(codeInput) {
@@ -1429,10 +1470,11 @@ const app = {
     },
 
     removeItem(button) {
-        const items = document.querySelectorAll('.invoice-item');
+        const items = document.querySelectorAll('#invoice-items > .invoice-item');
         if (items.length > 1) {
             button.closest('.invoice-item').remove();
             this.calculateTotals();
+            this.updateInvoiceItemReorderButtons();
         } else {
             alert('Invoice must have at least one row (item or section header)');
         }
