@@ -654,7 +654,9 @@
       var onShift = shiftsOnDate(ymd, st.id);
       var status;
       if (leave.length) status = 'Away — ' + (REQUEST_TYPES[leave[0].type] || leave[0].type) + (leave[0].status === 'pending' ? ' (pending)' : '');
-      else if (onShift.length) status = 'Working — ' + onShift.map(function (s) { return s.startTime + '–' + s.endTime; }).join(', ');
+      else if (onShift.length) status = 'Working — ' + onShift.map(function (s) {
+        return formatShiftTime(s.startTime) + '–' + formatShiftTime(s.endTime);
+      }).join(', ');
       else status = 'No shift / available';
       return '<li><strong>' + escapeHtml(st.name) + '</strong>: ' + escapeHtml(status) + '</li>';
     }).join('') || '<li>Add team members in Settings.</li>';
@@ -727,8 +729,8 @@
       '<div class="form-group"><label>Team member</label><select id="shifts-f-staff">' + staffOptionsHtml(sid) + '</select></div>' +
       '<div class="form-row"><div class="form-group"><label>Date</label><input type="date" id="shifts-f-date" value="' + escapeHtml(sh ? toYmd(sh.date) : (presetDate || toYmd(new Date().toISOString()))) + '"></div>' +
       '<div class="form-group"><label>Break (minutes)</label><input type="number" id="shifts-f-break" min="0" value="' + (sh ? (sh.breakMinutes || 0) : 0) + '"></div></div>' +
-      '<div class="form-row"><div class="form-group"><label>Start</label><input type="time" id="shifts-f-start" value="' + escapeHtml(sh ? sh.startTime || '09:00' : '09:00') + '"></div>' +
-      '<div class="form-group"><label>End</label><input type="time" id="shifts-f-end" value="' + escapeHtml(sh ? sh.endTime || '17:00' : '17:00') + '"></div></div>' +
+      '<div class="form-row"><div class="form-group"><label>Start</label><input type="text" class="app-time-input" id="shifts-f-start" inputmode="numeric" placeholder="HH:mm" maxlength="8" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" title="24-hour time (HH:mm)" value="' + escapeHtml(formatShiftTime(sh ? sh.startTime || '09:00' : '09:00')) + '"></div>' +
+      '<div class="form-group"><label>End</label><input type="text" class="app-time-input" id="shifts-f-end" inputmode="numeric" placeholder="HH:mm" maxlength="8" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" title="24-hour time (HH:mm)" value="' + escapeHtml(formatShiftTime(sh ? sh.endTime || '17:00' : '17:00')) + '"></div></div>' +
       '<div class="form-group"><label>Notes</label><textarea id="shifts-f-notes" rows="2">' + escapeHtml(sh ? sh.notes || '' : '') + '</textarea></div>';
 
     openModal(editId ? 'Edit shift' : 'Log shift', html, function () {
@@ -736,6 +738,10 @@
       var date = toYmd((document.getElementById('shifts-f-date') || {}).value);
       var startTime = (document.getElementById('shifts-f-start') || {}).value;
       var endTime = (document.getElementById('shifts-f-end') || {}).value;
+      if (window.AndecoDate && window.AndecoDate.normalizeTime) {
+        startTime = window.AndecoDate.normalizeTime(startTime);
+        endTime = window.AndecoDate.normalizeTime(endTime);
+      }
       if (!staffId || !date || !startTime || !endTime) {
         alert('Please fill team member, date, start and end.');
         return false;

@@ -2116,3 +2116,17 @@ body.home-view {
     padding: 0.55rem 0.75rem;
   }
 }
+
+/* 24-hour time / datetime text inputs (no AM/PM pickers) */
+.app-time-input,
+.app-datetime-input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.app-time-input {
+  min-width: 5.5rem;
+  max-width: 7rem;
+}
+.app-datetime-input {
+  min-width: 9.5rem;
+}
