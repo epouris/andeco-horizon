@@ -1030,7 +1030,9 @@
           var ds = window.AccountingData;
           if (ds && typeof ds.loadWorkspace === 'function') {
             return ds.loadWorkspace().then(function () {
-              if (typeof ds.notifyModulesDataLoaded === 'function') ds.notifyModulesDataLoaded();
+              // loadWorkspace → applyLoadedData already notifies modules with server data.
+              // Do not call bare notifyModulesDataLoaded() here — that re-reads localStorage
+              // and can wipe Distribution quotes when the full blob failed to cache.
               startApp();
             });
           }
@@ -1138,7 +1140,7 @@
           var ds = window.AccountingData;
           if (ds && typeof ds.loadWorkspace === 'function') {
             return ds.loadWorkspace().then(function () {
-              if (typeof ds.notifyModulesDataLoaded === 'function') ds.notifyModulesDataLoaded();
+              // applyLoadedData already notified modules with the server payload.
               if (out.json.session.isAdmin) return refreshUsersFromServer();
             }).then(function () {
               startApp();
@@ -1866,7 +1868,7 @@
           setSession(serverSession);
           if (ds && typeof ds.loadWorkspace === 'function') {
             return ds.loadWorkspace().then(function () {
-              if (typeof ds.notifyModulesDataLoaded === 'function') ds.notifyModulesDataLoaded();
+              // applyLoadedData already notified modules with the server payload.
               if (serverSession.isAdmin) return refreshUsersFromServer();
             }).then(function () {
               startApp();

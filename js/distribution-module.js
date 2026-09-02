@@ -5917,7 +5917,19 @@
     if (!data) return false;
     // Don't clobber an open editor, and briefly ignore stale poll payloads after a local save.
     if (!shouldAcceptRemote()) return false;
-    state = normalizeState(data);
+    var incoming = normalizeState(data);
+    var curQuotes = Array.isArray(state.quotations) ? state.quotations.length : 0;
+    var curProspects = Array.isArray(state.potentialClients) ? state.potentialClients.length : 0;
+    var curSold = Array.isArray(state.soldVessels) ? state.soldVessels.length : 0;
+    var inQuotes = Array.isArray(incoming.quotations) ? incoming.quotations.length : 0;
+    var inProspects = Array.isArray(incoming.potentialClients) ? incoming.potentialClients.length : 0;
+    var inSold = Array.isArray(incoming.soldVessels) ? incoming.soldVessels.length : 0;
+    // Never replace real quotations / prospects with an empty payload (login race / empty cache).
+    if ((curQuotes > 0 || curProspects > 0 || curSold > 0) &&
+        inQuotes === 0 && inProspects === 0 && inSold === 0) {
+      return false;
+    }
+    state = incoming;
     if (pendingCatalogPersist) {
       pendingCatalogPersist = false;
       persist(true);

@@ -230,6 +230,26 @@ window.AccountingData = (function () {
     try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
   }
 
+  /** True when Distribution has no quotations, prospects, or sold vessels. */
+  function isSparseDistribution(d) {
+    if (!d || typeof d !== 'object') return true;
+    var q = Array.isArray(d.quotations) ? d.quotations.length : 0;
+    var p = Array.isArray(d.potentialClients) ? d.potentialClients.length : 0;
+    var s = Array.isArray(d.soldVessels) ? d.soldVessels.length : 0;
+    return q === 0 && p === 0 && s === 0;
+  }
+
+  function readCachedDistribution() {
+    try {
+      var raw = localStorage.getItem('andeco_distribution_data');
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function emptyRemotePayload() {
     return {
       invoices: [],
@@ -378,18 +398,20 @@ window.AccountingData = (function () {
       distribution: (function () {
         // Prefer live module state so freshly uploaded quote photos are included
         // even if localStorage quota prevented a local write.
+        var live = null;
         try {
           if (typeof window !== 'undefined' &&
               window.DistributionModule &&
               typeof window.DistributionModule.getState === 'function') {
-            var live = window.DistributionModule.getState();
-            if (live && typeof live === 'object') return live;
+            live = window.DistributionModule.getState();
+            if (live && typeof live === 'object' && !isSparseDistribution(live)) return live;
           }
         } catch (e0) {}
         try {
-          var r = localStorage.getItem('andeco_distribution_data');
-          if (r) return JSON.parse(r);
+          var cached = readCachedDistribution();
+          if (cached && !isSparseDistribution(cached)) return cached;
         } catch (e) {}
+        if (live && typeof live === 'object') return live;
         return {
           brands: [],
           models: [],
@@ -1086,8 +1108,17 @@ window.AccountingData = (function () {
             window.DistributionModule.shouldAcceptRemote &&
             !window.DistributionModule.shouldAcceptRemote()
           );
+          // Never replace a rich local Distribution cache with an empty payload
+          // (pre-login emptyRemotePayload + failed large-blob cache writes).
+          var shouldWriteDist = true;
+          if (isSparseDistribution(data.distribution)) {
+            var existingDist = readCachedDistribution();
+            if (existingDist && !isSparseDistribution(existingDist)) {
+              shouldWriteDist = false;
+            }
+          }
           // Best-effort local cache only — quotation photos often exceed localStorage quota.
-          if (distAccept) setLocalStorage('andeco_distribution_data', data.distribution);
+          if (distAccept && shouldWriteDist) setLocalStorage('andeco_distribution_data', data.distribution);
         }
         if (data.payroll && typeof data.payroll === 'object') {
           if (Array.isArray(data.payroll.employees)) setLocalStorage('employees', data.payroll.employees);
@@ -1102,9 +1133,15 @@ window.AccountingData = (function () {
           if (Array.isArray(data.crm.users)) setLocalStorage('andeco_crm_users', data.crm.users);
         }
         // Pass server distribution directly so photos are not lost when localStorage write fails.
-        notifyModulesDataLoaded(
-          data.distribution && typeof data.distribution === 'object' ? data.distribution : null
-        );
+        // Prefer a non-sparse cache when the incoming payload is empty (login race).
+        var notifyDist = data.distribution && typeof data.distribution === 'object' ? data.distribution : null;
+        if (isSparseDistribution(notifyDist)) {
+          var cachedForNotify = readCachedDistribution();
+          if (cachedForNotify && !isSparseDistribution(cachedForNotify)) {
+            notifyDist = cachedForNotify;
+          }
+        }
+        notifyModulesDataLoaded(notifyDist);
   }
 
   function ensureSupabaseClient() {
