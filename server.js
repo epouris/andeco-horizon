@@ -142,7 +142,14 @@ async function initPostgres() {
           restoreResult.addedQuotes +
           ' quotes, ' +
           restoreResult.addedProspects +
-          ' prospects)'
+          ' prospects): ' +
+          ((restoreResult.ensuredNumbers || []).join(', ') || '')
+      );
+    } else if (restoreResult) {
+      console.log(
+        'Postgres: PDF quotation restore checked — added 0 missing quotes (pack ' +
+          (restoreResult.packId || '') +
+          ')'
       );
     }
   } catch (eRestore) {
