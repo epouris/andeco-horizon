@@ -131,26 +131,6 @@ async function initPostgres() {
   auth.configureSessionStore(pool);
   await ensureAdminUser();
   await pgStore.migrateLegacyPayloadIfNeeded(pool);
-  // One-shot: push missing PDF-restored Distribution quotes into Postgres, then
-  // this helper can be removed once production data is confirmed.
-  try {
-    const pdfRestore = require('./lib/distribution-pdf-restore');
-    const restoreResult = await pdfRestore.restoreMissingPdfQuotes(pool);
-    if (restoreResult && restoreResult.wrote) {
-      console.log(
-        'Postgres: PDF quotation restore applied (' +
-          restoreResult.addedQuotes +
-          ' quotes, ' +
-          restoreResult.addedProspects +
-          ' prospects)'
-      );
-    }
-  } catch (eRestore) {
-    console.warn(
-      'Postgres: PDF quotation restore skipped:',
-      eRestore && eRestore.message ? eRestore.message : eRestore
-    );
-  }
   console.log('Postgres: relational schema ready');
 }
 
