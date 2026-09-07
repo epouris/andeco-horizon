@@ -2884,6 +2884,23 @@
     return `${prefix}-${String(n).padStart(4, '0')}`;
   }
 
+  /** Sort key for quotation numbers like ORQ-1009 (numeric, then full string). */
+  function quoteNumberSortValue(q) {
+    const raw = String((q && q.number) || '').trim();
+    const m = raw.match(/(\d+)\s*$/);
+    return {
+      n: m ? Number(m[1]) : Number.POSITIVE_INFINITY,
+      raw: raw.toUpperCase()
+    };
+  }
+
+  function compareQuoteNumberAsc(a, b) {
+    const aa = quoteNumberSortValue(a);
+    const bb = quoteNumberSortValue(b);
+    if (aa.n !== bb.n) return aa.n - bb.n;
+    return aa.raw.localeCompare(bb.raw);
+  }
+
   function setSection(name, options) {
     if (!SECTIONS.includes(name)) name = 'dashboard';
     const keepEditor = options && options.keepEditor;
@@ -3904,7 +3921,7 @@
       renderQuoteEditor(el);
       return;
     }
-    const list = [...state.quotations].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    const list = [...state.quotations].sort(compareQuoteNumberAsc);
     el.innerHTML = `
       <div class="dist-toolbar">
         <div class="dist-actions">
