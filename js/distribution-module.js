@@ -43,8 +43,6 @@
   let optionsDialogOpen = false;
   let localWriteGuardUntil = 0;
   let pendingCatalogPersist = false;
-  let pendingRecoveryPersist = false;
-  let recoveryServerPushDone = false;
 
   function uid(prefix) {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -5915,205 +5913,6 @@
     else if (section === 'sold') renderSold();
   }
 
-  function stateHasRecoveryQuotes(targetState) {
-    const pack = typeof window !== 'undefined' ? window.DistributionRecoveryPack : null;
-    if (!pack || !targetState) return false;
-    const nums = new Set(
-      (targetState.quotations || []).map((q) => String((q && q.number) || '').trim().toUpperCase())
-    );
-    return (pack.quotations || []).some((spec) => nums.has(String(spec.number || '').trim().toUpperCase()));
-  }
-
-  function findRecoveryModel(spec) {
-    const models = Array.isArray(state.models) ? state.models : [];
-    const match = spec && spec.modelMatch;
-    if (match instanceof RegExp) {
-      const hit = models.find((m) => m && match.test(String(m.name || '')) && m.active !== false);
-      if (hit) return hit;
-    }
-    const label = String((spec && spec.modelLabel) || '').trim().toLowerCase();
-    if (label) {
-      const needle = label.replace(/\s+hl\b/, '').trim();
-      const hit = models.find((m) => String(m.name || '').toLowerCase().includes(needle));
-      if (hit) return hit;
-    }
-    return models.find((m) => m && m.active !== false) || models[0] || null;
-  }
-
-  function prospectEmailKey(email) {
-    return String(email || '').trim().toLowerCase();
-  }
-
-  /**
-   * Merge PDF-restored prospects + quotations when those ORQ numbers are missing
-   * (production wipe recovery). Idempotent; bumps quote sequence to pack minimum.
-   */
-  function applyPdfRecoveryPack(options) {
-    const pack = typeof window !== 'undefined' ? window.DistributionRecoveryPack : null;
-    const silent = !!(options && options.silent);
-    const result = { addedQuotes: 0, addedProspects: 0, skippedQuotes: 0 };
-    if (!pack || !state) return result;
-    if (!Array.isArray(state.potentialClients)) state.potentialClients = [];
-    if (!Array.isArray(state.quotations)) state.quotations = [];
-    if (!state.settings || typeof state.settings !== 'object') state.settings = {};
-
-    const brand = (state.brands || [])[0] || null;
-    const emailToProspectId = {};
-    (state.potentialClients || []).forEach((p) => {
-      const key = prospectEmailKey(p && p.email);
-      if (key) emailToProspectId[key] = p.id;
-    });
-
-    (pack.prospects || []).forEach((raw) => {
-      const key = prospectEmailKey(raw.key || raw.email);
-      if (!key) return;
-      if (emailToProspectId[key]) return;
-      const created = normalizeProspect({
-        id: uid('prospect'),
-        company: raw.company || '',
-        contactName: raw.contactName || '',
-        email: raw.email || '',
-        phone: raw.phone || '',
-        city: raw.city || '',
-        country: raw.country || '',
-        source: raw.source || 'other',
-        status: raw.status || 'quoted',
-        interestNotes: raw.interestNotes || '',
-        notes: raw.notes || '',
-        newsletterOptIn: true
-      });
-      state.potentialClients.unshift(created);
-      emailToProspectId[key] = created.id;
-      result.addedProspects += 1;
-    });
-
-    const existingNumbers = new Set(
-      (state.quotations || []).map((q) => String((q && q.number) || '').trim().toUpperCase())
-    );
-    const existingOlrs = new Set(
-      (state.quotations || [])
-        .map((q) => String((q && q.olrRef) || '').trim().toUpperCase())
-        .filter(Boolean)
-    );
-
-    (pack.quotations || []).forEach((spec) => {
-      const number = String(spec.number || '').trim();
-      const olr = String(spec.olrRef || '').trim().toUpperCase();
-      if (!number) return;
-      if (existingNumbers.has(number.toUpperCase()) || (olr && existingOlrs.has(olr))) {
-        result.skippedQuotes += 1;
-        return;
-      }
-      const prospectId = emailToProspectId[prospectEmailKey(spec.prospectEmail)] || '';
-      const prospect = prospectId ? prospectById(prospectId) : null;
-      const model = findRecoveryModel(spec);
-      const disc = 0;
-      const lines = [];
-      const pkg = spec.packageLine || {};
-      lines.push({
-        id: uid('line'),
-        kind: 'model',
-        refId: model ? model.id : '',
-        description: pkg.description || (model ? hullLineDescription(brand, model) : spec.modelLabel || ''),
-        qty: 1,
-        unit: 'pcs',
-        unitPrice: Number(pkg.unitPrice) || 0,
-        discountPercent: disc,
-        categoryKey: 'hull'
-      });
-      (spec.optionLines || []).forEach((opt) => {
-        const qty = Number(opt.qty) > 0 ? Number(opt.qty) : 1;
-        lines.push({
-          id: uid('line'),
-          kind: 'custom',
-          refId: '',
-          description: opt.description || '',
-          qty,
-          unit: 'pcs',
-          unitPrice: Number(opt.unitPrice) || 0,
-          discountPercent: disc,
-          categoryKey: 'options'
-        });
-      });
-
-      const fee = Number(spec.transportPackagingFee) || 0;
-      const q = {
-        id: uid('quote'),
-        number,
-        date: spec.date || todayISO(),
-        status: spec.status || 'sent',
-        prospectId: prospectId || '',
-        clientId: '',
-        clientSnapshot: prospect
-          ? snapshotFromProspect(prospect)
-          : {
-              name: '',
-              contactName: '',
-              email: spec.prospectEmail || '',
-              phone: '',
-              company: '',
-              address: '',
-              city: '',
-              country: '',
-              postalCode: '',
-              taxId: ''
-            },
-        brandId: brand ? brand.id : (model && model.brandId) || '',
-        modelId: model ? model.id : '',
-        currency: spec.currency || (model && model.currency) || 'EUR',
-        olrRef: spec.olrRef || '',
-        colors: Array.isArray(spec.colors)
-          ? spec.colors.map((c) => ({
-              id: uid('color'),
-              area: c.area || '',
-              value: c.value || '',
-              code: c.code || ''
-            }))
-          : [],
-        detailPhotos: emptyDetailPhotos(),
-        sisterDetailPhotos: emptyDetailPhotos(),
-        vesselPhoto: (model && model.photo) || '',
-        paymentTerms: defaultPaymentTerms(),
-        transportPackagingFee: fee,
-        transportFee: fee,
-        packagingFee: 0,
-        lines,
-        notes: [
-          spec.validUntil ? `Valid until ${spec.validUntil} (from issued PDF).` : '',
-          `Restored from PDF recovery pack ${pack.id || ''}`.trim()
-        ]
-          .filter(Boolean)
-          .join(' '),
-        taxRate: 0,
-        taxAmount: 0,
-        convertedToProformaId: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      normalizeQuoteColors(q);
-      normalizeQuoteDetailPhotos(q);
-      normalizeSisterDetailPhotos(q);
-      normalizeQuoteFees(q);
-      recalcQuote(q);
-      state.quotations.unshift(q);
-      existingNumbers.add(number.toUpperCase());
-      if (olr) existingOlrs.add(olr);
-      result.addedQuotes += 1;
-    });
-
-    const minSeq = Number(pack.minQuoteSequence) || 0;
-    const curSeq = Number(state.settings.quoteSequenceNumber) || 1000;
-    if (minSeq > curSeq) state.settings.quoteSequenceNumber = minSeq;
-
-    if (!silent && (result.addedQuotes || result.addedProspects)) {
-      toast(
-        `Restored ${result.addedQuotes} quotation(s) and ${result.addedProspects} potential client(s) from PDF backup.`,
-        'success'
-      );
-    }
-    return result;
-  }
-
   function applyRemote(data) {
     if (!data) return false;
     // Don't clobber an open editor, and briefly ignore stale poll payloads after a local save.
@@ -6128,48 +5927,11 @@
     // Never replace real quotations / prospects with an empty payload (login race / empty cache).
     if ((curQuotes > 0 || curProspects > 0 || curSold > 0) &&
         inQuotes === 0 && inProspects === 0 && inSold === 0) {
-      var guarded = applyPdfRecoveryPack({ silent: true });
-      var shouldPush =
-        guarded.addedQuotes ||
-        guarded.addedProspects ||
-        pendingCatalogPersist ||
-        pendingRecoveryPersist ||
-        (!recoveryServerPushDone && stateHasRecoveryQuotes(state));
-      if (shouldPush) {
-        pendingCatalogPersist = false;
-        pendingRecoveryPersist = false;
-        recoveryServerPushDone = true;
-        if (guarded.addedQuotes || guarded.addedProspects) {
-          toast(
-            `Restored ${guarded.addedQuotes} quotation(s) and ${guarded.addedProspects} potential client(s) from PDF backup.`,
-            'success'
-          );
-        }
-        persist(true);
-        render({ force: true });
-      }
       return false;
     }
     state = incoming;
-    var recovered = applyPdfRecoveryPack({ silent: true });
-    if (stateHasRecoveryQuotes(state) && !recovered.addedQuotes) {
-      recoveryServerPushDone = true;
-    }
-    var shouldPersist =
-      pendingCatalogPersist ||
-      pendingRecoveryPersist ||
-      recovered.addedQuotes > 0 ||
-      recovered.addedProspects > 0;
-    pendingCatalogPersist = false;
-    pendingRecoveryPersist = false;
-    if (shouldPersist) {
-      recoveryServerPushDone = true;
-      if (recovered.addedQuotes || recovered.addedProspects) {
-        toast(
-          `Restored ${recovered.addedQuotes} quotation(s) and ${recovered.addedProspects} potential client(s) from PDF backup.`,
-          'success'
-        );
-      }
+    if (pendingCatalogPersist) {
+      pendingCatalogPersist = false;
       persist(true);
     } else {
       saveLocal();
@@ -6183,12 +5945,7 @@
     if (!Array.isArray(state.potentialClients)) state.potentialClients = [];
     // Do NOT persist catalog seeds from local-only state here. That used to overwrite
     // server quotations (and wipe photos) before /api/data hydrated Distribution.
-    // PDF recovery is applied locally here; server persist happens in applyRemote().
-    var bootRecovered = applyPdfRecoveryPack({ silent: true });
-    if (bootRecovered.addedQuotes || bootRecovered.addedProspects) {
-      saveLocal();
-      pendingRecoveryPersist = true;
-    }
+    // pendingCatalogPersist is flushed in applyRemote() after server data arrives.
     const page = document.getElementById('page-distribution');
     if (page && page.classList.contains('active')) {
       setSection(section, { keepEditor: true });
@@ -6204,7 +5961,6 @@
     getState: () => state,
     applyRemote,
     persist,
-    applyPdfRecoveryPack,
     isBusy,
     shouldAcceptRemote,
     compressImageFile,
