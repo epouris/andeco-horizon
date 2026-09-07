@@ -5913,6 +5913,39 @@
     else if (section === 'sold') renderSold();
   }
 
+  function unionByQuoteNumber(localList, remoteList) {
+    const map = new Map();
+    const add = (list, prefer) => {
+      (list || []).forEach((q) => {
+        if (!q || typeof q !== 'object') return;
+        const num = String(q.number || '').trim().toUpperCase();
+        const key = num || String(q.id || '');
+        if (!key) return;
+        if (prefer || !map.has(key)) map.set(key, q);
+      });
+    };
+    // Remote wins on the same quotation number so server restores appear in the UI.
+    add(localList, false);
+    add(remoteList, true);
+    return Array.from(map.values());
+  }
+
+  function unionProspectsByEmail(localList, remoteList) {
+    const map = new Map();
+    const add = (list, prefer) => {
+      (list || []).forEach((p) => {
+        if (!p || typeof p !== 'object') return;
+        const email = String(p.email || '').trim().toLowerCase();
+        const key = email || String(p.id || '');
+        if (!key) return;
+        if (prefer || !map.has(key)) map.set(key, p);
+      });
+    };
+    add(localList, false);
+    add(remoteList, true);
+    return Array.from(map.values());
+  }
+
   function applyRemote(data) {
     if (!data) return false;
     // Don't clobber an open editor, and briefly ignore stale poll payloads after a local save.
@@ -5928,6 +5961,14 @@
     if ((curQuotes > 0 || curProspects > 0 || curSold > 0) &&
         inQuotes === 0 && inProspects === 0 && inSold === 0) {
       return false;
+    }
+    // Union by quote number / prospect email so a thinner browser cache cannot hide
+    // server-restored quotations (e.g. ORQ-1009 / ORQ-1010).
+    if (state && (curQuotes > 0 || inQuotes > 0)) {
+      incoming.quotations = unionByQuoteNumber(state.quotations, incoming.quotations);
+    }
+    if (state && (curProspects > 0 || inProspects > 0)) {
+      incoming.potentialClients = unionProspectsByEmail(state.potentialClients, incoming.potentialClients);
     }
     state = incoming;
     if (pendingCatalogPersist) {
