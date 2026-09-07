@@ -701,6 +701,81 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Temporary emergency restore for missing PDF quotations (ORQ-1009/1010).
+    // Auth: X-Andeco-Emergency-Restore header, ?secret=, or JSON body.secret.
+    // Remove after quotes are confirmed in production.
+    if (
+      (req.method === 'POST' || req.method === 'GET') &&
+      url === '/api/emergency-restore-pdf-quotes'
+    ) {
+      const EMERGENCY_SECRET = 'andeco-pdf-restore-7f3a9c2e';
+      let body = {};
+      if (req.method === 'POST') {
+        try {
+          body = JSON.parse((await readBody(req)) || '{}');
+        } catch (eParse) {
+          body = {};
+        }
+      }
+      const provided =
+        String(req.headers['x-andeco-emergency-restore'] || '') ||
+        String((body && body.secret) || '') ||
+        String(parsed.searchParams.get('secret') || '');
+      if (provided !== EMERGENCY_SECRET) {
+        sendJson(res, 401, { ok: false, error: 'Unauthorized' });
+        return;
+      }
+      if (!usePostgres || !pool) {
+        sendJson(res, 500, { ok: false, error: 'Postgres is not available' });
+        return;
+      }
+      const pdfRestore = require('./lib/distribution-pdf-restore');
+      let before = [];
+      try {
+        const row = await pool.query('SELECT data FROM distribution_data WHERE id = 1');
+        const data = row.rows[0] && row.rows[0].data;
+        before = Array.isArray(data && data.quotations)
+          ? data.quotations.map((q) => ({
+              number: q && q.number,
+              olrRef: q && q.olrRef,
+              total: q && (q.total != null ? q.total : q.grandTotal),
+              client: q && q.clientSnapshot && q.clientSnapshot.name
+            }))
+          : [];
+      } catch (eBefore) {
+        before = [];
+      }
+      const restoreResult = await pdfRestore.restoreMissingPdfQuotes(pool);
+      let after = [];
+      try {
+        const row2 = await pool.query('SELECT data FROM distribution_data WHERE id = 1');
+        const data2 = row2.rows[0] && row2.rows[0].data;
+        after = Array.isArray(data2 && data2.quotations)
+          ? data2.quotations.map((q) => ({
+              number: q && q.number,
+              olrRef: q && q.olrRef,
+              total: q && (q.total != null ? q.total : q.grandTotal),
+              client: q && q.clientSnapshot && q.clientSnapshot.name
+            }))
+          : [];
+      } catch (eAfter) {
+        after = [];
+      }
+      const numbers = after.map((q) => String(q.number || '')).filter(Boolean).sort();
+      sendJson(res, 200, {
+        ok: true,
+        restoreResult,
+        beforeCount: before.length,
+        afterCount: after.length,
+        numbers,
+        has1009: numbers.indexOf('ORQ-1009') >= 0,
+        has1010: numbers.indexOf('ORQ-1010') >= 0,
+        before,
+        after
+      });
+      return;
+    }
+
     if (req.method === 'GET' && (url === '/andeco_data.json' || url === '/api/data')) {
       const authz = await requireAuth(req, res);
       if (!authz) return;
