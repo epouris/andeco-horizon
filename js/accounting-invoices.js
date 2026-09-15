@@ -725,11 +725,15 @@ const app = {
         const stats = this.calculateStats(active, overdue);
 
         const totalInvoicesEl = document.getElementById('total-invoices');
+        const totalNetEl = document.getElementById('total-net');
+        const totalVatEl = document.getElementById('total-vat');
         const totalRevenueEl = document.getElementById('total-revenue');
         const pendingInvoicesEl = document.getElementById('pending-invoices');
         const paidInvoicesEl = document.getElementById('paid-invoices');
         const overdueInvoicesEl = document.getElementById('overdue-invoices');
         if (totalInvoicesEl) totalInvoicesEl.textContent = stats.total;
+        if (totalNetEl) totalNetEl.textContent = this.formatCurrency(stats.totalNet);
+        if (totalVatEl) totalVatEl.textContent = this.formatCurrency(stats.totalVat);
         if (totalRevenueEl) totalRevenueEl.textContent = this.formatCurrency(stats.totalRevenue);
         if (pendingInvoicesEl) pendingInvoicesEl.textContent = stats.pending;
         if (paidInvoicesEl) paidInvoicesEl.textContent = stats.paid;
@@ -746,9 +750,25 @@ const app = {
         const overdue = Array.isArray(overdueList)
             ? overdueList
             : list.filter(inv => this.isInvoiceOverdue(inv));
+        let totalNet = 0;
+        let totalVat = 0;
+        let totalRevenue = 0;
+        list.forEach((inv) => {
+            const total = parseFloat(inv.total) || 0;
+            const taxAmount = parseFloat(inv.taxAmount);
+            const subtotal = parseFloat(inv.subtotal);
+            const vat = Number.isFinite(taxAmount) ? taxAmount : 0;
+            // Prefer stored subtotal; fall back to total − VAT when older docs lack it
+            const net = Number.isFinite(subtotal) ? subtotal : Math.max(0, total - vat);
+            totalNet += net;
+            totalVat += vat;
+            totalRevenue += total;
+        });
         return {
             total: list.length,
-            totalRevenue: list.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0),
+            totalNet: totalNet,
+            totalVat: totalVat,
+            totalRevenue: totalRevenue,
             pending: list.filter(inv => inv.status === 'pending' && !this.isInvoiceOverdue(inv)).length,
             paid: list.filter(inv => inv.status === 'paid').length,
             overdue: overdue.length
