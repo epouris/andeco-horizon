@@ -6051,7 +6051,12 @@ const app = {
                     }
                     
                     .bill-to-section-print {
-                        margin-bottom: 12px;
+                        margin-bottom: 10px;
+                    }
+                    
+                    .bill-to-section-print .section-title {
+                        font-size: 7.5pt;
+                        margin-bottom: 4px;
                     }
                     
                     .section-title {
@@ -6064,17 +6069,17 @@ const app = {
                     }
                     
                     .client-name {
-                        font-size: 11pt;
-                        margin: 3px 0;
+                        font-size: 8pt;
+                        margin: 2px 0;
                         color: #000;
                         font-weight: bold;
                     }
                     
                     .client-address {
-                        font-size: 9pt;
-                        margin: 3px 0;
+                        font-size: 7pt;
+                        margin: 1px 0;
                         color: #333;
-                        line-height: 1.5;
+                        line-height: 1.35;
                     }
                     
                     .invoice-items-table-print {
