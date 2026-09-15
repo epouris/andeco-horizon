@@ -398,14 +398,18 @@ const app = {
                     }
                 }
                 if (data.payroll && typeof data.payroll === 'object') {
-                    if (Array.isArray(data.payroll.employees)) setLocal('employees', data.payroll.employees);
-                    if (data.payroll.payrollData && typeof data.payroll.payrollData === 'object') setLocal('payrollData', data.payroll.payrollData);
-                    if (data.payroll.companySettings && typeof data.payroll.companySettings === 'object') setLocal('companySettings', data.payroll.companySettings);
+                    if (typeof window.applyPayrollRemote === 'function') {
+                        window.applyPayrollRemote(data.payroll, { force: true });
+                    } else {
+                        if (Array.isArray(data.payroll.employees)) setLocal('employees', data.payroll.employees);
+                        if (data.payroll.payrollData && typeof data.payroll.payrollData === 'object') setLocal('payrollData', data.payroll.payrollData);
+                        if (data.payroll.companySettings && typeof data.payroll.companySettings === 'object') setLocal('companySettings', data.payroll.companySettings);
+                    }
                 }
                 if (data.crm && typeof data.crm === 'object') {
                     if (Array.isArray(data.crm.users)) setLocal('andeco_crm_users', data.crm.users);
                 }
-                if (typeof window.reloadPayrollFromStorage === 'function') window.reloadPayrollFromStorage();
+                if (typeof window.reloadPayrollFromStorage === 'function') window.reloadPayrollFromStorage(true);
                 if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
                 if (typeof app.refreshCurrentView === 'function') app.refreshCurrentView();
             })

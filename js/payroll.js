@@ -37,10 +37,10 @@ const INCOME_TAX_BRACKET_ANNUAL_MULTIPLIER = 11;
 /** Monthly income tax on payslip = annual income tax ÷ this. */
 const INCOME_TAX_MONTHLY_DIVISOR = 12;
 
-// Global variables
-let employees = JSON.parse(localStorage.getItem('employees')) || [];
-let payrollData = JSON.parse(localStorage.getItem('payrollData')) || {};
-let companySettings = JSON.parse(localStorage.getItem('companySettings')) || {};
+// Global variables — database is source of truth; start empty until server hydrate.
+let employees = [];
+let payrollData = {};
+let companySettings = {};
 let editingPayslip = null; // Track if we're editing an existing payslip
 
 function formatMoney(amount) {
@@ -57,14 +57,7 @@ function formatMoney(amount) {
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
-    if (normalizePayrollDataKeys({ persist: true })) {
-        // Deduped legacy keys (e.g. id_2026_7 vs id_2026_07); persist once after cleanup.
-        try { persistPayrollToCloud(); } catch (e) {}
-    }
     lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
-    // One-time safety: if this browser still has payslips only in localStorage
-    // (e.g. after quota failures), merge them into memory and push to the server.
-    try { safetySyncLocalPayrollToServer(); } catch (eSafety) {}
     loadEmployees();
     var empTable = document.getElementById('employeesTableBody');
     if (empTable) {
@@ -4584,107 +4577,31 @@ function trySetLocalStorage(key, value) {
 }
 
 /**
- * Merge any payslips still only in this browser's localStorage into live memory
- * and push to Postgres so nothing is lost after quota / offline gaps.
+ * Legacy no-op: payroll must not merge old browser localStorage into the database.
+ * Kept as a stub so older callers do not break.
  */
 function safetySyncLocalPayrollToServer() {
-    let localPayroll = null;
-    let localEmployees = null;
-    try {
-        localPayroll = JSON.parse(localStorage.getItem('payrollData') || 'null');
-    } catch (e) {
-        localPayroll = null;
-    }
-    try {
-        localEmployees = JSON.parse(localStorage.getItem('employees') || 'null');
-    } catch (e2) {
-        localEmployees = null;
-    }
-
-    let changed = false;
-    if (localPayroll && typeof localPayroll === 'object') {
-        Object.keys(localPayroll).forEach((key) => {
-            if (pendingDeletedPayKeys.has(key)) return;
-            const loc = localPayroll[key];
-            if (!loc || typeof loc !== 'object') return;
-            const cur = payrollData[key];
-            if (!cur) {
-                payrollData[key] = loc;
-                changed = true;
-                return;
-            }
-            const tLoc = Number(loc.savedAt || loc.updatedAt || 0);
-            const tCur = Number(cur.savedAt || cur.updatedAt || 0);
-            if (tLoc > tCur) {
-                payrollData[key] = loc;
-                changed = true;
-            }
-        });
-    }
-    if (Array.isArray(localEmployees) && localEmployees.length) {
-        if (!Array.isArray(employees) || employees.length === 0) {
-            employees = localEmployees;
-            changed = true;
-        } else {
-            const byId = {};
-            employees.forEach((e) => {
-                if (e && e.employeeId) byId[e.employeeId] = e;
-            });
-            localEmployees.forEach((e) => {
-                if (!e || !e.employeeId) return;
-                if (!byId[e.employeeId]) {
-                    employees.push(e);
-                    changed = true;
-                }
-            });
-        }
-    }
-
-    if (!changed) return false;
-    normalizePayrollDataKeys({ persist: false });
-    lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
-    trySetLocalStorage('payrollData', payrollData);
-    trySetLocalStorage('employees', employees);
-    // Upsert-only: do not delete other server payslips during recovery merge.
-    const prevMode = window.__payrollPayslipSyncMode;
-    window.__payrollPayslipSyncMode = 'merge';
-    try {
-        persistPayrollToCloud(true);
-    } finally {
-        window.__payrollPayslipSyncMode = prevMode || 'replace';
-    }
-    console.info(
-        'Payroll safety sync: pushed',
-        Object.keys(payrollData).length,
-        'payslip key(s) to server (merged from browser cache).'
-    );
-    return true;
+    return false;
 }
 window.safetySyncLocalPayrollToServer = safetySyncLocalPayrollToServer;
 
 function saveEmployees() {
-    // Server is source of truth; localStorage is best-effort cache only.
+    // Optional cache only — database is source of truth.
     trySetLocalStorage('employees', employees);
     try {
         if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
     } catch (e) {}
+    window.__payrollPayslipSyncMode = 'replace';
     return persistPayrollToCloud(true);
 }
 
 function savePayrollData() {
     window.__payrollPayslipSyncMode = 'replace';
     normalizePayrollDataKeys({ persist: false });
-    const localOk = trySetLocalStorage('payrollData', payrollData);
+    // Best-effort browser cache; never required for correctness.
+    trySetLocalStorage('payrollData', payrollData);
     lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
-    // Always push to Postgres immediately — do not wait for localStorage.
-    const serverPromise = persistPayrollToCloud(true);
-    if (!localOk) {
-        showMessage(
-            'Payslip saved on server. Browser storage is full, so keep using this device online.',
-            'info'
-        );
-    }
-    return serverPromise;
+    return persistPayrollToCloud(true);
 }
 
 function persistPayrollToCloud(immediate) {
@@ -4718,6 +4635,7 @@ function reloadPayrollFromStorage(force) {
     }, 200);
 }
 
+/** Refresh payroll UI from in-memory (server-hydrated) state. Does not read localStorage. */
 function reloadPayrollFromStorageNow(force) {
     try {
         if (!force && window.AccountingData && typeof window.AccountingData.isSaveInFlight === 'function' && window.AccountingData.isSaveInFlight()) {
@@ -4726,35 +4644,13 @@ function reloadPayrollFromStorageNow(force) {
         if (!force && window.DataStore && typeof window.DataStore.isSaveInFlight === 'function' && window.DataStore.isSaveInFlight()) {
             return;
         }
-        // Keep richer in-memory payroll when localStorage is stale/full and could not be updated.
-        const prevEmployees = employees;
-        const prevPayroll = payrollData;
-        const prevCompany = companySettings;
-        const prevCount = prevPayroll && typeof prevPayroll === 'object' ? Object.keys(prevPayroll).length : 0;
-
-        let nextEmployees = JSON.parse(localStorage.getItem('employees')) || [];
-        let nextPayroll = JSON.parse(localStorage.getItem('payrollData')) || {};
-        let nextCompany = JSON.parse(localStorage.getItem('companySettings')) || {};
-        const nextCount = nextPayroll && typeof nextPayroll === 'object' ? Object.keys(nextPayroll).length : 0;
-
-        if (!force && !payrollLocalStorageOk && prevCount > nextCount) {
-            // localStorage is behind live memory (quota failure) — do not clobber.
-            return;
-        }
-
-        employees = Array.isArray(nextEmployees) ? nextEmployees : prevEmployees;
-        payrollData = nextPayroll && typeof nextPayroll === 'object' ? nextPayroll : prevPayroll;
-        companySettings = nextCompany && typeof nextCompany === 'object' ? nextCompany : prevCompany;
-    } catch (e) {
-        // Keep current in-memory state on parse errors.
-    }
+    } catch (e) {}
     normalizePayrollDataKeys({ persist: false });
     const fp = payrollDataFingerprint(payrollData);
     if (!force && fp === lastPayrollDataFingerprint) {
         return;
     }
     lastPayrollDataFingerprint = fp;
-    // Single UI refresh path (updateAllTabs already calls loadPayslips once).
     if (typeof loadEmployees === 'function') loadEmployees();
     if (typeof updateSocialInsuranceYTDDisplay === 'function') updateSocialInsuranceYTDDisplay();
     if (typeof updateSocialInsuranceMonthlyDisplay === 'function') updateSocialInsuranceMonthlyDisplay();
@@ -4769,7 +4665,7 @@ function reloadPayrollFromStorageNow(force) {
 }
 window.reloadPayrollFromStorage = reloadPayrollFromStorage;
 
-/** Apply payroll payload from server/shared save into live memory (bypasses localStorage quota). */
+/** Apply payroll payload from the database into live memory. Server wins — no localStorage merge. */
 function applyPayrollRemote(payrollPayload, opts) {
     opts = opts || {};
     if (!payrollPayload || typeof payrollPayload !== 'object') return false;
@@ -4792,17 +4688,8 @@ function applyPayrollRemote(payrollPayload, opts) {
                     delete incoming[key];
                 }
             });
-            const inCount = Object.keys(incoming).length;
-            const curCount = payrollData && typeof payrollData === 'object' ? Object.keys(payrollData).length : 0;
-            if (opts.force || inCount === 0) {
-                if (opts.force) payrollData = incoming;
-            } else if (inCount >= curCount) {
-                payrollData = incoming;
-            } else {
-                // Incoming is thinner (stale poll while localStorage was full) — keep local-only keys.
-                payrollData = Object.assign({}, incoming, payrollData);
-            }
-            // Drop any pending-deleted keys that were reintroduced via merge.
+            // Database payload replaces memory (except pending local deletes above).
+            payrollData = incoming;
             pendingDeletedPayKeys.forEach((key) => {
                 if (payrollData[key]) delete payrollData[key];
             });
@@ -4896,13 +4783,10 @@ function generateIR63Data(year) {
 
 // Company Settings Functions
 function loadCompanySettings() {
-    try {
-        var stored = localStorage.getItem('companySettings');
-        if (stored) companySettings = JSON.parse(stored);
-    } catch (e) {}
+    // Use in-memory settings from the database hydrate — do not re-read localStorage.
     var companyNameEl = document.getElementById('companyName');
     if (!companyNameEl) return;
-    if (Object.keys(companySettings).length > 0) {
+    if (Object.keys(companySettings || {}).length > 0) {
         companyNameEl.value = companySettings.companyName || '';
         document.getElementById('companyRegistration').value = companySettings.companyRegistration || '';
         document.getElementById('companyTaxId').value = companySettings.companyTaxId || '';
