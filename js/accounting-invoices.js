@@ -5495,24 +5495,12 @@ const app = {
             return;
         }
 
-        const normalizeText = (value) => String(value || '').trim().toLowerCase();
-        const clientNameKey = normalizeText(client.name);
-        const clientEmailKey = normalizeText(client.email);
-        const clientCustomerIdKey = String(client.customerId || '').trim();
-
-        const documentMatchesClient = (doc) => {
+        // Match invoices the same way as the rest of accounting (name / company / customerId / email)
+        const allDocs = DataStore.getInvoices().filter((doc) => {
             if (!doc || doc.status === 'draft' || doc.documentType === 'proforma') return false;
-            if (doc.clientId && String(doc.clientId) === String(clientId)) return true;
-            if (clientCustomerIdKey && doc.clientCustomerId &&
-                String(doc.clientCustomerId).trim() === clientCustomerIdKey) {
-                return true;
-            }
-            if (clientNameKey && normalizeText(doc.clientName) === clientNameKey) return true;
-            if (clientEmailKey && normalizeText(doc.clientEmail) === clientEmailKey) return true;
-            return false;
-        };
-
-        const allDocs = DataStore.getInvoices().filter(documentMatchesClient);
+            const matched = this.findClientForInvoice(doc);
+            return matched && String(matched.id) === String(clientId);
+        });
         const clientInvoices = allDocs.filter(doc => doc.documentType !== 'creditNote');
         const clientCreditNotes = allDocs.filter(doc => doc.documentType === 'creditNote');
 
