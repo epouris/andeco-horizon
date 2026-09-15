@@ -3168,14 +3168,20 @@ const app = {
         const clients = DataStore.getClients();
         if (!Array.isArray(clients) || !clients.length) return null;
         if (invoice.clientCustomerId) {
-            const byCust = clients.find((c) => c && c.customerId && c.customerId === invoice.clientCustomerId);
+            const custId = String(invoice.clientCustomerId).trim();
+            const byCust = clients.find((c) => c && c.customerId && String(c.customerId).trim() === custId);
             if (byCust) return byCust;
         }
         if (invoice.clientName) {
-            const byName = clients.find((c) => c && (
-                c.name === invoice.clientName ||
-                (DataStore.getClientCompanyName && DataStore.getClientCompanyName(c) === invoice.clientName)
-            ));
+            const invName = String(invoice.clientName).trim().toLowerCase();
+            const byName = clients.find((c) => {
+                if (!c) return false;
+                const name = String(c.name || '').trim().toLowerCase();
+                const company = DataStore.getClientCompanyName
+                    ? String(DataStore.getClientCompanyName(c) || '').trim().toLowerCase()
+                    : '';
+                return (name && name === invName) || (company && company === invName);
+            });
             if (byName) return byName;
         }
         if (invoice.clientEmail) {
@@ -5460,7 +5466,31 @@ const app = {
             return;
         }
         
-        if (new Date(fromDate) > new Date(toDate)) {
+        // Date-only compare (YYYYMMDD) so timezone / time-of-day cannot drop prior activity
+        const toDayNumber = (value) => {
+            if (value == null || value === '') return null;
+            if (window.AndecoDate && typeof window.AndecoDate.parseDateParts === 'function') {
+                const parts = window.AndecoDate.parseDateParts(value);
+                if (parts && parts.y && parts.m && parts.d) {
+                    return parts.y * 10000 + parts.m * 100 + parts.d;
+                }
+            }
+            const iso = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (iso) {
+                return Number(iso[1]) * 10000 + Number(iso[2]) * 100 + Number(iso[3]);
+            }
+            const d = new Date(value);
+            if (isNaN(d.getTime())) return null;
+            return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+        };
+
+        const fromDay = toDayNumber(fromDate);
+        const toDay = toDayNumber(toDate);
+        if (fromDay == null || toDay == null) {
+            alert('Please enter valid from and to dates.');
+            return;
+        }
+        if (fromDay > toDay) {
             alert('From date must be before or equal to To date.');
             return;
         }
@@ -5470,101 +5500,91 @@ const app = {
             alert('Customer not found.');
             return;
         }
-        
-        // Get all invoices for this client
-        const allInvoices = DataStore.getInvoices();
-        const clientInvoices = allInvoices.filter(inv =>
-            inv.documentType !== 'proforma' &&
-            (inv.clientName === client.name ||
-            (client.email && inv.clientEmail === client.email))
+
+        // Match invoices the same way as the rest of accounting (name / company / customerId / email)
+        const allDocs = DataStore.getInvoices().filter((doc) => {
+            if (!doc || doc.status === 'draft' || doc.documentType === 'proforma') return false;
+            const matched = this.findClientForInvoice(doc);
+            return matched && String(matched.id) === String(clientId);
+        });
+        const clientInvoices = allDocs.filter(doc => doc.documentType !== 'creditNote');
+        const clientCreditNotes = allDocs.filter(doc => doc.documentType === 'creditNote');
+
+        const clientReceipts = DataStore.getReceipts().filter(receipt =>
+            receipt && String(receipt.clientId) === String(clientId)
         );
-        
-        // Filter invoices by date range
-        const from = new Date(fromDate);
-        const to = new Date(toDate);
-        to.setHours(23, 59, 59, 999); // Include the entire end date
-        
-        const invoicesInRange = clientInvoices.filter(inv => {
-            const invDate = new Date(inv.date);
-            return invDate >= from && invDate <= to;
-        });
-        
-        // Get all receipts for this client
-        const allReceipts = DataStore.getReceipts();
-        const clientReceipts = allReceipts.filter(receipt => 
-            receipt.clientId === clientId
-        );
-        
-        // Filter receipts by date range
-        const receiptsInRange = clientReceipts.filter(receipt => {
-            const receiptDate = new Date(receipt.date);
-            return receiptDate >= from && receiptDate <= to;
-        });
-        
-        // Get all invoices (including those outside date range) for balance calculation
-        const allClientInvoices = clientInvoices;
-        
-        // Calculate opening balance (unpaid invoices before from date)
-        const openingInvoices = allClientInvoices.filter(inv => {
-            const invDate = new Date(inv.date);
-            return invDate < from;
-        });
-        
-        // Get all receipts (including those outside date range) for payment tracking
-        const allClientReceipts = allReceipts.filter(receipt => receipt.clientId === clientId);
-        
-        const openingBalance = openingInvoices.reduce((sum, inv) => {
-            // Check if invoice is paid (either by status or by receipt)
-            const isPaid = inv.status === 'paid' || 
-                          allClientReceipts.some(r => r.invoiceIds.includes(inv.id));
-            return isPaid ? sum : sum + (parseFloat(inv.total) || 0);
-        }, 0);
-        
-        // Calculate transactions in period
+
+        const inPeriod = (dateValue) => {
+            const day = toDayNumber(dateValue);
+            return day != null && day >= fromDay && day <= toDay;
+        };
+        const beforePeriod = (dateValue) => {
+            const day = toDayNumber(dateValue);
+            return day != null && day < fromDay;
+        };
+
+        // Opening balance = all prior invoices − prior credit notes − prior receipts
+        // (do not treat later-period payments as wiping prior invoices)
+        const priorInvoiceTotal = clientInvoices
+            .filter(inv => beforePeriod(inv.date))
+            .reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
+        const priorCreditTotal = clientCreditNotes
+            .filter(cn => beforePeriod(cn.date))
+            .reduce((sum, cn) => sum + (parseFloat(cn.total) || 0), 0);
+        const priorReceiptTotal = clientReceipts
+            .filter(receipt => beforePeriod(receipt.date))
+            .reduce((sum, receipt) => sum + (parseFloat(receipt.amount) || 0), 0);
+        const openingBalance = priorInvoiceTotal - priorCreditTotal - priorReceiptTotal;
+
+        const invoicesInRange = clientInvoices.filter(inv => inPeriod(inv.date));
+        const creditNotesInRange = clientCreditNotes.filter(cn => inPeriod(cn.date));
+        const receiptsInRange = clientReceipts.filter(receipt => inPeriod(receipt.date));
+
         let totalInvoiced = 0;
+        let totalCredits = 0;
         let totalPaid = 0;
-        
+
         invoicesInRange.forEach(inv => {
             totalInvoiced += parseFloat(inv.total) || 0;
         });
-        
+        creditNotesInRange.forEach(cn => {
+            totalCredits += parseFloat(cn.total) || 0;
+        });
         receiptsInRange.forEach(receipt => {
             totalPaid += parseFloat(receipt.amount) || 0;
         });
-        
-        // Calculate closing balance
-        const closingBalance = openingBalance + totalInvoiced - totalPaid;
-        
-        // Calculate ageing
+
+        const closingBalance = openingBalance + totalInvoiced - totalCredits - totalPaid;
+
+        // Ageing on unpaid invoices only (exclude credit notes / drafts / proformas)
         const today = new Date();
         const ageing = {
-            current: 0,      // 0-30 days
-            days31_60: 0,    // 31-60 days
-            days61_90: 0,    // 61-90 days
-            over90: 0        // Over 90 days
+            current: 0,
+            days31_60: 0,
+            days61_90: 0,
+            over90: 0
         };
-        
-        allClientInvoices.forEach(inv => {
-            if (inv.status !== 'paid') {
-                const invDate = new Date(inv.dueDate || inv.date);
-                const daysDiff = Math.floor((today - invDate) / (1000 * 60 * 60 * 24));
-                const amount = parseFloat(inv.total) || 0;
-                
-                if (daysDiff <= 30) {
-                    ageing.current += amount;
-                } else if (daysDiff <= 60) {
-                    ageing.days31_60 += amount;
-                } else if (daysDiff <= 90) {
-                    ageing.days61_90 += amount;
-                } else {
-                    ageing.over90 += amount;
-                }
+
+        clientInvoices.forEach(inv => {
+            if (inv.status === 'paid') return;
+            const invDate = new Date(inv.dueDate || inv.date);
+            if (isNaN(invDate.getTime())) return;
+            const daysDiff = Math.floor((today - invDate) / (1000 * 60 * 60 * 24));
+            const amount = parseFloat(inv.total) || 0;
+
+            if (daysDiff <= 30) {
+                ageing.current += amount;
+            } else if (daysDiff <= 60) {
+                ageing.days31_60 += amount;
+            } else if (daysDiff <= 90) {
+                ageing.days61_90 += amount;
+            } else {
+                ageing.over90 += amount;
             }
         });
-        
-        // Combine invoices and receipts into a single array with type indicator
+
         const transactions = [];
-        
+
         invoicesInRange.forEach(inv => {
             transactions.push({
                 type: 'invoice',
@@ -5577,7 +5597,19 @@ const app = {
                 status: inv.status
             });
         });
-        
+
+        creditNotesInRange.forEach(cn => {
+            const creditAmount = parseFloat(cn.total) || 0;
+            transactions.push({
+                type: 'creditNote',
+                date: cn.date,
+                reference: cn.invoiceNumber,
+                description: `Credit Note ${cn.invoiceNumber}`,
+                amount: 0,
+                payment: creditAmount
+            });
+        });
+
         receiptsInRange.forEach(receipt => {
             transactions.push({
                 type: 'receipt',
@@ -5589,37 +5621,34 @@ const app = {
                 paymentMethod: receipt.paymentMethod
             });
         });
-        
-        // Sort by date
+
         transactions.sort((a, b) => {
-            const dateA = new Date(a.date);
-            const dateB = new Date(b.date);
-            if (dateA.getTime() === dateB.getTime()) {
-                // If same date, put receipts after invoices
-                return a.type === 'receipt' ? 1 : -1;
-            }
-            return dateA - dateB;
+            const dayA = toDayNumber(a.date) || 0;
+            const dayB = toDayNumber(b.date) || 0;
+            if (dayA !== dayB) return dayA - dayB;
+            // Same day: invoices first, then credit notes, then receipts
+            const order = { invoice: 0, creditNote: 1, receipt: 2 };
+            return (order[a.type] || 9) - (order[b.type] || 9);
         });
-        
-        // Calculate running balance for each transaction
+
         let runningBalance = openingBalance;
         transactions.forEach(trans => {
             runningBalance = runningBalance + trans.amount - trans.payment;
             trans.balance = runningBalance;
         });
-        
-        // Store statement data for printing
+
         this.currentStatementData = {
             client: client,
             fromDate: fromDate,
             toDate: toDate,
             openingBalance: openingBalance,
             totalInvoiced: totalInvoiced,
+            totalCredits: totalCredits,
             totalPaid: totalPaid,
             closingBalance: closingBalance,
             transactions: transactions,
             ageing: ageing,
-            allInvoices: allClientInvoices
+            allInvoices: clientInvoices
         };
         
         this.renderStatement();
@@ -5700,13 +5729,12 @@ const app = {
                             </tr>
                         </thead>
                         <tbody>
-                            ${data.transactions.length > 0 ? `
-                                <tr style="background-color: #f5f5f5; font-weight: 600;">
-                                    <td colspan="3" style="text-align: right; padding: 0.5rem;">Opening Balance:</td>
-                                    <td colspan="2"></td>
-                                    <td class="text-right" style="padding: 0.5rem;">${this.formatCurrency(data.openingBalance)}</td>
-                                </tr>
-                                ${data.transactions.map(trans => {
+                            <tr style="background-color: #f5f5f5; font-weight: 600;">
+                                <td colspan="3" style="text-align: right; padding: 0.5rem;">Opening Balance:</td>
+                                <td colspan="2"></td>
+                                <td class="text-right" style="padding: 0.5rem;">${this.formatCurrency(data.openingBalance)}</td>
+                            </tr>
+                            ${data.transactions.length > 0 ? data.transactions.map(trans => {
                                     const transDate = new Date(trans.date);
                                     return `
                                         <tr>
@@ -5718,8 +5746,7 @@ const app = {
                                             <td class="text-right" style="font-weight: 600;">${this.formatCurrency(trans.balance)}</td>
                                         </tr>
                                     `;
-                                }).join('')}
-                            ` : '<tr><td colspan="6" style="text-align: center; padding: 1rem;">No transactions in this period</td></tr>'}
+                                }).join('') : '<tr><td colspan="6" style="text-align: center; padding: 1rem;">No transactions in this period</td></tr>'}
                         </tbody>
                     </table>
                 </div>
@@ -5735,6 +5762,12 @@ const app = {
                             <td class="summary-label">Total Invoiced (Period):</td>
                             <td class="summary-value">${this.formatCurrency(data.totalInvoiced)}</td>
                         </tr>
+                        ${(data.totalCredits || 0) > 0 ? `
+                        <tr>
+                            <td class="summary-label">Total Credit Notes (Period):</td>
+                            <td class="summary-value">${this.formatCurrency(data.totalCredits)}</td>
+                        </tr>
+                        ` : ''}
                         <tr>
                             <td class="summary-label">Total Paid (Period):</td>
                             <td class="summary-value">${this.formatCurrency(data.totalPaid)}</td>
@@ -6077,13 +6110,12 @@ const app = {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${data.transactions.length > 0 ? `
-                                    <tr style="background-color: #f5f5f5; font-weight: 600;">
-                                        <td colspan="3" style="text-align: right; padding: 0.5rem;">Opening Balance:</td>
-                                        <td colspan="2"></td>
-                                        <td class="text-right" style="padding: 0.5rem;">${this.formatCurrency(data.openingBalance)}</td>
-                                    </tr>
-                                    ${data.transactions.map(trans => {
+                                <tr style="background-color: #f5f5f5; font-weight: 600;">
+                                    <td colspan="3" style="text-align: right; padding: 0.5rem;">Opening Balance:</td>
+                                    <td colspan="2"></td>
+                                    <td class="text-right" style="padding: 0.5rem;">${this.formatCurrency(data.openingBalance)}</td>
+                                </tr>
+                                ${data.transactions.length > 0 ? data.transactions.map(trans => {
                                         const transDate = new Date(trans.date);
                                         return `
                                             <tr>
@@ -6095,8 +6127,7 @@ const app = {
                                                 <td class="text-right" style="font-weight: 600;">${this.formatCurrency(trans.balance)}</td>
                                             </tr>
                                         `;
-                                    }).join('')}
-                                ` : '<tr><td colspan="6" style="text-align: center; padding: 1rem;">No transactions in this period</td></tr>'}
+                                    }).join('') : '<tr><td colspan="6" style="text-align: center; padding: 1rem;">No transactions in this period</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -6112,6 +6143,12 @@ const app = {
                                 <td class="summary-label">Total Invoiced (Period):</td>
                                 <td class="summary-value">${this.formatCurrency(data.totalInvoiced)}</td>
                             </tr>
+                            ${(data.totalCredits || 0) > 0 ? `
+                            <tr>
+                                <td class="summary-label">Total Credit Notes (Period):</td>
+                                <td class="summary-value">${this.formatCurrency(data.totalCredits)}</td>
+                            </tr>
+                            ` : ''}
                             <tr>
                                 <td class="summary-label">Total Paid (Period):</td>
                                 <td class="summary-value">${this.formatCurrency(data.totalPaid)}</td>
