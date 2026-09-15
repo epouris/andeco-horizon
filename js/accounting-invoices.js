@@ -5446,6 +5446,7 @@ const app = {
      * Ageing analysis for a customer statement as of asOfDate.
      * Uses remaining balances (invoices − allocated receipts − FIFO unallocated
      * credits/on-account receipts), not full unpaid invoice totals.
+     * Buckets are based on invoice date (not due date).
      */
     buildStatementAgeing({ invoices, creditNotes, receipts, asOfDate, toDayNumber }) {
         const ageing = { current: 0, days31_60: 0, days61_90: 0, over90: 0 };
@@ -5526,15 +5527,15 @@ const app = {
         const rows = invoicesAsOf.map((inv) => {
             const total = parseFloat(inv.total) || 0;
             const paid = Math.min(total, paidToward[inv.id] || 0);
-            const dueDay = dayNum(inv.dueDate || inv.date);
+            const invoiceDay = dayNum(inv.date);
             return {
                 outstanding: Math.max(0, total - paid),
-                dueDay: dueDay
+                invoiceDay: invoiceDay
             };
         }).filter((row) => row.outstanding > 0.0001);
 
-        // Apply on-account receipts + credit notes to oldest due balances first
-        rows.sort((a, b) => (a.dueDay || 0) - (b.dueDay || 0));
+        // Apply on-account receipts + credit notes to oldest invoice dates first
+        rows.sort((a, b) => (a.invoiceDay || 0) - (b.invoiceDay || 0));
         let creditLeft = unallocatedCredit;
         rows.forEach((row) => {
             if (creditLeft <= 0) return;
@@ -5545,12 +5546,12 @@ const app = {
 
         rows.forEach((row) => {
             if (row.outstanding <= 0.0001) return;
-            const daysOverdue = row.dueDay != null ? daysBetween(row.dueDay, asOfDay) : 0;
-            if (daysOverdue <= 30) {
+            const ageDays = row.invoiceDay != null ? daysBetween(row.invoiceDay, asOfDay) : 0;
+            if (ageDays <= 30) {
                 ageing.current += row.outstanding;
-            } else if (daysOverdue <= 60) {
+            } else if (ageDays <= 60) {
                 ageing.days31_60 += row.outstanding;
-            } else if (daysOverdue <= 90) {
+            } else if (ageDays <= 90) {
                 ageing.days61_90 += row.outstanding;
             } else {
                 ageing.over90 += row.outstanding;
@@ -5669,7 +5670,7 @@ const app = {
 
         const closingBalance = openingBalance + totalInvoiced - totalCredits - totalPaid;
 
-        // Ageing = remaining outstanding as of statement To date, bucketed by days past due
+        // Ageing = remaining outstanding as of statement To date, bucketed by days since invoice date
         const ageing = this.buildStatementAgeing({
             invoices: clientInvoices,
             creditNotes: clientCreditNotes,
@@ -5876,7 +5877,7 @@ const app = {
 
                 <div style="margin-bottom: 20px;">
                     <h3 class="section-title">Ageing Analysis</h3>
-                    <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #64748b;">Outstanding balances as of ${toDateFormatted}, by days past due</p>
+                    <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #64748b;">Outstanding balances as of ${toDateFormatted}, by days since invoice date</p>
                     <table class="invoice-items-table-print" style="width: 100%; margin-bottom: 20px;">
                         <thead>
                             <tr>
@@ -6258,7 +6259,7 @@ const app = {
 
                     <div style="margin-bottom: 20px;">
                         <h3 class="section-title">Ageing Analysis</h3>
-                        <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #64748b;">Outstanding balances as of ${toDateFormatted}, by days past due</p>
+                        <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #64748b;">Outstanding balances as of ${toDateFormatted}, by days since invoice date</p>
                         <table class="invoice-items-table-print" style="width: 100%; margin-bottom: 20px;">
                             <thead>
                                 <tr>
