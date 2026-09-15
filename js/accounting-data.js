@@ -1147,6 +1147,10 @@ window.AccountingData = (function () {
             if (typeof window.applyPayrollRemote === 'function') {
               window.applyPayrollRemote(data.payroll, { force: false });
             }
+            // After server hydrate, push any browser-only payslips up so nothing is lost.
+            if (typeof window.safetySyncLocalPayrollToServer === 'function') {
+              window.safetySyncLocalPayrollToServer();
+            }
           } catch (ePayApply) {}
         }
         if (data.crm && typeof data.crm === 'object') {
