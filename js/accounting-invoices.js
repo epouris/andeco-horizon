@@ -3168,14 +3168,20 @@ const app = {
         const clients = DataStore.getClients();
         if (!Array.isArray(clients) || !clients.length) return null;
         if (invoice.clientCustomerId) {
-            const byCust = clients.find((c) => c && c.customerId && c.customerId === invoice.clientCustomerId);
+            const custId = String(invoice.clientCustomerId).trim();
+            const byCust = clients.find((c) => c && c.customerId && String(c.customerId).trim() === custId);
             if (byCust) return byCust;
         }
         if (invoice.clientName) {
-            const byName = clients.find((c) => c && (
-                c.name === invoice.clientName ||
-                (DataStore.getClientCompanyName && DataStore.getClientCompanyName(c) === invoice.clientName)
-            ));
+            const invName = String(invoice.clientName).trim().toLowerCase();
+            const byName = clients.find((c) => {
+                if (!c) return false;
+                const name = String(c.name || '').trim().toLowerCase();
+                const company = DataStore.getClientCompanyName
+                    ? String(DataStore.getClientCompanyName(c) || '').trim().toLowerCase()
+                    : '';
+                return (name && name === invName) || (company && company === invName);
+            });
             if (byName) return byName;
         }
         if (invoice.clientEmail) {
