@@ -20,6 +20,7 @@ const app = {
     currentClientId: null,
     currentReceiptId: null,
     invoiceListMode: 'invoice', // 'invoice' | 'proforma' | 'creditNote' | 'drafts'
+    dashboardChartYear: null,
     _sharedDataPollTimer: null,
 
     isProformaMode() {
@@ -589,6 +590,13 @@ const app = {
             radio.addEventListener('change', () => this.toggleReceiptPaymentType());
         });
 
+        const dashboardChartYear = document.getElementById('dashboard-chart-year');
+        if (dashboardChartYear) {
+            dashboardChartYear.addEventListener('change', () => {
+                this.onDashboardChartYearChange();
+            });
+        }
+
         // Client search
         const clientSearch = document.getElementById('client-search');
         if (clientSearch) {
@@ -741,6 +749,7 @@ const app = {
 
         this.renderDashboardOverdue(overdue);
         this.renderDashboardClientStats(active, today);
+        this.renderDashboardMonthlyChart(active, today);
         this.renderDashboardMonthlyBreakdown(active, today);
         this.renderCopilotDrafts();
     },
@@ -863,6 +872,130 @@ const app = {
               </tbody>
             </table>
             ${rows.length > 15 ? `<p class="dashboard-footnote">Showing top 15 of ${rows.length} clients by outstanding balance.</p>` : ''}
+        `;
+    },
+
+    invoiceDateParts(dateValue) {
+        if (dateValue == null || dateValue === '') return null;
+        if (window.AndecoDate && typeof window.AndecoDate.parseDateParts === 'function') {
+            const parts = window.AndecoDate.parseDateParts(dateValue);
+            if (parts && parts.y && parts.m) {
+                return { y: parts.y, m: parts.m, d: parts.d || 1 };
+            }
+        }
+        const iso = String(dateValue).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) {
+            return { y: Number(iso[1]), m: Number(iso[2]), d: Number(iso[3]) };
+        }
+        const d = new Date(dateValue);
+        if (isNaN(d.getTime())) return null;
+        return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() };
+    },
+
+    getDashboardChartYears(invoices, today) {
+        const currentYear = (today || new Date()).getFullYear();
+        const years = new Set([currentYear]);
+        (invoices || []).forEach((inv) => {
+            if (this.isCreditNoteDoc && this.isCreditNoteDoc(inv)) return;
+            const parts = this.invoiceDateParts(inv && inv.date);
+            if (parts && parts.y) years.add(parts.y);
+        });
+        return Array.from(years).sort((a, b) => b - a);
+    },
+
+    niceChartMax(value) {
+        const n = Number(value) || 0;
+        if (n <= 0) return 100;
+        const exp = Math.floor(Math.log10(n));
+        const pow = Math.pow(10, exp);
+        const frac = n / pow;
+        let niceFrac = 10;
+        if (frac <= 1) niceFrac = 1;
+        else if (frac <= 2) niceFrac = 2;
+        else if (frac <= 5) niceFrac = 5;
+        return niceFrac * pow;
+    },
+
+    onDashboardChartYearChange() {
+        const select = document.getElementById('dashboard-chart-year');
+        if (!select) return;
+        const year = parseInt(select.value, 10);
+        if (!Number.isFinite(year)) return;
+        this.dashboardChartYear = year;
+        const invoices = DataStore.getInvoices().filter(inv => !this.isProformaDoc(inv) && inv.status !== 'draft');
+        this.renderDashboardMonthlyChart(invoices, new Date());
+    },
+
+    renderDashboardMonthlyChart(invoices, today) {
+        const chartEl = document.getElementById('dashboard-monthly-chart');
+        const yearSelect = document.getElementById('dashboard-chart-year');
+        if (!chartEl) return;
+
+        const now = today || new Date();
+        const currentYear = now.getFullYear();
+        const years = this.getDashboardChartYears(invoices, now);
+        let selectedYear = parseInt(this.dashboardChartYear, 10);
+        if (!Number.isFinite(selectedYear) || !years.includes(selectedYear)) {
+            selectedYear = years.includes(currentYear) ? currentYear : years[0];
+        }
+        this.dashboardChartYear = selectedYear;
+
+        if (yearSelect) {
+            yearSelect.innerHTML = years.map((y) =>
+                `<option value="${y}"${y === selectedYear ? ' selected' : ''}>${y}</option>`
+            ).join('');
+        }
+
+        const monthTotals = Array.from({ length: 12 }, () => 0);
+        (invoices || []).forEach((inv) => {
+            if (this.isCreditNoteDoc && this.isCreditNoteDoc(inv)) return;
+            const parts = this.invoiceDateParts(inv && inv.date);
+            if (!parts || parts.y !== selectedYear) return;
+            const idx = parts.m - 1;
+            if (idx < 0 || idx > 11) return;
+            monthTotals[idx] += parseFloat(inv.total) || 0;
+        });
+
+        const maxValue = Math.max.apply(null, monthTotals);
+        const axisMax = this.niceChartMax(maxValue);
+        const tickCount = 4;
+        const ticks = [];
+        for (let i = tickCount; i >= 0; i--) {
+            ticks.push((axisMax * i) / tickCount);
+        }
+
+        const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const hasAny = monthTotals.some((v) => v > 0);
+
+        if (!hasAny) {
+            chartEl.innerHTML = `<p class="dash-bar-chart-empty">No billed invoices in ${selectedYear}.</p>`;
+            return;
+        }
+
+        chartEl.innerHTML = `
+            <div class="dash-bar-chart" role="img" aria-label="Monthly billed totals for ${selectedYear}">
+              <div class="dash-bar-chart-y" aria-hidden="true">
+                ${ticks.map((t) => `<span>${this.escapeHtml(this.formatCurrency(t))}</span>`).join('')}
+              </div>
+              <div class="dash-bar-chart-plot">
+                <div class="dash-bar-chart-grid" aria-hidden="true">
+                  ${ticks.map(() => '<span></span>').join('')}
+                </div>
+                <div class="dash-bar-chart-cols">
+                  ${monthTotals.map((amount, idx) => {
+                      const pct = axisMax > 0 ? Math.max(0, Math.min(100, (amount / axisMax) * 100)) : 0;
+                      const empty = amount <= 0;
+                      const title = `${monthLabels[idx]} ${selectedYear}: ${this.formatCurrency(amount)}`;
+                      return `<div class="dash-bar-col" title="${this.escapeHtml(title)}">
+                        <div class="dash-bar-track">
+                          <div class="dash-bar${empty ? ' is-empty' : ''}" style="height: ${empty ? 0 : pct}%;"></div>
+                        </div>
+                        <span class="dash-bar-label">${monthLabels[idx]}</span>
+                      </div>`;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
         `;
     },
 
