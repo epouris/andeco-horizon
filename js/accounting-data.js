@@ -372,11 +372,25 @@ window.AccountingData = (function () {
           return { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
         }
       })(),
-      payroll: {
-        employees: getLocalStorage('employees', []),
-        payrollData: getLocalStorage('payrollData', {}),
-        companySettings: getLocalStorage('companySettings', {})
-      },
+      payroll: (function () {
+        // Prefer live in-memory payroll (localStorage can hit QuotaExceeded with many payslips).
+        var liveEmployees = null;
+        var livePayroll = null;
+        var liveCompany = null;
+        try {
+          if (typeof window !== 'undefined') {
+            if (typeof window.getPayrollEmployees === 'function') liveEmployees = window.getPayrollEmployees();
+            else if (typeof window.employees !== 'undefined' && Array.isArray(window.employees)) liveEmployees = window.employees;
+            if (typeof window.getPayrollDataMap === 'function') livePayroll = window.getPayrollDataMap();
+            if (typeof window.getPayrollCompanySettings === 'function') liveCompany = window.getPayrollCompanySettings();
+          }
+        } catch (ePayLive) {}
+        return {
+          employees: Array.isArray(liveEmployees) ? liveEmployees : getLocalStorage('employees', []),
+          payrollData: livePayroll && typeof livePayroll === 'object' ? livePayroll : getLocalStorage('payrollData', {}),
+          companySettings: liveCompany && typeof liveCompany === 'object' ? liveCompany : getLocalStorage('companySettings', {})
+        };
+      })(),
       lms: (function () {
         try {
           var r = localStorage.getItem('andeco_lms_data');
@@ -1128,6 +1142,12 @@ window.AccountingData = (function () {
           if (data.payroll.companySettings && typeof data.payroll.companySettings === 'object') {
             setLocalStorage('companySettings', data.payroll.companySettings);
           }
+          // Always hydrate live payroll memory (localStorage may be full).
+          try {
+            if (typeof window.applyPayrollRemote === 'function') {
+              window.applyPayrollRemote(data.payroll, { force: false });
+            }
+          } catch (ePayApply) {}
         }
         if (data.crm && typeof data.crm === 'object') {
           if (Array.isArray(data.crm.users)) setLocalStorage('andeco_crm_users', data.crm.users);

@@ -899,14 +899,9 @@ function payslipOvertimeHoursAndRate(payslip) {
 // Payslip Generation
 function generatePayslip() {
     try {
-        console.log('Starting payslip generation...');
-        
         const employeeId = document.getElementById('payslipEmployee').value;
         const month = document.getElementById('payslipMonth').value;
         const year = document.getElementById('payslipYear').value;
-        
-        console.log('Form values:', { employeeId, month, year });
-        console.log('Employees array:', employees);
         
         if (!employeeId) {
             showMessage('Please select an employee', 'error');
@@ -998,9 +993,7 @@ function generatePayslip() {
         taxYear: year
     };
     
-    console.log('About to calculate payroll...');
     const payroll = calculatePayroll(basicSalary, employee.taxCode, additionalEarnings, expenses, excludeHolidayFund, excludeIncomeTax, deductionBasisOptions);
-    console.log('Payroll calculated:', payroll);
     
     const siTaxableBasisBeforeHolidays = payroll.siTaxableBasis;
     const socialInsuranceBreakdownBeforeHolidays = payroll.socialInsuranceBreakdown;
@@ -1061,11 +1054,9 @@ function generatePayslip() {
         autoPayrollNumber = existingPayslip
             ? existingPayslip.payrollNumber
             : formatPayrollNumber(year, monthNum, 1);
-        console.log(`Default payroll number (editing): ${autoPayrollNumber}`);
     } else {
         const sequenceNumber = getNextPayrollSequence(year, monthNum);
         autoPayrollNumber = formatPayrollNumber(year, monthNum, sequenceNumber);
-        console.log(`Default payroll number (new): ${autoPayrollNumber} (sequence: ${sequenceNumber})`);
     }
     const payrollNumber = resolvePayrollNumberForSave(autoPayrollNumber);
     updateElement('payslipPayrollNumber', payrollNumber);
@@ -1570,20 +1561,15 @@ function updatePayslipFilters() {
 }
 
 function viewPayslip(employeeId, year, month) {
-    console.log('viewPayslip called with:', { employeeId, year, month });
-    console.log('Current payrollData:', payrollData);
     
     const result = findPayslip(employeeId, year, month);
     
     if (!result) {
-        console.log('Payslip not found for employee:', employeeId, 'year:', year, 'month:', month);
-        console.log('Available payroll keys:', Object.keys(payrollData));
         showMessage('Payslip not found', 'error');
         return;
     }
     
     const { payslip } = result;
-    console.log('Found payslip:', payslip);
     
     // Populate payslip display with existing data
     populatePayslipDisplay(payslip);
@@ -1734,12 +1720,9 @@ function renumberPayrollSequences(year) {
 }
 
 function populatePayslipDisplay(payslip) {
-    console.log('populatePayslipDisplay called with:', payslip);
     
     // Get employee data to access social insurance number
     const employee = employees.find(emp => emp.employeeId === payslip.employeeId);
-    console.log('Employee found:', employee);
-    console.log('Social Insurance Number:', employee ? employee.socialInsurance : 'Employee not found');
     
     // Update basic info
     updateElement('payslipEmployeeName', payslip.employeeName);
@@ -1750,9 +1733,7 @@ function populatePayslipDisplay(payslip) {
     try {
         // Convert month to number if it's a string
         const monthNum = typeof payslip.month === 'string' ? parseInt(payslip.month) : payslip.month;
-        console.log('Month conversion:', { original: payslip.month, converted: monthNum, type: typeof monthNum });
         monthForDisplay = getMonthName(monthNum).toUpperCase();
-        console.log('Month name result:', monthForDisplay);
     } catch (error) {
         console.error('Error getting month name:', error);
         console.error('Month value that caused error:', payslip.month);
@@ -4467,7 +4448,6 @@ function setDefaultPayDate() {
 function getNextPayrollSequence(year, month) {
     const maxSequence = getMaxPayrollSequenceForMonth(year, month);
     const nextSequence = maxSequence + 1;
-    console.log(`Next payroll sequence for ${year}-${payrollMonthSegment(month)}: ${nextSequence} (max existing: ${maxSequence})`);
     return nextSequence;
 }
 
@@ -4496,30 +4476,71 @@ function showMessage(message, type) {
     }, 5000);
 }
 
+/** True when the last localStorage write for payroll maps succeeded. */
+let payrollLocalStorageOk = true;
+
+function trySetLocalStorage(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+        if (key === 'payrollData') payrollLocalStorageOk = true;
+        return true;
+    } catch (e) {
+        const quota =
+            e &&
+            (e.name === 'QuotaExceededError' ||
+                e.code === 22 ||
+                e.code === 1014 ||
+                /quota/i.test(String(e.message || e)));
+        if (key === 'payrollData') payrollLocalStorageOk = false;
+        if (quota) {
+            console.warn('localStorage quota exceeded for', key, '— keeping in-memory data and saving to server.');
+        } else {
+            console.warn('localStorage write failed for', key, e);
+        }
+        return false;
+    }
+}
+
 function saveEmployees() {
-    localStorage.setItem('employees', JSON.stringify(employees));
+    const ok = trySetLocalStorage('employees', employees);
+    payrollLocalStorageOk = payrollLocalStorageOk && ok;
     try {
         if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
     } catch (e) {}
-    persistPayrollToCloud();
+    persistPayrollToCloud(!ok);
 }
 
 function savePayrollData() {
     normalizePayrollDataKeys({ persist: false });
-    localStorage.setItem('payrollData', JSON.stringify(payrollData));
+    const ok = trySetLocalStorage('payrollData', payrollData);
+    payrollLocalStorageOk = ok;
     lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
-    persistPayrollToCloud();
+    // If browser cache is full, push to server immediately with live in-memory data.
+    persistPayrollToCloud(!ok);
+    if (!ok) {
+        showMessage(
+            'Payslip saved on server. Browser storage is full, so keep using this device online.',
+            'info'
+        );
+    }
 }
 
-function persistPayrollToCloud() {
+function persistPayrollToCloud(immediate) {
     if (persistPayrollTimer) clearTimeout(persistPayrollTimer);
-    persistPayrollTimer = setTimeout(function () {
+    const run = function () {
         persistPayrollTimer = null;
         try {
-            if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll();
-            else if (window.DataStore && window.DataStore.persistAll) window.DataStore.persistAll();
+            if (window.AccountingData && window.AccountingData.persistAll) return window.AccountingData.persistAll();
+            if (window.DataStore && window.DataStore.persistAll) return window.DataStore.persistAll();
         } catch (e) {}
-    }, 750);
+        return Promise.resolve(false);
+    };
+    if (immediate) {
+        persistPayrollTimer = null;
+        return run();
+    }
+    persistPayrollTimer = setTimeout(run, 750);
+    return Promise.resolve(true);
 }
 
 function reloadPayrollFromStorage(force) {
@@ -4538,13 +4559,27 @@ function reloadPayrollFromStorageNow(force) {
         if (!force && window.DataStore && typeof window.DataStore.isSaveInFlight === 'function' && window.DataStore.isSaveInFlight()) {
             return;
         }
-        employees = JSON.parse(localStorage.getItem('employees')) || [];
-        payrollData = JSON.parse(localStorage.getItem('payrollData')) || {};
-        companySettings = JSON.parse(localStorage.getItem('companySettings')) || {};
+        // Keep richer in-memory payroll when localStorage is stale/full and could not be updated.
+        const prevEmployees = employees;
+        const prevPayroll = payrollData;
+        const prevCompany = companySettings;
+        const prevCount = prevPayroll && typeof prevPayroll === 'object' ? Object.keys(prevPayroll).length : 0;
+
+        let nextEmployees = JSON.parse(localStorage.getItem('employees')) || [];
+        let nextPayroll = JSON.parse(localStorage.getItem('payrollData')) || {};
+        let nextCompany = JSON.parse(localStorage.getItem('companySettings')) || {};
+        const nextCount = nextPayroll && typeof nextPayroll === 'object' ? Object.keys(nextPayroll).length : 0;
+
+        if (!force && !payrollLocalStorageOk && prevCount > nextCount) {
+            // localStorage is behind live memory (quota failure) — do not clobber.
+            return;
+        }
+
+        employees = Array.isArray(nextEmployees) ? nextEmployees : prevEmployees;
+        payrollData = nextPayroll && typeof nextPayroll === 'object' ? nextPayroll : prevPayroll;
+        companySettings = nextCompany && typeof nextCompany === 'object' ? nextCompany : prevCompany;
     } catch (e) {
-        employees = [];
-        payrollData = {};
-        companySettings = {};
+        // Keep current in-memory state on parse errors.
     }
     normalizePayrollDataKeys({ persist: false });
     const fp = payrollDataFingerprint(payrollData);
@@ -4566,6 +4601,45 @@ function reloadPayrollFromStorageNow(force) {
     }
 }
 window.reloadPayrollFromStorage = reloadPayrollFromStorage;
+
+/** Apply payroll payload from server/shared save into live memory (bypasses localStorage quota). */
+function applyPayrollRemote(payrollPayload, opts) {
+    opts = opts || {};
+    if (!payrollPayload || typeof payrollPayload !== 'object') return false;
+    try {
+        if (Array.isArray(payrollPayload.employees)) {
+            employees = payrollPayload.employees;
+            trySetLocalStorage('employees', employees);
+        }
+        if (payrollPayload.payrollData && typeof payrollPayload.payrollData === 'object') {
+            const incoming = payrollPayload.payrollData;
+            const inCount = Object.keys(incoming).length;
+            const curCount = payrollData && typeof payrollData === 'object' ? Object.keys(payrollData).length : 0;
+            if (opts.force || inCount === 0) {
+                if (opts.force) payrollData = incoming;
+            } else if (inCount >= curCount) {
+                payrollData = incoming;
+            } else {
+                // Incoming is thinner (stale poll while localStorage was full) — keep local-only keys.
+                payrollData = Object.assign({}, incoming, payrollData);
+            }
+            trySetLocalStorage('payrollData', payrollData);
+        }
+        if (payrollPayload.companySettings && typeof payrollPayload.companySettings === 'object') {
+            companySettings = payrollPayload.companySettings;
+            trySetLocalStorage('companySettings', companySettings);
+        }
+        normalizePayrollDataKeys({ persist: false });
+        lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
+        if (typeof loadEmployees === 'function') loadEmployees();
+        if (typeof updateAllTabs === 'function') updateAllTabs();
+        return true;
+    } catch (e) {
+        console.warn('applyPayrollRemote failed', e);
+        return false;
+    }
+}
+window.applyPayrollRemote = applyPayrollRemote;
 
 function downloadCSV(data, filename) {
     const csvContent = "data:text/csv;charset=utf-8," + data;
@@ -4734,10 +4808,10 @@ companyFormEl.addEventListener('submit', function(e) {
 }
 
 function saveCompanySettings() {
-    localStorage.setItem('companySettings', JSON.stringify(companySettings));
+    const ok = trySetLocalStorage('companySettings', companySettings);
     updatePayslipWithCompanyInfo();
     updateAllTabs();
-    persistPayrollToCloud();
+    persistPayrollToCloud(!ok);
 }
 
 function updatePayslipCompanyInfo() {
@@ -4920,6 +4994,18 @@ function clearAllData() {
 function getPayrollDataMap() {
     return payrollData && typeof payrollData === 'object' ? payrollData : {};
 }
+
+function getPayrollEmployees() {
+    return Array.isArray(employees) ? employees : [];
+}
+
+function getPayrollCompanySettings() {
+    return companySettings && typeof companySettings === 'object' ? companySettings : {};
+}
+
+window.getPayrollDataMap = getPayrollDataMap;
+window.getPayrollEmployees = getPayrollEmployees;
+window.getPayrollCompanySettings = getPayrollCompanySettings;
 
 function mergeImportedPayrollRecords(recordsByKey) {
     if (!recordsByKey || typeof recordsByKey !== 'object') return 0;
