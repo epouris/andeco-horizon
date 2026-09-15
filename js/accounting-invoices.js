@@ -6012,18 +6012,18 @@ const app = {
                     }
                     
                     .invoice-title {
-                        font-size: 18pt;
+                        font-size: 12pt;
                         font-weight: bold;
-                        margin: 0 0 8px 0;
+                        margin: 0 0 5px 0;
                         color: #000;
                         text-transform: uppercase;
                     }
                     
                     .invoice-details-table {
                         border-collapse: collapse;
-                        margin-top: 3px;
+                        margin-top: 2px;
                         width: 100%;
-                        font-size: 9pt;
+                        font-size: 7.5pt;
                     }
                     
                     .invoice-details-table tr {
@@ -6031,17 +6031,17 @@ const app = {
                     }
                     
                     .invoice-details-table .label-cell {
-                        padding: 2px 8px 2px 0;
+                        padding: 1px 6px 1px 0;
                         text-align: right;
                         font-weight: 600;
                         color: #333;
                         white-space: nowrap;
                         width: 50%;
-                        font-size: 9pt;
+                        font-size: 7.5pt;
                     }
                     
                     .invoice-details-table .value-cell {
-                        padding: 2px 0;
+                        padding: 1px 0;
                         text-align: left;
                         color: #000;
                         width: 50%;
