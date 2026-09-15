@@ -5836,7 +5836,7 @@ const app = {
                                         <tr>
                                             <td>${(window.AndecoDate ? window.AndecoDate.formatDate(transDate) : transDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))}</td>
                                             <td>${trans.reference}</td>
-                                            <td>${trans.description}${trans.type === 'invoice' && trans.dueDate ? ` (Due: ${(window.AndecoDate ? window.AndecoDate.formatDate(trans.dueDate) : this.formatDate(trans.dueDate))})` : ''}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
+                                            <td>${trans.description}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
                                             <td class="text-right">${trans.amount > 0 ? this.formatCurrency(trans.amount) : '-'}</td>
                                             <td class="text-right">${trans.payment > 0 ? this.formatCurrency(trans.payment) : '-'}</td>
                                             <td class="text-right" style="font-weight: 600;">${this.formatCurrency(trans.balance)}</td>
@@ -6218,7 +6218,7 @@ const app = {
                                             <tr>
                                                 <td>${(window.AndecoDate ? window.AndecoDate.formatDate(transDate) : transDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))}</td>
                                                 <td>${trans.reference}</td>
-                                                <td>${trans.description}${trans.type === 'invoice' && trans.dueDate ? ` (Due: ${(window.AndecoDate ? window.AndecoDate.formatDate(trans.dueDate) : this.formatDate(trans.dueDate))})` : ''}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
+                                                <td>${trans.description}${trans.type === 'receipt' && trans.paymentMethod ? ` - ${trans.paymentMethod}` : ''}</td>
                                                 <td class="text-right">${trans.amount > 0 ? this.formatCurrency(trans.amount) : '-'}</td>
                                                 <td class="text-right">${trans.payment > 0 ? this.formatCurrency(trans.payment) : '-'}</td>
                                                 <td class="text-right" style="font-weight: 600;">${this.formatCurrency(trans.balance)}</td>
