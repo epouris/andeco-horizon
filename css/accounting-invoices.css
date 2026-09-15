@@ -964,11 +964,16 @@
 .invoice-details-table tr { border-bottom: 1px solid #e0e0e0; }
 .invoice-details-table .label-cell { padding: 0.15rem 0.5rem 0.15rem 0; text-align: right; font-weight: 600; color: #333; white-space: nowrap; font-size: 0.75rem; }
 .invoice-details-table .value-cell { padding: 0.15rem 0; text-align: left; color: #000; font-size: 0.75rem; }
-/* Customer Statement header — smaller title / period / date */
-.statement-preview .invoice-title { font-size: 1.05rem; margin: 0 0 0.35rem 0; }
-.statement-preview .invoice-details-table { font-size: 0.65rem; }
+/* Customer Statement header — smaller title / period / date; keep period on one line */
+.statement-preview .invoice-title-section { min-width: 240px; max-width: 280px; flex: 0 0 auto; }
+.statement-preview .invoice-title { font-size: 0.95rem; margin: 0 0 0.25rem 0; }
+.statement-preview .invoice-details-table { font-size: 0.55rem; width: 100%; }
 .statement-preview .invoice-details-table .label-cell,
-.statement-preview .invoice-details-table .value-cell { font-size: 0.65rem; padding: 0.1rem 0.35rem 0.1rem 0; }
+.statement-preview .invoice-details-table .value-cell {
+  font-size: 0.55rem;
+  padding: 0.08rem 0.25rem 0.08rem 0;
+  white-space: nowrap;
+}
 .bill-to-section-print { margin-bottom: 2rem; }
 .section-title { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.75rem; color: #333; text-transform: uppercase; letter-spacing: 0.5px; }
 .bill-to-content { margin-left: 0; }
