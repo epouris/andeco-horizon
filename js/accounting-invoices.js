@@ -5451,6 +5451,128 @@ const app = {
         }
     },
 
+    /**
+     * Ageing analysis for a customer statement as of asOfDate.
+     * Uses remaining balances (invoices − allocated receipts − FIFO unallocated
+     * credits/on-account receipts), not full unpaid invoice totals.
+     */
+    buildStatementAgeing({ invoices, creditNotes, receipts, asOfDate, toDayNumber }) {
+        const ageing = { current: 0, days31_60: 0, days61_90: 0, over90: 0 };
+        const dayNum = typeof toDayNumber === 'function'
+            ? toDayNumber
+            : (value) => {
+                const parts = this.invoiceDateParts(value);
+                return parts ? parts.y * 10000 + parts.m * 100 + parts.d : null;
+            };
+        const asOfDay = dayNum(asOfDate);
+        if (asOfDay == null) return ageing;
+
+        const partsFromDay = (day) => {
+            if (day == null) return null;
+            const y = Math.floor(day / 10000);
+            const m = Math.floor((day % 10000) / 100);
+            const d = day % 100;
+            return { y, m, d };
+        };
+        const daysBetween = (earlierDay, laterDay) => {
+            const a = partsFromDay(earlierDay);
+            const b = partsFromDay(laterDay);
+            if (!a || !b) return 0;
+            const ms = Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d);
+            return Math.floor(ms / 86400000);
+        };
+
+        const invoicesAsOf = (invoices || []).filter((inv) => {
+            const day = dayNum(inv && inv.date);
+            return day != null && day <= asOfDay;
+        });
+
+        const paidToward = {};
+        let unallocatedCredit = 0;
+
+        (receipts || []).forEach((receipt) => {
+            if (!receipt) return;
+            const day = dayNum(receipt.date);
+            if (day == null || day > asOfDay) return;
+            const amount = parseFloat(receipt.amount) || 0;
+            if (amount <= 0) return;
+            const ids = Array.isArray(receipt.invoiceIds)
+                ? receipt.invoiceIds.filter(Boolean)
+                : [];
+            if (receipt.onAccountBalance || ids.length === 0) {
+                unallocatedCredit += amount;
+                return;
+            }
+            const linked = ids
+                .map((id) => invoicesAsOf.find((inv) => inv && String(inv.id) === String(id)))
+                .filter(Boolean);
+            const linkedTotal = linked.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
+            if (!linked.length || linkedTotal <= 0) {
+                unallocatedCredit += amount;
+                return;
+            }
+            let allocated = 0;
+            linked.forEach((inv, idx) => {
+                const invTotal = parseFloat(inv.total) || 0;
+                const share = idx === linked.length - 1
+                    ? Math.max(0, amount - allocated)
+                    : Math.round((amount * (invTotal / linkedTotal)) * 100) / 100;
+                const apply = Math.max(0, share);
+                paidToward[inv.id] = (paidToward[inv.id] || 0) + apply;
+                allocated += apply;
+            });
+            if (amount > allocated + 0.0001) {
+                unallocatedCredit += amount - allocated;
+            }
+        });
+
+        (creditNotes || []).forEach((cn) => {
+            const day = dayNum(cn && cn.date);
+            if (day == null || day > asOfDay) return;
+            unallocatedCredit += parseFloat(cn.total) || 0;
+        });
+
+        const rows = invoicesAsOf.map((inv) => {
+            const total = parseFloat(inv.total) || 0;
+            const paid = Math.min(total, paidToward[inv.id] || 0);
+            const dueDay = dayNum(inv.dueDate || inv.date);
+            return {
+                outstanding: Math.max(0, total - paid),
+                dueDay: dueDay
+            };
+        }).filter((row) => row.outstanding > 0.0001);
+
+        // Apply on-account receipts + credit notes to oldest due balances first
+        rows.sort((a, b) => (a.dueDay || 0) - (b.dueDay || 0));
+        let creditLeft = unallocatedCredit;
+        rows.forEach((row) => {
+            if (creditLeft <= 0) return;
+            const apply = Math.min(row.outstanding, creditLeft);
+            row.outstanding -= apply;
+            creditLeft -= apply;
+        });
+
+        rows.forEach((row) => {
+            if (row.outstanding <= 0.0001) return;
+            const daysOverdue = row.dueDay != null ? daysBetween(row.dueDay, asOfDay) : 0;
+            if (daysOverdue <= 30) {
+                ageing.current += row.outstanding;
+            } else if (daysOverdue <= 60) {
+                ageing.days31_60 += row.outstanding;
+            } else if (daysOverdue <= 90) {
+                ageing.days61_90 += row.outstanding;
+            } else {
+                ageing.over90 += row.outstanding;
+            }
+        });
+
+        // Round display totals to cents
+        Object.keys(ageing).forEach((key) => {
+            ageing[key] = Math.round(ageing[key] * 100) / 100;
+        });
+        return ageing;
+    },
+
     generateStatement() {
         const clientId = document.getElementById('statement-client-select').value;
         const fromDate = document.getElementById('statement-from-date').value;
@@ -5556,31 +5678,13 @@ const app = {
 
         const closingBalance = openingBalance + totalInvoiced - totalCredits - totalPaid;
 
-        // Ageing on unpaid invoices only (exclude credit notes / drafts / proformas)
-        const today = new Date();
-        const ageing = {
-            current: 0,
-            days31_60: 0,
-            days61_90: 0,
-            over90: 0
-        };
-
-        clientInvoices.forEach(inv => {
-            if (inv.status === 'paid') return;
-            const invDate = new Date(inv.dueDate || inv.date);
-            if (isNaN(invDate.getTime())) return;
-            const daysDiff = Math.floor((today - invDate) / (1000 * 60 * 60 * 24));
-            const amount = parseFloat(inv.total) || 0;
-
-            if (daysDiff <= 30) {
-                ageing.current += amount;
-            } else if (daysDiff <= 60) {
-                ageing.days31_60 += amount;
-            } else if (daysDiff <= 90) {
-                ageing.days61_90 += amount;
-            } else {
-                ageing.over90 += amount;
-            }
+        // Ageing = remaining outstanding as of statement To date, bucketed by days past due
+        const ageing = this.buildStatementAgeing({
+            invoices: clientInvoices,
+            creditNotes: clientCreditNotes,
+            receipts: clientReceipts,
+            asOfDate: toDate,
+            toDayNumber: toDayNumber
         });
 
         const transactions = [];
@@ -5781,6 +5885,7 @@ const app = {
 
                 <div style="margin-bottom: 20px;">
                     <h3 class="section-title">Ageing Analysis</h3>
+                    <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #64748b;">Outstanding balances as of ${toDateFormatted}, by days past due</p>
                     <table class="invoice-items-table-print" style="width: 100%; margin-bottom: 20px;">
                         <thead>
                             <tr>
@@ -6162,6 +6267,7 @@ const app = {
 
                     <div style="margin-bottom: 20px;">
                         <h3 class="section-title">Ageing Analysis</h3>
+                        <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #64748b;">Outstanding balances as of ${toDateFormatted}, by days past due</p>
                         <table class="invoice-items-table-print" style="width: 100%; margin-bottom: 20px;">
                             <thead>
                                 <tr>
