@@ -323,19 +323,17 @@
         return window.FleetManagement.getVessels() || [];
       }
     } catch (_) {}
-    try {
-      return JSON.parse(localStorage.getItem('andeco_fleet_vessels') || '[]') || [];
-    } catch (_) {
-      return [];
-    }
+    return [];
   }
 
   function readFleetGalleryPhotos() {
     try {
-      return JSON.parse(localStorage.getItem('andeco_fleet_vessel_photos') || '[]') || [];
-    } catch (_) {
-      return [];
-    }
+      if (window.FleetManagement && typeof window.FleetManagement.getState === 'function') {
+        var st = window.FleetManagement.getState();
+        return (st && Array.isArray(st.vesselPhotos)) ? st.vesselPhotos : [];
+      }
+    } catch (_) {}
+    return [];
   }
 
   function fleetVesselPhotoItems(vessel) {
@@ -2723,13 +2721,8 @@
   }
 
   function loadLocal() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return emptyState();
-      return normalizeState(JSON.parse(raw));
-    } catch (_) {
-      return emptyState();
-    }
+    // Memory/server only — never seed from localStorage.
+    return emptyState();
   }
 
   function isBusy() {
@@ -2753,7 +2746,7 @@
 
   function saveLocal() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // no-op: Postgres via persistAll is the durable store
       return true;
     } catch (err) {
       console.error('Distribution local save failed', err);

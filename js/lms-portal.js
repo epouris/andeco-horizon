@@ -65,8 +65,12 @@
 
   function getSession() {
     try {
-      var raw = localStorage.getItem('andeco_crm_session');
-      if (raw) return JSON.parse(raw);
+      if (window.AndecoUsers && typeof window.AndecoUsers.getSession === 'function') {
+        return window.AndecoUsers.getSession();
+      }
+      if (window.AndecoApp && typeof window.AndecoApp.getSession === 'function') {
+        return window.AndecoApp.getSession();
+      }
     } catch (e) {}
     return null;
   }
@@ -75,18 +79,10 @@
     if (window.LmsModule && typeof window.LmsModule.getData === 'function') {
       return window.LmsModule.getData();
     }
-    try {
-      var raw = localStorage.getItem('andeco_lms_data');
-      return raw ? JSON.parse(raw) : {
-        courses: [], enrollments: [], certificates: [], announcements: [],
-        attempts: [], learnerProfiles: [], discussions: [], settings: {}
-      };
-    } catch (e) {
-      return {
-        courses: [], enrollments: [], certificates: [], announcements: [],
-        attempts: [], learnerProfiles: [], discussions: [], settings: {}
-      };
-    }
+    return {
+      courses: [], enrollments: [], certificates: [], announcements: [],
+      attempts: [], learnerProfiles: [], discussions: [], settings: {}
+    };
   }
 
   function saveData(data) {
@@ -98,9 +94,6 @@
       window.LmsModule.saveData(payload);
       return;
     }
-    try {
-      localStorage.setItem('andeco_lms_data', JSON.stringify(payload));
-    } catch (e) {}
     try {
       if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll();
     } catch (e2) {}
@@ -475,7 +468,11 @@
 
   function closeToLogin() {
     document.body.classList.remove('lms-portal-active');
-    try { localStorage.removeItem('andeco_crm_session'); } catch (e) {}
+    try {
+      if (window.AndecoUsers && typeof window.AndecoUsers.clearSession === 'function') {
+        window.AndecoUsers.clearSession();
+      }
+    } catch (e) {}
     document.querySelectorAll('.screen').forEach(function (s) {
       s.classList.add('hidden');
     });

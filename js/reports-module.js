@@ -67,11 +67,10 @@
     if (!employeeId) return '—';
     var employees = [];
     try {
-      if (typeof window.getEmployeesList === 'function') {
+      if (typeof window.getPayrollEmployees === 'function') {
+        employees = window.getPayrollEmployees() || [];
+      } else if (typeof window.getEmployeesList === 'function') {
         employees = window.getEmployeesList() || [];
-      } else {
-        var raw = localStorage.getItem('employees');
-        employees = raw ? JSON.parse(raw) : [];
       }
     } catch (e) {
       employees = [];
@@ -128,11 +127,10 @@
     if (!select) return;
     var employees = [];
     try {
-      if (typeof window.getEmployeesList === 'function') {
+      if (typeof window.getPayrollEmployees === 'function') {
+        employees = window.getPayrollEmployees() || [];
+      } else if (typeof window.getEmployeesList === 'function') {
         employees = window.getEmployeesList() || [];
-      } else {
-        var raw = localStorage.getItem('employees');
-        employees = raw ? JSON.parse(raw) : [];
       }
     } catch (e) {
       employees = [];
@@ -164,7 +162,10 @@
           if (v && v.name) names[String(v.name).trim()] = true;
         });
       } else {
-        var raw = localStorage.getItem('andeco_fleet_vessels');
+        var raw = null;
+        if (window.FleetManagement && typeof window.FleetManagement.getVessels === 'function') {
+          return window.FleetManagement.getVessels() || [];
+        }
         var vessels = raw ? JSON.parse(raw) : [];
         if (Array.isArray(vessels)) {
           vessels.forEach(function (v) {

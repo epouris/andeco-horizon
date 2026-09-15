@@ -52,29 +52,23 @@
     };
   }
 
+  var memoryData = emptyState();
+
   function getData() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return normalize(JSON.parse(raw));
-    } catch (e) {}
-    return emptyState();
+    return normalize(memoryData);
   }
 
   function saveData(data) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalize(data)));
-    } catch (e) {}
+    memoryData = normalize(data);
     persistAllIfFile();
   }
 
   function getEmployees() {
     try {
+      if (typeof window.getPayrollEmployees === 'function') return window.getPayrollEmployees() || [];
       if (typeof window.getEmployeesList === 'function') return window.getEmployeesList() || [];
-      var raw = localStorage.getItem('employees');
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      return [];
-    }
+    } catch (e) {}
+    return [];
   }
 
   function employeeName(employeeId) {

@@ -204,7 +204,7 @@ function normalizePayrollDataKeys(options) {
     if (changed) {
         payrollData = next;
         if (opts.persist) {
-            try { localStorage.setItem('payrollData', JSON.stringify(payrollData)); } catch (e) {}
+            /* no localStorage write */
         }
     }
     return changed;
@@ -4551,25 +4551,8 @@ function showMessage(message, type) {
 let payrollLocalStorageOk = true;
 
 function trySetLocalStorage(key, value) {
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-        if (key === 'payrollData') payrollLocalStorageOk = true;
-        return true;
-    } catch (e) {
-        const quota =
-            e &&
-            (e.name === 'QuotaExceededError' ||
-                e.code === 22 ||
-                e.code === 1014 ||
-                /quota/i.test(String(e.message || e)));
-        if (key === 'payrollData') payrollLocalStorageOk = false;
-        if (quota) {
-            console.warn('localStorage quota exceeded for', key, '— keeping in-memory data and saving to server.');
-        } else {
-            console.warn('localStorage write failed for', key, e);
-        }
-        return false;
-    }
+    // Postgres is the durable store; browser cache disabled for payroll data.
+    return false;
 }
 
 /**
@@ -5028,7 +5011,7 @@ function importAllData(input) {
             payrollData = importData.payrollData || {};
             companySettings = importData.companySettings || {};
             
-            // Save to localStorage
+            // Persist to Postgres via AccountingData
             saveEmployees();
             savePayrollData();
             saveCompanySettings();
@@ -5062,10 +5045,12 @@ function clearAllData() {
         payrollData = {};
         companySettings = {};
         
-        // Clear localStorage
-        localStorage.removeItem('employees');
-        localStorage.removeItem('payrollData');
-        localStorage.removeItem('companySettings');
+        // Clear legacy browser cache keys (no longer used)
+        try {
+            localStorage.removeItem('employees');
+            localStorage.removeItem('payrollData');
+            localStorage.removeItem('companySettings');
+        } catch (eClear) {}
         
         // Update all tabs
         updateAllTabs();

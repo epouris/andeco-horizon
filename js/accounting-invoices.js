@@ -355,7 +355,7 @@ const app = {
                     if (data.companySettings && typeof data.companySettings === 'object') DataStore.saveCompanySettings(data.companySettings);
                     if (Array.isArray(data.products) && DataStore.saveProducts) DataStore.saveProducts(data.products);
                 }
-                function setLocal(key, val) { try { if (val !== undefined) localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+                function setLocal(key, val) { /* no-op: Postgres only */ }
                 if (data.fleet && typeof data.fleet === 'object') {
                     if (Array.isArray(data.fleet.vessels)) setLocal('andeco_fleet_vessels', data.fleet.vessels);
                     if (Array.isArray(data.fleet.vesselPhotos)) setLocal('andeco_fleet_vessel_photos', data.fleet.vesselPhotos);
@@ -372,11 +372,13 @@ const app = {
                     if (Array.isArray(data.crew.crewAssignments)) setLocal('andeco_crew_assignments', data.crew.crewAssignments);
                 }
                 if (data.shifts && typeof data.shifts === 'object') {
-                    try { localStorage.setItem('andeco_shifts_data', JSON.stringify(data.shifts)); } catch (e) {}
-                    if (typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) window.ShiftsManagement.render();
+                    if (typeof window.ShiftsManagement !== 'undefined') {
+                        if (window.ShiftsManagement.applyRemote) window.ShiftsManagement.applyRemote(data.shifts);
+                        else if (window.ShiftsManagement.render) window.ShiftsManagement.render();
+                    }
                 }
                 if (data.lms && typeof data.lms === 'object') {
-                    try { localStorage.setItem('andeco_lms_data', JSON.stringify(data.lms)); } catch (e) {}
+                    if (window.LmsModule && window.LmsModule.applyRemote) window.LmsModule.applyRemote(data.lms);
                     if (typeof window.LmsModule !== 'undefined' && window.LmsModule.render) {
                         if (!(window.LmsModule.isBusy && window.LmsModule.isBusy())) {
                             window.LmsModule.render();
@@ -390,7 +392,7 @@ const app = {
                         !window.DistributionModule.shouldAcceptRemote()
                     );
                     if (distAcceptRemote) {
-                        try { localStorage.setItem('andeco_distribution_data', JSON.stringify(data.distribution)); } catch (e) {}
+                        /* distribution applied via applyRemote below */
                         if (typeof window.DistributionModule !== 'undefined') {
                             if (window.DistributionModule.applyRemote) window.DistributionModule.applyRemote(data.distribution);
                             else if (window.DistributionModule.render) window.DistributionModule.render();
@@ -5150,9 +5152,9 @@ const app = {
         if (typeof window.updateAllTabs === 'function') window.updateAllTabs();
     },
 
-    /** Sync main app company settings to Payroll localStorage so payslips and IR63 use the same data. */
+    /** Sync main app company settings into payroll in-memory state (Postgres via persist). */
     syncCompanySettingsToPayroll(settings) {
-        if (!settings || typeof localStorage === 'undefined') return;
+        if (!settings || typeof settings !== 'object') return;
         const payrollCompany = {
             companyName: settings.companyName || '',
             companyAddress: settings.companyAddress || '',
@@ -5170,7 +5172,14 @@ const app = {
             currency: settings.currency || 'EUR'
         };
         try {
-            localStorage.setItem('companySettings', JSON.stringify(payrollCompany));
+            if (typeof window.applyPayrollRemote === 'function') {
+                var existing = (typeof window.getPayrollCompanySettings === 'function')
+                    ? (window.getPayrollCompanySettings() || {})
+                    : {};
+                window.applyPayrollRemote({
+                    companySettings: Object.assign({}, existing, payrollCompany)
+                }, { force: true });
+            }
         } catch (e) {}
     },
 
@@ -5278,11 +5287,13 @@ const app = {
 
     // Data Export/Import (all app data: accounting, fleet, crew)
     exportData() {
-        function getLocal(key, def) {
+        function modState(name, fallback) {
             try {
-                var r = localStorage.getItem(key);
-                return r ? JSON.parse(r) : def;
-            } catch (e) { return def; }
+                if (window[name] && typeof window[name].getState === 'function') {
+                    return window[name].getState() || fallback;
+                }
+            } catch (e) {}
+            return fallback;
         }
         const data = {
             version: '1.0',
@@ -5292,39 +5303,29 @@ const app = {
             clients: DataStore.getClients(),
             companySettings: DataStore.getCompanySettings(),
             products: DataStore.getProducts ? DataStore.getProducts() : [],
-            fleet: {
-                vessels: getLocal('andeco_fleet_vessels', []),
-                vesselPhotos: getLocal('andeco_fleet_vessel_photos', []),
-                documents: getLocal('andeco_fleet_documents', []),
-                maintenance: getLocal('andeco_fleet_maintenance', []),
-                drydock: getLocal('andeco_fleet_drydock', []),
-                inventory: getLocal('andeco_fleet_inventory', []),
-                logbooks: getLocal('andeco_fleet_logbooks', []),
-                crew: getLocal('andeco_fleet_crew', [])
-            },
-            crew: {
-                crewMembers: getLocal('andeco_crew_members', []),
-                crewDocuments: getLocal('andeco_crew_documents', []),
-                crewAssignments: getLocal('andeco_crew_assignments', [])
-            },
-            lms: getLocal('andeco_lms_data', {
-                courses: [],
-                enrollments: [],
-                attempts: [],
-                purchases: [],
-                applicants: [],
-                settings: {}
+            fleet: modState('FleetManagement', {
+                vessels: [], vesselPhotos: [], documents: [], maintenance: [],
+                drydock: [], inventory: [], logbooks: [], crew: []
             }),
-            distribution: getLocal('andeco_distribution_data', {
-                brands: [],
-                models: [],
-                optionCategories: [],
-                options: [],
-                quotations: [],
-                soldVessels: [],
-                potentialClients: [],
-                settings: {}
-            })
+            crew: modState('CrewManagement', {
+                crewMembers: [], crewDocuments: [], crewAssignments: []
+            }),
+            lms: modState('LmsModule', {
+                courses: [], enrollments: [], attempts: [], purchases: [],
+                applicants: [], settings: {}
+            }),
+            distribution: modState('DistributionModule', {
+                brands: [], models: [], optionCategories: [], options: [],
+                quotations: [], soldVessels: [], potentialClients: [], settings: {}
+            }),
+            shifts: modState('ShiftsManagement', { staff: [], shifts: [], requests: [], settings: {} }),
+            projectManagement: modState('ProjectManagement', { calls: [], people: [], seeded: false }),
+            hrTools: modState('HrTools', { leave: [], documents: [], onboarding: [], notes: [], announcements: [] }),
+            payroll: {
+                employees: (typeof window.getPayrollEmployees === 'function' ? window.getPayrollEmployees() : []) || [],
+                payrollData: (typeof window.getPayrollDataMap === 'function' ? window.getPayrollDataMap() : {}) || {},
+                companySettings: (typeof window.getPayrollCompanySettings === 'function' ? window.getPayrollCompanySettings() : {}) || {}
+            }
         };
 
         const dataStr = JSON.stringify(data, null, 2);
@@ -5338,7 +5339,7 @@ const app = {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        alert('Data exported successfully! (Accounting, Fleet, Crew, LMS, Distribution)');
+        alert('Data exported successfully!');
     },
 
     importData(event) {
@@ -5367,45 +5368,31 @@ const app = {
                 DataStore.saveCompanySettings(importedData.companySettings || {});
                 if (DataStore.saveProducts && importedData.products) DataStore.saveProducts(importedData.products);
 
-                function setLocal(key, val) {
+                function applyMod(name, payload) {
                     try {
-                        if (val === undefined) return;
-                        localStorage.setItem(key, JSON.stringify(val));
+                        if (payload && window[name] && typeof window[name].applyRemote === 'function') {
+                            window[name].applyRemote(payload);
+                        }
                     } catch (err) {}
                 }
-                if (importedData.fleet && typeof importedData.fleet === 'object') {
-                    if (Array.isArray(importedData.fleet.vessels)) setLocal('andeco_fleet_vessels', importedData.fleet.vessels);
-                    if (Array.isArray(importedData.fleet.vesselPhotos)) setLocal('andeco_fleet_vessel_photos', importedData.fleet.vesselPhotos);
-                    if (Array.isArray(importedData.fleet.documents)) setLocal('andeco_fleet_documents', importedData.fleet.documents);
-                    if (Array.isArray(importedData.fleet.maintenance)) setLocal('andeco_fleet_maintenance', importedData.fleet.maintenance);
-                    if (Array.isArray(importedData.fleet.drydock)) setLocal('andeco_fleet_drydock', importedData.fleet.drydock);
-                    if (Array.isArray(importedData.fleet.inventory)) setLocal('andeco_fleet_inventory', importedData.fleet.inventory);
-                    if (Array.isArray(importedData.fleet.logbooks)) setLocal('andeco_fleet_logbooks', importedData.fleet.logbooks);
-                    if (Array.isArray(importedData.fleet.crew)) setLocal('andeco_fleet_crew', importedData.fleet.crew);
-                }
-                if (importedData.crew && typeof importedData.crew === 'object') {
-                    if (Array.isArray(importedData.crew.crewMembers)) setLocal('andeco_crew_members', importedData.crew.crewMembers);
-                    if (Array.isArray(importedData.crew.crewDocuments)) setLocal('andeco_crew_documents', importedData.crew.crewDocuments);
-                    if (Array.isArray(importedData.crew.crewAssignments)) setLocal('andeco_crew_assignments', importedData.crew.crewAssignments);
-                }
-                if (importedData.lms && typeof importedData.lms === 'object') {
-                    setLocal('andeco_lms_data', importedData.lms);
-                }
-                if (importedData.distribution && typeof importedData.distribution === 'object') {
-                    setLocal('andeco_distribution_data', importedData.distribution);
+                if (importedData.fleet) applyMod('FleetManagement', importedData.fleet);
+                if (importedData.crew) applyMod('CrewManagement', importedData.crew);
+                if (importedData.lms) applyMod('LmsModule', importedData.lms);
+                if (importedData.distribution) applyMod('DistributionModule', importedData.distribution);
+                if (importedData.shifts) applyMod('ShiftsManagement', importedData.shifts);
+                if (importedData.projectManagement) applyMod('ProjectManagement', importedData.projectManagement);
+                if (importedData.hrTools) applyMod('HrTools', importedData.hrTools);
+                if (importedData.payroll && typeof window.applyPayrollRemote === 'function') {
+                    window.applyPayrollRemote(importedData.payroll, { force: true });
                 }
 
-                alert('Data imported successfully! The page will reload to apply changes.');
-                event.target.value = '';
-                window.location.reload();
-            } catch (error) {
-                alert('Error importing data: ' + error.message + '\n\nPlease make sure the file is a valid JSON backup file.');
+                if (typeof DataStore.persistAll === 'function') DataStore.persistAll({ immediate: true });
+                alert('Data imported successfully!');
+                location.reload();
+            } catch (err) {
+                alert('Error importing data: ' + (err && err.message ? err.message : err));
                 event.target.value = '';
             }
-        };
-        reader.onerror = () => {
-            alert('Error reading file. Please try again.');
-            event.target.value = '';
         };
         reader.readAsText(file);
     },

@@ -450,6 +450,26 @@ CREATE TABLE IF NOT EXISTS distribution_data (
 INSERT INTO distribution_data (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
+-- HR Tools (leave, documents, onboarding, notes, announcements) as JSON
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS hr_tools_data (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO hr_tools_data (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Project Management (oil terminal board) as JSON
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS project_management_data (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO project_management_data (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
 -- Legacy JSON blob (migration source + optional snapshot)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS app_data (

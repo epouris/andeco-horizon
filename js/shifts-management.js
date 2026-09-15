@@ -38,18 +38,8 @@
     } catch (e) {}
   }
 
-  function getData() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        var d = JSON.parse(raw);
-        return normalizeData(d);
-      }
-    } catch (e) {}
-    return normalizeData({});
-  }
-
   function normalizeData(d) {
+    d = d || {};
     return {
       staff: Array.isArray(d.staff) ? d.staff : [],
       shifts: Array.isArray(d.shifts) ? d.shifts : [],
@@ -58,11 +48,23 @@
     };
   }
 
+  var memoryData = normalizeData({});
+
+  function getData() {
+    return normalizeData(memoryData);
+  }
+
   function saveData(data) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeData(data)));
-    } catch (e) {}
+    memoryData = normalizeData(data);
     persistAllIfFile();
+  }
+
+  function getState() { return getData(); }
+  function applyRemote(data) {
+    if (!data || typeof data !== 'object') return false;
+    memoryData = normalizeData(data);
+    try { if (typeof render === 'function') render(); } catch (e) {}
+    return true;
   }
 
   function getStaff() { return getData().staff; }
@@ -140,7 +142,7 @@
 
   function getActiveStaffId() {
     try {
-      var s = localStorage.getItem(ACTIVE_STAFF_KEY);
+      var s = sessionStorage.getItem(ACTIVE_STAFF_KEY);
       if (s && staffById(s)) return s;
     } catch (e) {}
     var list = getStaff();
@@ -148,14 +150,18 @@
   }
 
   function setActiveStaffId(sid) {
-    try { localStorage.setItem(ACTIVE_STAFF_KEY, sid || ''); } catch (e) {}
+    try { sessionStorage.setItem(ACTIVE_STAFF_KEY, sid || ''); } catch (e) {}
   }
 
   function getSessionDisplayName() {
     try {
-      var raw = localStorage.getItem('andeco_crm_session');
-      if (!raw) return '';
-      var sess = JSON.parse(raw);
+      var sess = null;
+      if (window.AndecoUsers && typeof window.AndecoUsers.getSession === 'function') {
+        sess = window.AndecoUsers.getSession();
+      } else if (window.AndecoApp && typeof window.AndecoApp.getSession === 'function') {
+        sess = window.AndecoApp.getSession();
+      }
+      if (!sess) return '';
       return (sess.displayName || sess.username || '').trim().toLowerCase();
     } catch (e) { return ''; }
   }
@@ -286,9 +292,13 @@
 
   function isAdminSession() {
     try {
-      var raw = localStorage.getItem('andeco_crm_session');
-      if (!raw) return false;
-      return JSON.parse(raw).isAdmin === true;
+      var sess = null;
+      if (window.AndecoUsers && typeof window.AndecoUsers.getSession === 'function') {
+        sess = window.AndecoUsers.getSession();
+      } else if (window.AndecoApp && typeof window.AndecoApp.getSession === 'function') {
+        sess = window.AndecoApp.getSession();
+      }
+      return !!(sess && sess.isAdmin === true);
     } catch (e) { return false; }
   }
 
@@ -838,8 +848,10 @@
 
   function importFromHr() {
     try {
-      var raw = localStorage.getItem('employees');
-      var emps = raw ? JSON.parse(raw) : [];
+      var emps = [];
+      if (typeof window.getPayrollEmployees === 'function') {
+        emps = window.getPayrollEmployees() || [];
+      }
       if (!emps.length) {
         alert('No HR employees found. Add employees under HR → Employees first.');
         return;
@@ -983,7 +995,9 @@
   window.ShiftsManagement = {
     init: init,
     render: render,
-    setSection: setSection
+    setSection: setSection,
+    getState: getState,
+    applyRemote: applyRemote
   };
 
   if (document.readyState === 'loading') {

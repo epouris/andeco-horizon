@@ -1,7 +1,7 @@
 /**
  * Fleet Management — Vessel database, documents, maintenance, inventory, logbooks, crew, photos.
  * Ensures onboard maintenance, data and operations are efficient; prevents downtime and protects the vessel.
- * Data in localStorage.
+ * Data in memory; persisted to Postgres via AccountingData.
  */
 (function () {
   'use strict';
@@ -122,29 +122,56 @@
         var s = window.AccountingData.getCompanySettings();
         if (s && typeof s === 'object') return s;
       }
-      var raw = localStorage.getItem('andeco_inv_companySettings');
+      if (window.AccountingData && window.AccountingData.getCompanySettings) {
+        return window.AccountingData.getCompanySettings() || {};
+      }
+      var raw = null;
       if (raw) return JSON.parse(raw) || {};
     } catch (e) {}
     return {};
   }
 
-  function getVessels() { try { var r = localStorage.getItem(STORAGE_KEYS.vessels); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveVessels(a) { try { localStorage.setItem(STORAGE_KEYS.vessels, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getVesselPhotos() { try { var r = localStorage.getItem(STORAGE_KEYS.vesselPhotos); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveVesselPhotos(a) { try { localStorage.setItem(STORAGE_KEYS.vesselPhotos, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getDocuments() { try { var r = localStorage.getItem(STORAGE_KEYS.documents); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveDocuments(a) { try { localStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getMaintenance() { try { var r = localStorage.getItem(STORAGE_KEYS.maintenance); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveMaintenance(a) { try { localStorage.setItem(STORAGE_KEYS.maintenance, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getDrydock() { try { var r = localStorage.getItem(STORAGE_KEYS.drydock); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveDrydock(a) { try { localStorage.setItem(STORAGE_KEYS.drydock, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getInventory() { try { var r = localStorage.getItem(STORAGE_KEYS.inventory); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveInventory(a) { try { localStorage.setItem(STORAGE_KEYS.inventory, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getLogbooks() { try { var r = localStorage.getItem(STORAGE_KEYS.logbooks); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveLogbooks(a) { try { localStorage.setItem(STORAGE_KEYS.logbooks, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getCrew() { try { var r = localStorage.getItem(STORAGE_KEYS.crew); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveCrew(a) { try { localStorage.setItem(STORAGE_KEYS.crew, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
+  var store = {
+    vessels: [], vesselPhotos: [], documents: [], maintenance: [],
+    drydock: [], inventory: [], logbooks: [], crew: []
+  };
+  function getVessels() { return Array.isArray(store.vessels) ? store.vessels : []; }
+  function saveVessels(a) { store.vessels = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getVesselPhotos() { return Array.isArray(store.vesselPhotos) ? store.vesselPhotos : []; }
+  function saveVesselPhotos(a) { store.vesselPhotos = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getDocuments() { return Array.isArray(store.documents) ? store.documents : []; }
+  function saveDocuments(a) { store.documents = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getMaintenance() { return Array.isArray(store.maintenance) ? store.maintenance : []; }
+  function saveMaintenance(a) { store.maintenance = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getDrydock() { return Array.isArray(store.drydock) ? store.drydock : []; }
+  function saveDrydock(a) { store.drydock = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getInventory() { return Array.isArray(store.inventory) ? store.inventory : []; }
+  function saveInventory(a) { store.inventory = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getLogbooks() { return Array.isArray(store.logbooks) ? store.logbooks : []; }
+  function saveLogbooks(a) { store.logbooks = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getCrew() { return Array.isArray(store.crew) ? store.crew : []; }
+  function saveCrew(a) { store.crew = Array.isArray(a) ? a : []; persistAllIfFile(); }
   function persistAllIfFile() { try { if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll(); } catch (e) {} }
+  function getState() {
+    return {
+      vessels: getVessels(), vesselPhotos: getVesselPhotos(), documents: getDocuments(),
+      maintenance: getMaintenance(), drydock: getDrydock(), inventory: getInventory(),
+      logbooks: getLogbooks(), crew: getCrew()
+    };
+  }
+  function applyRemote(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (Array.isArray(data.vessels)) store.vessels = data.vessels;
+    if (Array.isArray(data.vesselPhotos)) store.vesselPhotos = data.vesselPhotos;
+    if (Array.isArray(data.documents)) store.documents = data.documents;
+    if (Array.isArray(data.maintenance)) store.maintenance = data.maintenance;
+    if (Array.isArray(data.drydock)) store.drydock = data.drydock;
+    if (Array.isArray(data.inventory)) store.inventory = data.inventory;
+    if (Array.isArray(data.logbooks)) store.logbooks = data.logbooks;
+    if (Array.isArray(data.crew)) store.crew = data.crew;
+    try { if (typeof render === 'function') render(); } catch (e) {}
+    return true;
+  }
 
   function removeCrewAssignmentsForVessel(vesselId) {
     try {
@@ -156,14 +183,15 @@
       }
     } catch (e) {}
     try {
-      var raw = localStorage.getItem('andeco_crew_assignments');
+      var raw = null;
+      try {
+        if (window.CrewManagement && typeof window.CrewManagement.getCrewAssignments === 'function') {
+          return window.CrewManagement.getCrewAssignments() || [];
+        }
+      } catch (e0) {}
       var assignments = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(assignments)) return;
-      localStorage.setItem(
-        'andeco_crew_assignments',
-        JSON.stringify(assignments.filter(function (a) { return a && a.vesselId !== vesselId; }))
-      );
-      persistAllIfFile();
+      if (window.CrewManagement && window.CrewManagement.saveCrewAssignments) { window.CrewManagement.saveCrewAssignments(list); } else { persistAllIfFile(); }
     } catch (e2) {}
   }
 
@@ -1056,7 +1084,9 @@
     getDrydock: getDrydock,
     getInventory: getInventory,
     getLogbooks: getLogbooks,
-    getCrew: getCrew
+    getCrew: getCrew,
+    getState: getState,
+    applyRemote: applyRemote
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initFleet);

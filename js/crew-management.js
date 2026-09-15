@@ -12,14 +12,33 @@
     vessels: 'andeco_fleet_vessels'
   };
 
-  function getCrewMembers() { try { var r = localStorage.getItem(STORAGE_KEYS.crewMembers); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveCrewMembers(a) { try { localStorage.setItem(STORAGE_KEYS.crewMembers, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getCrewDocuments() { try { var r = localStorage.getItem(STORAGE_KEYS.crewDocuments); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveCrewDocuments(a) { try { localStorage.setItem(STORAGE_KEYS.crewDocuments, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
-  function getCrewAssignments() { try { var r = localStorage.getItem(STORAGE_KEYS.crewAssignments); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
-  function saveCrewAssignments(a) { try { localStorage.setItem(STORAGE_KEYS.crewAssignments, JSON.stringify(a)); } catch (e) {} persistAllIfFile(); }
+  var store = { crewMembers: [], crewDocuments: [], crewAssignments: [] };
+  function getCrewMembers() { return Array.isArray(store.crewMembers) ? store.crewMembers : []; }
+  function saveCrewMembers(a) { store.crewMembers = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getCrewDocuments() { return Array.isArray(store.crewDocuments) ? store.crewDocuments : []; }
+  function saveCrewDocuments(a) { store.crewDocuments = Array.isArray(a) ? a : []; persistAllIfFile(); }
+  function getCrewAssignments() { return Array.isArray(store.crewAssignments) ? store.crewAssignments : []; }
+  function saveCrewAssignments(a) { store.crewAssignments = Array.isArray(a) ? a : []; persistAllIfFile(); }
   function persistAllIfFile() { try { if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll(); } catch (e) {} }
-  function getVessels() { try { var r = localStorage.getItem(STORAGE_KEYS.vessels); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
+  function getVessels() {
+    try {
+      if (window.FleetManagement && typeof window.FleetManagement.getVessels === 'function') {
+        return window.FleetManagement.getVessels() || [];
+      }
+    } catch (e) {}
+    return [];
+  }
+  function getState() {
+    return { crewMembers: getCrewMembers(), crewDocuments: getCrewDocuments(), crewAssignments: getCrewAssignments() };
+  }
+  function applyRemote(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (Array.isArray(data.crewMembers)) store.crewMembers = data.crewMembers;
+    if (Array.isArray(data.crewDocuments)) store.crewDocuments = data.crewDocuments;
+    if (Array.isArray(data.crewAssignments)) store.crewAssignments = data.crewAssignments;
+    try { if (typeof render === 'function') render(); } catch (e) {}
+    return true;
+  }
 
   function escapeHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function id() { return 'c' + Date.now() + '-' + Math.random().toString(36).slice(2, 9); }
@@ -332,7 +351,9 @@
     saveCrewDocuments: saveCrewDocuments,
     saveCrewAssignments: saveCrewAssignments,
     render: render,
-    formatDateDDMMYYYY: formatDateDDMMYYYY
+    formatDateDDMMYYYY: formatDateDDMMYYYY,
+    getState: getState,
+    applyRemote: applyRemote
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCrew);

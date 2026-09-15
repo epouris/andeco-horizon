@@ -10,11 +10,11 @@
 
   function getEmployeesList() {
     try {
-      var raw = localStorage.getItem('employees');
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      return [];
-    }
+      if (typeof window.getPayrollEmployees === 'function') {
+        return window.getPayrollEmployees() || [];
+      }
+    } catch (e) {}
+    return [];
   }
 
   function formatAmount(amount) {
