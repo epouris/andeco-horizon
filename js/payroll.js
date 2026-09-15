@@ -4502,27 +4502,27 @@ function trySetLocalStorage(key, value) {
 }
 
 function saveEmployees() {
-    const ok = trySetLocalStorage('employees', employees);
-    payrollLocalStorageOk = payrollLocalStorageOk && ok;
+    // Server is source of truth; localStorage is best-effort cache only.
+    trySetLocalStorage('employees', employees);
     try {
         if (typeof window.hrEmployeesRefreshOverview === 'function') window.hrEmployeesRefreshOverview();
     } catch (e) {}
-    persistPayrollToCloud(!ok);
+    return persistPayrollToCloud(true);
 }
 
 function savePayrollData() {
     normalizePayrollDataKeys({ persist: false });
-    const ok = trySetLocalStorage('payrollData', payrollData);
-    payrollLocalStorageOk = ok;
+    const localOk = trySetLocalStorage('payrollData', payrollData);
     lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
-    // If browser cache is full, push to server immediately with live in-memory data.
-    persistPayrollToCloud(!ok);
-    if (!ok) {
+    // Always push to Postgres immediately — do not wait for localStorage.
+    const serverPromise = persistPayrollToCloud(true);
+    if (!localOk) {
         showMessage(
             'Payslip saved on server. Browser storage is full, so keep using this device online.',
             'info'
         );
     }
+    return serverPromise;
 }
 
 function persistPayrollToCloud(immediate) {
@@ -4530,7 +4530,12 @@ function persistPayrollToCloud(immediate) {
     const run = function () {
         persistPayrollTimer = null;
         try {
-            if (window.AccountingData && window.AccountingData.persistAll) return window.AccountingData.persistAll();
+            if (window.AccountingData && window.AccountingData.persistAll) {
+                // Prefer immediate workspace save so payroll hits Postgres in real time.
+                if (typeof window.AccountingData.persistAll === 'function') {
+                    return window.AccountingData.persistAll({ immediate: true });
+                }
+            }
             if (window.DataStore && window.DataStore.persistAll) return window.DataStore.persistAll();
         } catch (e) {}
         return Promise.resolve(false);
@@ -4539,7 +4544,7 @@ function persistPayrollToCloud(immediate) {
         persistPayrollTimer = null;
         return run();
     }
-    persistPayrollTimer = setTimeout(run, 750);
+    persistPayrollTimer = setTimeout(run, 400);
     return Promise.resolve(true);
 }
 
@@ -4808,10 +4813,10 @@ companyFormEl.addEventListener('submit', function(e) {
 }
 
 function saveCompanySettings() {
-    const ok = trySetLocalStorage('companySettings', companySettings);
+    trySetLocalStorage('companySettings', companySettings);
     updatePayslipWithCompanyInfo();
     updateAllTabs();
-    persistPayrollToCloud(!ok);
+    return persistPayrollToCloud(true);
 }
 
 function updatePayslipCompanyInfo() {
