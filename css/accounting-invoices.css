@@ -980,6 +980,11 @@
 .client-name { font-size: 0.875rem; margin: 0.25rem 0; color: #000; }
 .client-address { font-size: 0.75rem; margin: 0.25rem 0; color: #333; line-height: 1.5; }
 #client-address { font-size: 0.75rem; }
+/* Customer Statement — smaller customer info block */
+.statement-preview .bill-to-section-print { margin-bottom: 1.25rem; }
+.statement-preview .bill-to-section-print .section-title { font-size: 0.7rem; margin-bottom: 0.4rem; }
+.statement-preview .bill-to-section-print .client-name { font-size: 0.7rem; margin: 0.15rem 0; }
+.statement-preview .bill-to-section-print .client-address { font-size: 0.6rem; margin: 0.1rem 0; line-height: 1.35; }
 .invoice-items-table-print {
   width: 100%;
   border-collapse: collapse;
