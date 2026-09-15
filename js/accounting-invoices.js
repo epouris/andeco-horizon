@@ -6009,13 +6009,13 @@ const app = {
                     
                     .invoice-title-section {
                         text-align: right;
-                        min-width: 200px;
+                        min-width: 230px;
                     }
                     
                     .invoice-title {
-                        font-size: 12pt;
+                        font-size: 11pt;
                         font-weight: bold;
-                        margin: 0 0 5px 0;
+                        margin: 0 0 4px 0;
                         color: #000;
                         text-transform: uppercase;
                     }
@@ -6024,7 +6024,7 @@ const app = {
                         border-collapse: collapse;
                         margin-top: 2px;
                         width: 100%;
-                        font-size: 7.5pt;
+                        font-size: 6.5pt;
                     }
                     
                     .invoice-details-table tr {
@@ -6032,21 +6032,22 @@ const app = {
                     }
                     
                     .invoice-details-table .label-cell {
-                        padding: 1px 6px 1px 0;
+                        padding: 1px 4px 1px 0;
                         text-align: right;
                         font-weight: 600;
                         color: #333;
                         white-space: nowrap;
-                        width: 50%;
-                        font-size: 7.5pt;
+                        width: 42%;
+                        font-size: 6.5pt;
                     }
                     
                     .invoice-details-table .value-cell {
                         padding: 1px 0;
                         text-align: left;
                         color: #000;
-                        width: 50%;
-                        font-size: 9pt;
+                        width: 58%;
+                        font-size: 6.5pt;
+                        white-space: nowrap;
                     }
                     
                     .bill-to-section-print {
