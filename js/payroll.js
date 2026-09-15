@@ -2678,11 +2678,7 @@ function collectMonthlyPayrollData(year, month) {
 }
 
 function getMergedCompanySettingsForReports() {
-    try {
-        var stored = localStorage.getItem('companySettings');
-        if (stored) companySettings = Object.assign({}, companySettings, JSON.parse(stored));
-    } catch (e) {}
-    var cs = Object.assign({}, companySettings);
+    var cs = Object.assign({}, companySettings || {});
     if (typeof window.AccountingData !== 'undefined' && window.AccountingData.getCompanySettings) {
         var main = window.AccountingData.getCompanySettings();
         if (main) {
@@ -4892,10 +4888,30 @@ function saveCompanySettings() {
 }
 
 function updatePayslipCompanyInfo() {
-    // Use latest from localStorage (synced from main app Settings when embedded)
+    // Prefer accounting company settings when available; otherwise use server-hydrated memory.
     try {
-        const stored = localStorage.getItem('companySettings');
-        if (stored) companySettings = JSON.parse(stored);
+        if (typeof window.AccountingData !== 'undefined' && window.AccountingData.getCompanySettings) {
+            var main = window.AccountingData.getCompanySettings();
+            if (main && typeof main === 'object') {
+                companySettings = Object.assign({}, companySettings || {}, {
+                    companyName: main.companyName || companySettings.companyName,
+                    companyAddress: main.companyAddress || companySettings.companyAddress,
+                    companyPhone: main.companyPhone || companySettings.companyPhone,
+                    companyEmail: main.companyEmail || companySettings.companyEmail,
+                    companyWebsite: main.companyWebsite || companySettings.companyWebsite,
+                    companyTaxId: main.companyTaxId || companySettings.companyTaxId,
+                    companyRegistration: main.companyRegistration || companySettings.companyRegistration
+                });
+                var payslipLogo = window.AccountingData.getDocumentLogo
+                    ? window.AccountingData.getDocumentLogo('payslip')
+                    : '';
+                if (payslipLogo && String(payslipLogo).indexOf('data:') === 0) {
+                    companySettings.logoData = payslipLogo;
+                } else if (main.logo && String(main.logo).indexOf('data:') === 0) {
+                    companySettings.logoData = main.logo;
+                }
+            }
+        }
     } catch (e) {}
     // Update the payslip with company information from settings
     const companyLogo = document.getElementById('payslipCompanyLogo');
