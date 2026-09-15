@@ -62,6 +62,9 @@ document.addEventListener('DOMContentLoaded', function() {
         try { persistPayrollToCloud(); } catch (e) {}
     }
     lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
+    // One-time safety: if this browser still has payslips only in localStorage
+    // (e.g. after quota failures), merge them into memory and push to the server.
+    try { safetySyncLocalPayrollToServer(); } catch (eSafety) {}
     loadEmployees();
     var empTable = document.getElementById('employeesTableBody');
     if (empTable) {
@@ -4500,6 +4503,77 @@ function trySetLocalStorage(key, value) {
         return false;
     }
 }
+
+/**
+ * Merge any payslips still only in this browser's localStorage into live memory
+ * and push to Postgres so nothing is lost after quota / offline gaps.
+ */
+function safetySyncLocalPayrollToServer() {
+    let localPayroll = null;
+    let localEmployees = null;
+    try {
+        localPayroll = JSON.parse(localStorage.getItem('payrollData') || 'null');
+    } catch (e) {
+        localPayroll = null;
+    }
+    try {
+        localEmployees = JSON.parse(localStorage.getItem('employees') || 'null');
+    } catch (e2) {
+        localEmployees = null;
+    }
+
+    let changed = false;
+    if (localPayroll && typeof localPayroll === 'object') {
+        Object.keys(localPayroll).forEach((key) => {
+            const loc = localPayroll[key];
+            if (!loc || typeof loc !== 'object') return;
+            const cur = payrollData[key];
+            if (!cur) {
+                payrollData[key] = loc;
+                changed = true;
+                return;
+            }
+            const tLoc = Number(loc.savedAt || loc.updatedAt || 0);
+            const tCur = Number(cur.savedAt || cur.updatedAt || 0);
+            if (tLoc > tCur) {
+                payrollData[key] = loc;
+                changed = true;
+            }
+        });
+    }
+    if (Array.isArray(localEmployees) && localEmployees.length) {
+        if (!Array.isArray(employees) || employees.length === 0) {
+            employees = localEmployees;
+            changed = true;
+        } else {
+            const byId = {};
+            employees.forEach((e) => {
+                if (e && e.employeeId) byId[e.employeeId] = e;
+            });
+            localEmployees.forEach((e) => {
+                if (!e || !e.employeeId) return;
+                if (!byId[e.employeeId]) {
+                    employees.push(e);
+                    changed = true;
+                }
+            });
+        }
+    }
+
+    if (!changed) return false;
+    normalizePayrollDataKeys({ persist: false });
+    lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
+    trySetLocalStorage('payrollData', payrollData);
+    trySetLocalStorage('employees', employees);
+    persistPayrollToCloud(true);
+    console.info(
+        'Payroll safety sync: pushed',
+        Object.keys(payrollData).length,
+        'payslip key(s) to server (merged from browser cache).'
+    );
+    return true;
+}
+window.safetySyncLocalPayrollToServer = safetySyncLocalPayrollToServer;
 
 function saveEmployees() {
     // Server is source of truth; localStorage is best-effort cache only.
