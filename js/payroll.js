@@ -140,6 +140,7 @@ function canonicalPayrollKey(employeeId, year, month) {
 
 /**
  * Collapse duplicate payslip keys (e.g. id_2026_7 vs id_2026_07) into one canonical entry.
+ * Also re-links orphan rows that have a name but empty employeeId to a matching employee.
  * Returns true if the in-memory map changed.
  */
 function normalizePayrollDataKeys(options) {
@@ -147,19 +148,49 @@ function normalizePayrollDataKeys(options) {
     const src = payrollData && typeof payrollData === 'object' ? payrollData : {};
     const next = {};
     let changed = false;
+
+    const employeeById = {};
+    const employeeByName = {};
+    (employees || []).forEach((emp) => {
+        if (!emp || !emp.employeeId) return;
+        employeeById[String(emp.employeeId)] = emp;
+        const nm = normalizePersonName(`${emp.firstName || ''} ${emp.lastName || ''}`);
+        if (nm) employeeByName[nm] = emp;
+    });
+
     Object.keys(src).forEach((key) => {
+        if (pendingDeletedPayKeys.has(key)) {
+            changed = true;
+            return;
+        }
         const p = src[key];
         if (!p || typeof p !== 'object') {
             changed = true;
             return;
         }
-        const employeeId = p.employeeId != null ? p.employeeId : String(key).split('_')[0];
+        let employeeId = p.employeeId != null ? String(p.employeeId).trim() : '';
+        if (!employeeId) {
+            const fromKey = String(key).split('_')[0];
+            if (fromKey && employeeById[fromKey]) employeeId = fromKey;
+        }
+        if (!employeeId) {
+            const matched = employeeByName[normalizePersonName(p.employeeName)];
+            if (matched) {
+                employeeId = String(matched.employeeId);
+                changed = true;
+            }
+        }
         const year = p.year != null ? p.year : '';
         const month = p.month != null ? p.month : '';
         const canon = canonicalPayrollKey(employeeId, year, month);
-        if (!canon.startsWith('_') && employeeId !== '' && year !== '' && payrollMonthSegment(month) !== '00') {
+        if (employeeId && year !== '' && payrollMonthSegment(month) !== '00') {
+            const emp = employeeById[employeeId];
+            const fallbackName = emp
+                ? `${emp.firstName || ''} ${emp.lastName || ''}`.trim()
+                : '';
             const normalized = Object.assign({}, p, {
                 employeeId: String(employeeId),
+                employeeName: (p.employeeName && String(p.employeeName).trim()) || fallbackName || p.employeeName,
                 year: typeof year === 'string' && /^\d+$/.test(year) ? parseInt(year, 10) : year,
                 month: payrollMonthSegment(month)
             });
@@ -191,6 +222,16 @@ let loadPayslipsRunning = false;
 let reloadPayrollTimer = null;
 let persistPayrollTimer = null;
 let lastPayrollDataFingerprint = '';
+/** Default replace so intentional deletes persist on the server. */
+if (typeof window !== 'undefined' && !window.__payrollPayslipSyncMode) {
+    window.__payrollPayslipSyncMode = 'replace';
+}
+/** Keys removed locally that must not be revived by a stale server poll / localStorage merge. */
+const pendingDeletedPayKeys = new Set();
+
+function normalizePersonName(value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 function payrollDataFingerprint(data) {
     try {
@@ -1458,7 +1499,19 @@ function loadPayslips() {
         payrollCell.textContent = payslip.payrollNumber || 'N/A';
         
         const employeeCell = document.createElement('td');
-        employeeCell.textContent = payslip.employeeName;
+        const linkedEmp = (employees || []).find((e) => e && String(e.employeeId) === String(payslip.employeeId || ''));
+        const linkedName = linkedEmp
+            ? `${linkedEmp.firstName || ''} ${linkedEmp.lastName || ''}`.trim()
+            : '';
+        const hasEmployeeId = !!String(payslip.employeeId || '').trim();
+        employeeCell.textContent = linkedName || payslip.employeeName || '(No employee)';
+        if (!hasEmployeeId || (!linkedEmp && payslip.employeeName)) {
+            employeeCell.title = hasEmployeeId
+                ? 'Employee record missing for this payslip'
+                : 'Payslip has no linked employee id';
+            employeeCell.style.fontStyle = 'italic';
+            employeeCell.style.opacity = '0.85';
+        }
         
         const periodCell = document.createElement('td');
         periodCell.textContent = period;
@@ -1656,20 +1709,46 @@ function editPayslip(employeeId, year, month) {
 
 function deletePayslip(employeeId, year, month) {
     if (confirm('Are you sure you want to delete this payslip? This action cannot be undone.')) {
-        const result = findPayslip(employeeId, year, month);
-        
-        if (!result) {
+        const monthSeg = payrollMonthSegment(month);
+        const yearStr = String(year);
+        const emp = (employees || []).find((e) => e && String(e.employeeId) === String(employeeId));
+        const nameKey = normalizePersonName(
+            emp ? `${emp.firstName || ''} ${emp.lastName || ''}` : ''
+        );
+
+        const keysToDelete = Object.keys(payrollData).filter((key) => {
+            const p = payrollData[key];
+            if (!p || typeof p !== 'object') return false;
+            if (payrollMonthSegment(p.month) !== monthSeg) return false;
+            if (String(p.year) !== yearStr) return false;
+            if (String(p.employeeId || '') === String(employeeId || '')) return true;
+            // Orphan duplicate: empty/missing employee id but same person name
+            if (!String(p.employeeId || '').trim() && nameKey &&
+                normalizePersonName(p.employeeName) === nameKey) {
+                return true;
+            }
+            return false;
+        });
+
+        if (!keysToDelete.length) {
             showMessage('Payslip not found', 'error');
             return;
         }
-        
-        const { key } = result;
-        delete payrollData[key];
-        
+
+        keysToDelete.forEach((key) => {
+            delete payrollData[key];
+            pendingDeletedPayKeys.add(key);
+        });
+
         // Renumber all payroll sequences for this year to ensure continuity
         renumberPayrollSequences(year);
-        
-        savePayrollData();
+
+        const savePromise = savePayrollData();
+        Promise.resolve(savePromise).then(function () {
+            keysToDelete.forEach((key) => pendingDeletedPayKeys.delete(key));
+        }).catch(function () {
+            // Keep pending deletes so a later poll cannot revive them.
+        });
         updateAllTabs();
         showMessage('Payslip deleted successfully', 'success');
     }
@@ -4525,6 +4604,7 @@ function safetySyncLocalPayrollToServer() {
     let changed = false;
     if (localPayroll && typeof localPayroll === 'object') {
         Object.keys(localPayroll).forEach((key) => {
+            if (pendingDeletedPayKeys.has(key)) return;
             const loc = localPayroll[key];
             if (!loc || typeof loc !== 'object') return;
             const cur = payrollData[key];
@@ -4565,7 +4645,14 @@ function safetySyncLocalPayrollToServer() {
     lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
     trySetLocalStorage('payrollData', payrollData);
     trySetLocalStorage('employees', employees);
-    persistPayrollToCloud(true);
+    // Upsert-only: do not delete other server payslips during recovery merge.
+    const prevMode = window.__payrollPayslipSyncMode;
+    window.__payrollPayslipSyncMode = 'merge';
+    try {
+        persistPayrollToCloud(true);
+    } finally {
+        window.__payrollPayslipSyncMode = prevMode || 'replace';
+    }
     console.info(
         'Payroll safety sync: pushed',
         Object.keys(payrollData).length,
@@ -4585,6 +4672,7 @@ function saveEmployees() {
 }
 
 function savePayrollData() {
+    window.__payrollPayslipSyncMode = 'replace';
     normalizePayrollDataKeys({ persist: false });
     const localOk = trySetLocalStorage('payrollData', payrollData);
     lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
@@ -4691,7 +4779,19 @@ function applyPayrollRemote(payrollPayload, opts) {
             trySetLocalStorage('employees', employees);
         }
         if (payrollPayload.payrollData && typeof payrollPayload.payrollData === 'object') {
-            const incoming = payrollPayload.payrollData;
+            const incoming = Object.assign({}, payrollPayload.payrollData);
+            // Do not revive payslips the user just deleted while save is in flight.
+            pendingDeletedPayKeys.forEach((key) => {
+                if (Object.prototype.hasOwnProperty.call(incoming, key)) delete incoming[key];
+            });
+            Object.keys(incoming).forEach((key) => {
+                const p = incoming[key];
+                if (!p || typeof p !== 'object') return;
+                const canon = canonicalPayrollKey(p.employeeId, p.year, p.month);
+                if (pendingDeletedPayKeys.has(canon) || pendingDeletedPayKeys.has(key)) {
+                    delete incoming[key];
+                }
+            });
             const inCount = Object.keys(incoming).length;
             const curCount = payrollData && typeof payrollData === 'object' ? Object.keys(payrollData).length : 0;
             if (opts.force || inCount === 0) {
@@ -4702,14 +4802,28 @@ function applyPayrollRemote(payrollPayload, opts) {
                 // Incoming is thinner (stale poll while localStorage was full) — keep local-only keys.
                 payrollData = Object.assign({}, incoming, payrollData);
             }
+            // Drop any pending-deleted keys that were reintroduced via merge.
+            pendingDeletedPayKeys.forEach((key) => {
+                if (payrollData[key]) delete payrollData[key];
+            });
             trySetLocalStorage('payrollData', payrollData);
         }
         if (payrollPayload.companySettings && typeof payrollPayload.companySettings === 'object') {
             companySettings = payrollPayload.companySettings;
             trySetLocalStorage('companySettings', companySettings);
         }
+        const incomingKeyCount = payrollPayload.payrollData && typeof payrollPayload.payrollData === 'object'
+            ? Object.keys(payrollPayload.payrollData).length
+            : 0;
         normalizePayrollDataKeys({ persist: false });
+        const liveKeyCount = Object.keys(payrollData || {}).length;
         lastPayrollDataFingerprint = payrollDataFingerprint(payrollData);
+        // If we collapsed duplicate/orphan keys from the server payload, push a replace
+        // so old pay_key rows are actually removed from Postgres.
+        if (incomingKeyCount > 0 && liveKeyCount < incomingKeyCount) {
+            window.__payrollPayslipSyncMode = 'replace';
+            try { persistPayrollToCloud(true); } catch (ePersistClean) {}
+        }
         if (typeof loadEmployees === 'function') loadEmployees();
         if (typeof updateAllTabs === 'function') updateAllTabs();
         return true;

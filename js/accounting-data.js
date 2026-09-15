@@ -388,7 +388,11 @@ window.AccountingData = (function () {
         return {
           employees: Array.isArray(liveEmployees) ? liveEmployees : getLocalStorage('employees', []),
           payrollData: livePayroll && typeof livePayroll === 'object' ? livePayroll : getLocalStorage('payrollData', {}),
-          companySettings: liveCompany && typeof liveCompany === 'object' ? liveCompany : getLocalStorage('companySettings', {})
+          companySettings: liveCompany && typeof liveCompany === 'object' ? liveCompany : getLocalStorage('companySettings', {}),
+          // replace (default) lets deletes persist; merge is only for safety recovery.
+          payslipSyncMode: (typeof window !== 'undefined' && window.__payrollPayslipSyncMode)
+            ? String(window.__payrollPayslipSyncMode)
+            : 'replace'
         };
       })(),
       lms: (function () {
