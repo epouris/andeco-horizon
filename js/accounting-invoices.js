@@ -3003,7 +3003,10 @@ const app = {
             alert('Please allow pop-ups to print the invoice.');
             return;
         }
-        printWindow.document.write(this.buildInvoicePrintHtml(invoice, true, { printCopies: true }));
+        printWindow.document.write(this.buildInvoicePrintHtml(invoice, true, {
+            // Regular invoices print ORIGINAL + COPY; proformas print a single unmarked page.
+            printCopies: !this.isProformaDoc(invoice)
+        }));
         printWindow.document.close();
     },
 
