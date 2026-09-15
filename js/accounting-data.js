@@ -373,7 +373,8 @@ window.AccountingData = (function () {
         }
       })(),
       payroll: (function () {
-        // Prefer live in-memory payroll (localStorage can hit QuotaExceeded with many payslips).
+        // Live in-memory payroll only (database-backed). Never fall back to localStorage
+        // — stale browser cache must not be written back to Postgres.
         var liveEmployees = null;
         var livePayroll = null;
         var liveCompany = null;
@@ -386,10 +387,9 @@ window.AccountingData = (function () {
           }
         } catch (ePayLive) {}
         return {
-          employees: Array.isArray(liveEmployees) ? liveEmployees : getLocalStorage('employees', []),
-          payrollData: livePayroll && typeof livePayroll === 'object' ? livePayroll : getLocalStorage('payrollData', {}),
-          companySettings: liveCompany && typeof liveCompany === 'object' ? liveCompany : getLocalStorage('companySettings', {}),
-          // replace (default) lets deletes persist; merge is only for safety recovery.
+          employees: Array.isArray(liveEmployees) ? liveEmployees : [],
+          payrollData: livePayroll && typeof livePayroll === 'object' ? livePayroll : {},
+          companySettings: liveCompany && typeof liveCompany === 'object' ? liveCompany : {},
           payslipSyncMode: (typeof window !== 'undefined' && window.__payrollPayslipSyncMode)
             ? String(window.__payrollPayslipSyncMode)
             : 'replace'
@@ -1139,6 +1139,7 @@ window.AccountingData = (function () {
           if (distAccept && shouldWriteDist) setLocalStorage('andeco_distribution_data', data.distribution);
         }
         if (data.payroll && typeof data.payroll === 'object') {
+          // Optional browser cache of the server snapshot only — never merge LS back up.
           if (Array.isArray(data.payroll.employees)) setLocalStorage('employees', data.payroll.employees);
           if (data.payroll.payrollData && typeof data.payroll.payrollData === 'object') {
             setLocalStorage('payrollData', data.payroll.payrollData);
@@ -1146,14 +1147,9 @@ window.AccountingData = (function () {
           if (data.payroll.companySettings && typeof data.payroll.companySettings === 'object') {
             setLocalStorage('companySettings', data.payroll.companySettings);
           }
-          // Always hydrate live payroll memory (localStorage may be full).
           try {
             if (typeof window.applyPayrollRemote === 'function') {
-              window.applyPayrollRemote(data.payroll, { force: false });
-            }
-            // After server hydrate, push any browser-only payslips up so nothing is lost.
-            if (typeof window.safetySyncLocalPayrollToServer === 'function') {
-              window.safetySyncLocalPayrollToServer();
+              window.applyPayrollRemote(data.payroll, { force: true });
             }
           } catch (ePayApply) {}
         }

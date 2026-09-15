@@ -218,11 +218,10 @@
 
   function getEmployees() {
     try {
-      if (typeof window.reloadPayrollFromStorageNow === 'function') {
-        /* keep employees in sync before matching IDs */
+      if (typeof window.getPayrollEmployees === 'function') {
+        var live = window.getPayrollEmployees();
+        if (Array.isArray(live) && live.length) return live;
       }
-      var fromLs = JSON.parse(localStorage.getItem('employees') || '[]');
-      if (Array.isArray(fromLs) && fromLs.length) return fromLs;
     } catch (e) {}
     return [];
   }
@@ -231,11 +230,7 @@
     if (typeof window.getPayrollDataMap === 'function') {
       return window.getPayrollDataMap() || {};
     }
-    try {
-      return JSON.parse(localStorage.getItem('payrollData') || '{}') || {};
-    } catch (e) {
-      return {};
-    }
+    return {};
   }
 
   function findEmployee(employeeId) {
@@ -542,6 +537,7 @@
 
         if (typeof window.reloadPayrollFromStorageNow === 'function') {
           try {
+            // Refresh UI from live memory only (no localStorage read).
             window.reloadPayrollFromStorageNow(true);
           } catch (err) {}
         }
@@ -594,7 +590,6 @@
         } else if (imported) {
           var map = getPayrollMap();
           Object.keys(toMerge).forEach(function (k) { map[k] = toMerge[k]; });
-          localStorage.setItem('payrollData', JSON.stringify(map));
           if (typeof window.savePayrollData === 'function') window.savePayrollData();
           if (typeof window.updateAllTabs === 'function') window.updateAllTabs();
         }
