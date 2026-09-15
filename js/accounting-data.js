@@ -2,7 +2,7 @@
  * Accounting data layer — invoices, receipts, clients, company settings.
  * Server/Railway: load via GET /api/data, save via POST /api/save (Postgres when DATABASE_URL is set).
  * Supabase (optional): set ANDECO_SUPABASE_URL, ANDECO_SUPABASE_ANON_KEY, ANDECO_ORG_ID — see SUPABASE.md.
- * Fallback: localStorage (andeco_inv_*) when file/server not available.
+ * Business data is memory + Postgres only (no localStorage mirror).
  */
 window.AccountingData = (function () {
   'use strict';
@@ -220,14 +220,23 @@ window.AccountingData = (function () {
     }
   };
 
+  /** In-memory module snapshots (last server hydrate / live getState). Never localStorage. */
+  var moduleLive = {
+    fleet: null,
+    crew: null,
+    shifts: null,
+    projectManagement: null,
+    hrTools: null,
+    lms: null,
+    distribution: null
+  };
+
   function getLocalStorage(key, def) {
-    try {
-      var r = localStorage.getItem(key);
-      return r ? JSON.parse(r) : def;
-    } catch (e) { return def; }
+    // Business data must not be read from localStorage.
+    return def;
   }
   function setLocalStorage(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+    // No-op: Postgres is the only durable store for business data.
   }
 
   /** True when Distribution has no quotations, prospects, or sold vessels. */
@@ -239,15 +248,28 @@ window.AccountingData = (function () {
     return q === 0 && p === 0 && s === 0;
   }
 
-  function readCachedDistribution() {
+  function callModuleGetState(globalName) {
     try {
-      var raw = localStorage.getItem('andeco_distribution_data');
-      if (!raw) return null;
-      var parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : null;
-    } catch (e) {
-      return null;
+      if (typeof window === 'undefined') return null;
+      var mod = window[globalName];
+      if (mod && typeof mod.getState === 'function') {
+        var live = mod.getState();
+        if (live && typeof live === 'object') return live;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function liveOrCached(moduleName, globalName, fallback) {
+    var live = callModuleGetState(globalName);
+    if (live) {
+      moduleLive[moduleName] = live;
+      return live;
     }
+    if (moduleLive[moduleName] && typeof moduleLive[moduleName] === 'object') {
+      return moduleLive[moduleName];
+    }
+    return fallback;
   }
 
   function emptyRemotePayload() {
@@ -306,6 +328,23 @@ window.AccountingData = (function () {
   }
 
   function buildFullPayload() {
+    var emptyFleet = {
+      vessels: [], vesselPhotos: [], documents: [], maintenance: [],
+      drydock: [], inventory: [], logbooks: [], crew: []
+    };
+    var emptyCrew = { crewMembers: [], crewDocuments: [], crewAssignments: [] };
+    var emptyShifts = { staff: [], shifts: [], requests: [], settings: {} };
+    var emptyPm = { calls: [], people: [], seeded: false };
+    var emptyHr = { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
+    var emptyLms = {
+      courses: [], enrollments: [], attempts: [], purchases: [], applicants: [],
+      announcements: [], certificates: [], learnerProfiles: [], discussions: [], settings: {}
+    };
+    var emptyDist = {
+      brands: [], models: [], optionCategories: [], options: [],
+      quotations: [], soldVessels: [], potentialClients: [], settings: {}
+    };
+
     return {
       version: '1.0',
       exportDate: new Date().toISOString(),
@@ -317,64 +356,12 @@ window.AccountingData = (function () {
       products: memory.products,
       subcontractors: memory.subcontractors,
       paymentOrders: memory.paymentOrders,
-      fleet: {
-        vessels: getLocalStorage('andeco_fleet_vessels', []),
-        vesselPhotos: getLocalStorage('andeco_fleet_vessel_photos', []),
-        documents: getLocalStorage('andeco_fleet_documents', []),
-        maintenance: getLocalStorage('andeco_fleet_maintenance', []),
-        drydock: getLocalStorage('andeco_fleet_drydock', []),
-        inventory: getLocalStorage('andeco_fleet_inventory', []),
-        logbooks: getLocalStorage('andeco_fleet_logbooks', []),
-        crew: getLocalStorage('andeco_fleet_crew', [])
-      },
-      crew: {
-        crewMembers: getLocalStorage('andeco_crew_members', []),
-        crewDocuments: getLocalStorage('andeco_crew_documents', []),
-        crewAssignments: getLocalStorage('andeco_crew_assignments', [])
-      },
-      shifts: (function () {
-        try {
-          var r = localStorage.getItem('andeco_shifts_data');
-          return r ? JSON.parse(r) : { staff: [], shifts: [], requests: [], settings: {} };
-        } catch (e) {
-          return { staff: [], shifts: [], requests: [], settings: {} };
-        }
-      })(),
-      projectManagement: (function () {
-        try {
-          if (typeof window !== 'undefined' &&
-              window.ProjectManagement &&
-              typeof window.ProjectManagement.getState === 'function') {
-            var livePm = window.ProjectManagement.getState();
-            if (livePm && typeof livePm === 'object') return livePm;
-          }
-        } catch (e0) {}
-        try {
-          var rpm = localStorage.getItem('andeco_pm_terminal_data');
-          return rpm ? JSON.parse(rpm) : { calls: [], people: [], seeded: false };
-        } catch (e) {
-          return { calls: [], people: [], seeded: false };
-        }
-      })(),
-      hrTools: (function () {
-        try {
-          if (typeof window !== 'undefined' &&
-              window.HrTools &&
-              typeof window.HrTools.getState === 'function') {
-            var liveHr = window.HrTools.getState();
-            if (liveHr && typeof liveHr === 'object') return liveHr;
-          }
-        } catch (e1) {}
-        try {
-          var rhr = localStorage.getItem('andeco_hr_tools');
-          return rhr ? JSON.parse(rhr) : { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
-        } catch (e) {
-          return { leave: [], documents: [], onboarding: [], notes: [], announcements: [] };
-        }
-      })(),
+      fleet: liveOrCached('fleet', 'FleetManagement', emptyFleet),
+      crew: liveOrCached('crew', 'CrewManagement', emptyCrew),
+      shifts: liveOrCached('shifts', 'ShiftsManagement', emptyShifts),
+      projectManagement: liveOrCached('projectManagement', 'ProjectManagement', emptyPm),
+      hrTools: liveOrCached('hrTools', 'HrTools', emptyHr),
       payroll: (function () {
-        // Live in-memory payroll only (database-backed). Never fall back to localStorage
-        // — stale browser cache must not be written back to Postgres.
         var liveEmployees = null;
         var livePayroll = null;
         var liveCompany = null;
@@ -395,88 +382,42 @@ window.AccountingData = (function () {
             : 'replace'
         };
       })(),
-      lms: (function () {
-        try {
-          var r = localStorage.getItem('andeco_lms_data');
-          if (r) return JSON.parse(r);
-        } catch (e) {}
-        return {
-          courses: [],
-          enrollments: [],
-          attempts: [],
-          purchases: [],
-          applicants: [],
-          announcements: [],
-          certificates: [],
-          learnerProfiles: [],
-          discussions: [],
-          settings: {}
-        };
-      })(),
+      lms: liveOrCached('lms', 'LmsModule', emptyLms),
       distribution: (function () {
-        // Prefer live module state so freshly uploaded quote photos are included
-        // even if localStorage quota prevented a local write.
-        var live = null;
-        try {
-          if (typeof window !== 'undefined' &&
-              window.DistributionModule &&
-              typeof window.DistributionModule.getState === 'function') {
-            live = window.DistributionModule.getState();
-            if (live && typeof live === 'object' && !isSparseDistribution(live)) return live;
-          }
-        } catch (e0) {}
-        try {
-          var cached = readCachedDistribution();
-          if (cached && !isSparseDistribution(cached)) return cached;
-        } catch (e) {}
-        if (live && typeof live === 'object') return live;
-        return {
-          brands: [],
-          models: [],
-          optionCategories: [],
-          options: [],
-          quotations: [],
-          soldVessels: [],
-          potentialClients: [],
-          settings: {}
-        };
+        var live = callModuleGetState('DistributionModule');
+        if (live && typeof live === 'object' && !isSparseDistribution(live)) {
+          moduleLive.distribution = live;
+          return live;
+        }
+        if (moduleLive.distribution && !isSparseDistribution(moduleLive.distribution)) {
+          return moduleLive.distribution;
+        }
+        if (live && typeof live === 'object') {
+          moduleLive.distribution = live;
+          return live;
+        }
+        return emptyDist;
       })(),
       crm: {
-        users: getLocalStorage('andeco_crm_users', [])
+        users: (typeof window !== 'undefined' && window.AndecoApp && typeof window.AndecoApp.getUsers === 'function')
+          ? (window.AndecoApp.getUsers() || [])
+          : []
       }
     };
   }
 
   function notifyModulesDataLoaded(workspaceDist) {
     if (typeof window.reloadPayrollFromStorage === 'function') {
-      try { window.reloadPayrollFromStorage(); } catch (e) {}
+      try { window.reloadPayrollFromStorage(true); } catch (e) {}
     }
     if (typeof window.ShiftsManagement !== 'undefined' && window.ShiftsManagement.render) {
       try { window.ShiftsManagement.render(); } catch (e) {}
     }
-    if (typeof window.ProjectManagement !== 'undefined') {
-      try {
-        if (window.ProjectManagement.applyRemote) {
-          var pmRaw = null;
-          try { pmRaw = localStorage.getItem('andeco_pm_terminal_data'); } catch (ePm) {}
-          if (pmRaw) window.ProjectManagement.applyRemote(JSON.parse(pmRaw));
-          else if (window.ProjectManagement.render) window.ProjectManagement.render();
-        } else if (window.ProjectManagement.render) {
-          window.ProjectManagement.render();
-        }
-      } catch (e) {}
+    if (typeof window.ProjectManagement !== 'undefined' && window.ProjectManagement.render) {
+      try { window.ProjectManagement.render(); } catch (e) {}
     }
-    if (typeof window.HrTools !== 'undefined') {
-      try {
-        if (window.HrTools.applyRemote) {
-          var hrRaw = null;
-          try { hrRaw = localStorage.getItem('andeco_hr_tools'); } catch (eHr) {}
-          if (hrRaw) window.HrTools.applyRemote(JSON.parse(hrRaw));
-          else if (window.HrTools.render) window.HrTools.render();
-        } else if (window.HrTools.render) {
-          window.HrTools.render();
-        }
-      } catch (e) {}
+    if (typeof window.HrTools !== 'undefined' && window.HrTools.render) {
+      try { window.HrTools.render(); } catch (e) {}
     }
     if (typeof window.FleetManagement !== 'undefined' && window.FleetManagement.render) {
       try { window.FleetManagement.render(); } catch (e) {}
@@ -496,24 +437,12 @@ window.AccountingData = (function () {
     }
     if (typeof window.DistributionModule !== 'undefined') {
       try {
-        // Prefer an explicit server/workspace payload. Re-reading localStorage here used to
-        // drop quotation photos when the distribution blob was too large to store locally.
         if (workspaceDist && typeof workspaceDist === 'object' && window.DistributionModule.applyRemote) {
           var distAcceptExplicit = !window.DistributionModule.shouldAcceptRemote ||
             window.DistributionModule.shouldAcceptRemote();
           if (distAcceptExplicit) window.DistributionModule.applyRemote(workspaceDist);
-        } else {
-          var distAcceptRemote = !window.DistributionModule.shouldAcceptRemote ||
-            window.DistributionModule.shouldAcceptRemote();
-          if (distAcceptRemote) {
-            var distRaw = null;
-            try { distRaw = localStorage.getItem('andeco_distribution_data'); } catch (e2) {}
-            if (distRaw && window.DistributionModule.applyRemote) {
-              window.DistributionModule.applyRemote(JSON.parse(distRaw));
-            } else if (window.DistributionModule.render) {
-              window.DistributionModule.render();
-            }
-          }
+        } else if (window.DistributionModule.render) {
+          window.DistributionModule.render();
         }
       } catch (e) {}
     }
@@ -690,65 +619,16 @@ window.AccountingData = (function () {
   }
 
   function getInvoices() {
-    if (useFileStorage) return memory.invoices;
-    try {
-      var raw = localStorage.getItem(PREFIX + 'invoices');
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {}
-    return [];
+    return Array.isArray(memory.invoices) ? memory.invoices : [];
   }
 
   function mirrorLocalAccounting(key, value) {
-    try {
-      localStorage.setItem(PREFIX + key, JSON.stringify(value));
-    } catch (e) {}
+    // No-op: do not mirror accounting data into localStorage.
   }
 
   function mergeLocalCacheIntoPayload(data) {
-    if (!data || typeof data !== 'object') return false;
-    var merged = false;
-    function mergeList(key) {
-      var localList = [];
-      try {
-        localList = getLocalStorage(PREFIX + key, []);
-      } catch (e) {
-        localList = [];
-      }
-      if (!Array.isArray(localList) || !localList.length) return;
-      var serverList = Array.isArray(data[key]) ? data[key].slice() : [];
-      var byId = {};
-      serverList.forEach(function (row) {
-        if (row && row.id != null) byId[String(row.id)] = row;
-      });
-      localList.forEach(function (row) {
-        if (!row || row.id == null) return;
-        var id = String(row.id);
-        if (!byId[id]) {
-          serverList.push(row);
-          byId[id] = row;
-          merged = true;
-          return;
-        }
-        var localTs = Date.parse(row.updatedAt || row.createdAt || 0) || 0;
-        var serverTs = Date.parse(byId[id].updatedAt || byId[id].createdAt || 0) || 0;
-        if (localTs > serverTs) {
-          for (var i = 0; i < serverList.length; i++) {
-            if (serverList[i] && String(serverList[i].id) === id) {
-              serverList[i] = row;
-              byId[id] = row;
-              merged = true;
-              break;
-            }
-          }
-        }
-      });
-      data[key] = serverList;
-    }
-    mergeList('receipts');
-    mergeList('invoices');
-    mergeList('clients');
-    mergeList('serviceReports');
-    return merged;
+    // Disabled — Postgres is the only source of truth.
+    return false;
   }
 
   function saveInvoices(invoices) {
@@ -765,12 +645,7 @@ window.AccountingData = (function () {
   }
 
   function getReceipts() {
-    if (useFileStorage) return memory.receipts;
-    try {
-      var raw = localStorage.getItem(PREFIX + 'receipts');
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {}
-    return [];
+    return Array.isArray(memory.receipts) ? memory.receipts : [];
   }
 
   function saveReceipts(receipts) {
@@ -787,26 +662,8 @@ window.AccountingData = (function () {
   }
 
   function getClients() {
-    if (useFileStorage) {
-      if (!Array.isArray(memory.clients)) memory.clients = [];
-      if (memory.clients.length === 0) {
-        try {
-          var rawLocal = localStorage.getItem(PREFIX + 'clients');
-          var parsedLocal = rawLocal ? JSON.parse(rawLocal) : [];
-          if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-            memory.clients = parsedLocal;
-            persistToFile();
-          }
-        } catch (e) {}
-      }
-      return memory.clients.slice();
-    }
-    try {
-      var raw = localStorage.getItem(PREFIX + 'clients');
-      var parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {}
-    return [];
+    if (!Array.isArray(memory.clients)) memory.clients = [];
+    return memory.clients.slice();
   }
 
   function saveClients(clients) {
@@ -823,25 +680,8 @@ window.AccountingData = (function () {
   }
 
   function getServiceReports() {
-    if (useFileStorage) {
-      if (!Array.isArray(memory.serviceReports)) memory.serviceReports = [];
-      if (memory.serviceReports.length === 0) {
-        try {
-          var rawLocal = localStorage.getItem(PREFIX + 'serviceReports');
-          var parsedLocal = rawLocal ? JSON.parse(rawLocal) : [];
-          if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-            memory.serviceReports = parsedLocal;
-          }
-        } catch (e) {}
-      }
-      return memory.serviceReports.slice();
-    }
-    try {
-      var raw = localStorage.getItem(PREFIX + 'serviceReports');
-      var parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {}
-    return [];
+    if (!Array.isArray(memory.serviceReports)) memory.serviceReports = [];
+    return memory.serviceReports.slice();
   }
 
   function saveServiceReports(reports) {
@@ -858,24 +698,13 @@ window.AccountingData = (function () {
   }
 
   function getCompanySettings() {
-    if (useFileStorage) return memory.companySettings || defaultSettings;
-    try {
-      var raw = localStorage.getItem(PREFIX + 'companySettings');
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {}
-    return {};
+    return memory.companySettings || defaultSettings;
   }
 
   function saveCompanySettings(settings) {
-    if (useFileStorage) {
-      memory.companySettings = settings && typeof settings === 'object' ? settings : defaultSettings;
-      markLocalDirty();
-      if (persistSuppressCount === 0) persistToFile();
-      return;
-    }
-    try {
-      localStorage.setItem(PREFIX + 'companySettings', JSON.stringify(settings || {}));
-    } catch (e) {}
+    memory.companySettings = settings && typeof settings === 'object' ? settings : defaultSettings;
+    markLocalDirty();
+    if (persistSuppressCount === 0) persistToFile();
   }
 
   var CURRENCY_LOCALE_MAP = {
@@ -917,77 +746,45 @@ window.AccountingData = (function () {
   }
 
   function getProducts() {
-    if (useFileStorage) return memory.products;
-    try {
-      var raw = localStorage.getItem(PREFIX + 'products');
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {}
-    return [];
+    return Array.isArray(memory.products) ? memory.products : [];
   }
 
   function saveProducts(products) {
-    if (useFileStorage) {
-      memory.products = Array.isArray(products) ? products : [];
-      markLocalDirty();
-      if (persistSuppressCount === 0) persistToFile();
-      return;
-    }
-    try {
-      localStorage.setItem(PREFIX + 'products', JSON.stringify(products || []));
-    } catch (e) {}
+    memory.products = Array.isArray(products) ? products : [];
+    markLocalDirty();
+    if (persistSuppressCount === 0) persistToFile();
   }
 
   function getSubcontractors() {
-    if (useFileStorage) return Array.isArray(memory.subcontractors) ? memory.subcontractors : [];
-    try {
-      var raw = localStorage.getItem(PREFIX + 'subcontractors');
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {}
-    return [];
+    return Array.isArray(memory.subcontractors) ? memory.subcontractors : [];
   }
 
   function saveSubcontractors(list) {
-    if (useFileStorage) {
-      memory.subcontractors = Array.isArray(list) ? list : [];
-      markLocalDirty();
-      if (persistSuppressCount === 0) persistToFile();
-      return;
-    }
-    try {
-      localStorage.setItem(PREFIX + 'subcontractors', JSON.stringify(list || []));
-    } catch (e) {}
+    memory.subcontractors = Array.isArray(list) ? list : [];
+    markLocalDirty();
+    if (persistSuppressCount === 0) persistToFile();
   }
 
   function getPaymentOrders() {
-    if (useFileStorage) return Array.isArray(memory.paymentOrders) ? memory.paymentOrders : [];
-    try {
-      var raw = localStorage.getItem(PREFIX + 'paymentOrders');
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {}
-    return [];
+    return Array.isArray(memory.paymentOrders) ? memory.paymentOrders : [];
   }
 
   function savePaymentOrders(list) {
-    if (useFileStorage) {
-      memory.paymentOrders = Array.isArray(list) ? list : [];
-      markLocalDirty();
-      if (persistSuppressCount === 0) persistToFile();
-      return;
-    }
-    try {
-      localStorage.setItem(PREFIX + 'paymentOrders', JSON.stringify(list || []));
-    } catch (e) {}
+    memory.paymentOrders = Array.isArray(list) ? list : [];
+    markLocalDirty();
+    if (persistSuppressCount === 0) persistToFile();
   }
 
   function initLocalStorage() {
-    if (!localStorage.getItem(PREFIX + 'invoices')) saveInvoices([]);
-    if (!localStorage.getItem(PREFIX + 'receipts')) saveReceipts([]);
-    if (!localStorage.getItem(PREFIX + 'clients')) saveClients([]);
-    if (!localStorage.getItem(PREFIX + 'serviceReports')) saveServiceReports([]);
-    if (!localStorage.getItem(PREFIX + 'companySettings')) saveCompanySettings(defaultSettings);
-    if (!localStorage.getItem(PREFIX + 'products')) saveProducts([]);
-    if (!localStorage.getItem(PREFIX + 'subcontractors')) saveSubcontractors([]);
-    if (!localStorage.getItem(PREFIX + 'paymentOrders')) savePaymentOrders([]);
+    // Memory defaults only — no localStorage seeding.
+    if (!Array.isArray(memory.invoices)) memory.invoices = [];
+    if (!Array.isArray(memory.receipts)) memory.receipts = [];
+    if (!Array.isArray(memory.clients)) memory.clients = [];
+    if (!Array.isArray(memory.serviceReports)) memory.serviceReports = [];
+    if (!memory.companySettings) memory.companySettings = Object.assign({}, defaultSettings);
+    if (!Array.isArray(memory.products)) memory.products = [];
+    if (!Array.isArray(memory.subcontractors)) memory.subcontractors = [];
+    if (!Array.isArray(memory.paymentOrders)) memory.paymentOrders = [];
   }
 
   function isServerPayloadAccountingEmpty(data) {
@@ -998,92 +795,19 @@ window.AccountingData = (function () {
     return inv === 0 && rec === 0 && cli === 0;
   }
 
-  function hasLocalAccountingData() {
-    try {
-      if (getLocalStorage(PREFIX + 'invoices', []).length > 0) return true;
-      if (getLocalStorage(PREFIX + 'clients', []).length > 0) return true;
-      if (getLocalStorage(PREFIX + 'receipts', []).length > 0) return true;
-    } catch (e) {}
-    return false;
-  }
-
-  function loadMemoryFromLocalInvKeys() {
-    memory.invoices = getLocalStorage(PREFIX + 'invoices', []);
-    memory.receipts = getLocalStorage(PREFIX + 'receipts', []);
-    memory.clients = getLocalStorage(PREFIX + 'clients', []);
-    memory.serviceReports = getLocalStorage(PREFIX + 'serviceReports', []);
-    memory.companySettings = getLocalStorage(PREFIX + 'companySettings', null) || defaultSettings;
-    memory.products = getLocalStorage(PREFIX + 'products', []);
-    memory.subcontractors = getLocalStorage(PREFIX + 'subcontractors', []);
-    memory.paymentOrders = getLocalStorage(PREFIX + 'paymentOrders', []);
-  }
-
-  /** When shared file is empty but this browser still has old localStorage (e.g. after switching file:// → localhost). */
   function finishServerInit(data, useSupabaseBackend) {
     if (data && data._rev != null) workspaceRevision = String(data._rev);
-    var needsRepersist = false;
-    if (!useSupabaseBackend && !preferServerData() && isServerPayloadAccountingEmpty(data) && hasLocalAccountingData()) {
-      loadMemoryFromLocalInvKeys();
-      var saved = {
-        invoices: memory.invoices,
-        receipts: memory.receipts,
-        clients: memory.clients,
-        serviceReports: memory.serviceReports,
-        companySettings: memory.companySettings,
-        products: memory.products,
-        subcontractors: memory.subcontractors,
-        paymentOrders: memory.paymentOrders
-      };
-      applyLoadedData(data);
-      memory.invoices = saved.invoices;
-      memory.receipts = saved.receipts;
-      memory.clients = saved.clients;
-      memory.serviceReports = saved.serviceReports;
-      memory.companySettings = saved.companySettings;
-      memory.products = saved.products;
-      memory.subcontractors = saved.subcontractors;
-      memory.paymentOrders = saved.paymentOrders;
-      useFileStorage = true;
-      useSupabase = !!useSupabaseBackend;
-      persistToFile();
-      if (typeof console !== 'undefined' && console.info) {
-        console.info('Andeco: accounting data was restored from browser storage into the shared data file.');
-      }
-      return;
-    }
-    // Re-attach any receipts/invoices that were saved locally but never made it to Railway.
-    needsRepersist = mergeLocalCacheIntoPayload(data);
-    applyLoadedData(data);
+    applyLoadedData(data || emptyRemotePayload());
     useFileStorage = true;
     useSupabase = !!useSupabaseBackend;
-    mirrorLocalAccounting('receipts', memory.receipts || []);
-    mirrorLocalAccounting('invoices', memory.invoices || []);
-    mirrorLocalAccounting('clients', memory.clients || []);
-    mirrorLocalAccounting('serviceReports', memory.serviceReports || []);
-    if (needsRepersist) {
-      markLocalDirty();
-      persistToFile();
-      if (typeof console !== 'undefined' && console.info) {
-        console.info('Andeco: merged locally cached receipts/invoices into workspace and re-saving.');
-      }
-    }
   }
 
   function applyLoadedData(data) {
+        data = data && typeof data === 'object' ? data : {};
         memory.invoices = Array.isArray(data.invoices) ? data.invoices : [];
         memory.receipts = Array.isArray(data.receipts) ? data.receipts : [];
-        if (Array.isArray(data.clients)) {
-          if (data.clients.length > 0 || memory.clients.length === 0) {
-            memory.clients = data.clients;
-          }
-        }
-        if (Array.isArray(data.serviceReports)) {
-          if (data.serviceReports.length > 0 || !memory.serviceReports || memory.serviceReports.length === 0) {
-            memory.serviceReports = data.serviceReports;
-          }
-        } else if (!Array.isArray(memory.serviceReports)) {
-          memory.serviceReports = [];
-        }
+        memory.clients = Array.isArray(data.clients) ? data.clients : [];
+        memory.serviceReports = Array.isArray(data.serviceReports) ? data.serviceReports : [];
         memory.companySettings = data.companySettings && typeof data.companySettings === 'object'
           ? data.companySettings
           : defaultSettings;
@@ -1093,60 +817,31 @@ window.AccountingData = (function () {
         if (memory.invoices.length === 0 && memory.receipts.length === 0 && memory.clients.length === 0) {
           memory.companySettings = Object.assign({}, defaultSettings, memory.companySettings);
         }
-        if (data.fleet && typeof data.fleet === 'object') {
-          if (Array.isArray(data.fleet.vessels)) setLocalStorage('andeco_fleet_vessels', data.fleet.vessels);
-          if (Array.isArray(data.fleet.vesselPhotos)) setLocalStorage('andeco_fleet_vessel_photos', data.fleet.vesselPhotos);
-          if (Array.isArray(data.fleet.documents)) setLocalStorage('andeco_fleet_documents', data.fleet.documents);
-          if (Array.isArray(data.fleet.maintenance)) setLocalStorage('andeco_fleet_maintenance', data.fleet.maintenance);
-          if (Array.isArray(data.fleet.drydock)) setLocalStorage('andeco_fleet_drydock', data.fleet.drydock);
-          if (Array.isArray(data.fleet.inventory)) setLocalStorage('andeco_fleet_inventory', data.fleet.inventory);
-          if (Array.isArray(data.fleet.logbooks)) setLocalStorage('andeco_fleet_logbooks', data.fleet.logbooks);
-          if (Array.isArray(data.fleet.crew)) setLocalStorage('andeco_fleet_crew', data.fleet.crew);
-        }
-        if (data.crew && typeof data.crew === 'object') {
-          if (Array.isArray(data.crew.crewMembers)) setLocalStorage('andeco_crew_members', data.crew.crewMembers);
-          if (Array.isArray(data.crew.crewDocuments)) setLocalStorage('andeco_crew_documents', data.crew.crewDocuments);
-          if (Array.isArray(data.crew.crewAssignments)) setLocalStorage('andeco_crew_assignments', data.crew.crewAssignments);
-        }
-        if (data.shifts && typeof data.shifts === 'object') {
-          setLocalStorage('andeco_shifts_data', data.shifts);
-        }
-        if (data.projectManagement && typeof data.projectManagement === 'object') {
-          setLocalStorage('andeco_pm_terminal_data', data.projectManagement);
-        }
-        if (data.hrTools && typeof data.hrTools === 'object') {
-          setLocalStorage('andeco_hr_tools', data.hrTools);
-        }
-        if (data.lms && typeof data.lms === 'object') {
-          setLocalStorage('andeco_lms_data', data.lms);
-        }
-        if (data.distribution && typeof data.distribution === 'object') {
-          var distAccept = !(
-            typeof window.DistributionModule !== 'undefined' &&
-            window.DistributionModule.shouldAcceptRemote &&
-            !window.DistributionModule.shouldAcceptRemote()
-          );
-          // Never replace a rich local Distribution cache with an empty payload
-          // (pre-login emptyRemotePayload + failed large-blob cache writes).
-          var shouldWriteDist = true;
-          if (isSparseDistribution(data.distribution)) {
-            var existingDist = readCachedDistribution();
-            if (existingDist && !isSparseDistribution(existingDist)) {
-              shouldWriteDist = false;
+
+        function applyMod(name, globalName, payload) {
+          if (!payload || typeof payload !== 'object') return;
+          moduleLive[name] = payload;
+          try {
+            if (typeof window !== 'undefined' && window[globalName] && typeof window[globalName].applyRemote === 'function') {
+              window[globalName].applyRemote(payload);
             }
+          } catch (e) {}
+        }
+
+        if (data.fleet && typeof data.fleet === 'object') applyMod('fleet', 'FleetManagement', data.fleet);
+        if (data.crew && typeof data.crew === 'object') applyMod('crew', 'CrewManagement', data.crew);
+        if (data.shifts && typeof data.shifts === 'object') applyMod('shifts', 'ShiftsManagement', data.shifts);
+        if (data.projectManagement && typeof data.projectManagement === 'object') {
+          applyMod('projectManagement', 'ProjectManagement', data.projectManagement);
+        }
+        if (data.hrTools && typeof data.hrTools === 'object') applyMod('hrTools', 'HrTools', data.hrTools);
+        if (data.lms && typeof data.lms === 'object') applyMod('lms', 'LmsModule', data.lms);
+        if (data.distribution && typeof data.distribution === 'object') {
+          if (!isSparseDistribution(data.distribution) || !moduleLive.distribution || isSparseDistribution(moduleLive.distribution)) {
+            applyMod('distribution', 'DistributionModule', data.distribution);
           }
-          // Best-effort local cache only — quotation photos often exceed localStorage quota.
-          if (distAccept && shouldWriteDist) setLocalStorage('andeco_distribution_data', data.distribution);
         }
         if (data.payroll && typeof data.payroll === 'object') {
-          // Optional browser cache of the server snapshot only — never merge LS back up.
-          if (Array.isArray(data.payroll.employees)) setLocalStorage('employees', data.payroll.employees);
-          if (data.payroll.payrollData && typeof data.payroll.payrollData === 'object') {
-            setLocalStorage('payrollData', data.payroll.payrollData);
-          }
-          if (data.payroll.companySettings && typeof data.payroll.companySettings === 'object') {
-            setLocalStorage('companySettings', data.payroll.companySettings);
-          }
           try {
             if (typeof window.applyPayrollRemote === 'function') {
               window.applyPayrollRemote(data.payroll, { force: true });
@@ -1154,19 +849,16 @@ window.AccountingData = (function () {
           } catch (ePayApply) {}
         }
         if (data.crm && typeof data.crm === 'object') {
-          if (Array.isArray(data.crm.users)) setLocalStorage('andeco_crm_users', data.crm.users);
+          // Users come from /api/users; ignore local cache.
         }
-        // Pass server distribution directly so photos are not lost when localStorage write fails.
-        // Prefer a non-sparse cache when the incoming payload is empty (login race).
+        // Pass server distribution directly so photos are not lost.
         var notifyDist = data.distribution && typeof data.distribution === 'object' ? data.distribution : null;
-        if (isSparseDistribution(notifyDist)) {
-          var cachedForNotify = readCachedDistribution();
-          if (cachedForNotify && !isSparseDistribution(cachedForNotify)) {
-            notifyDist = cachedForNotify;
-          }
+        if (isSparseDistribution(notifyDist) && moduleLive.distribution && !isSparseDistribution(moduleLive.distribution)) {
+          notifyDist = moduleLive.distribution;
         }
         notifyModulesDataLoaded(notifyDist);
   }
+
 
   function ensureSupabaseClient() {
     var w = typeof window !== 'undefined' ? window : null;

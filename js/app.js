@@ -1,17 +1,54 @@
 /**
  * Andeco Horizon Suite — Login required. Users and module access managed by administrator.
- * Data in localStorage. No installation required.
+ * Business data lives in Postgres (via /api/data + /api/save). Auth session is in-memory,
+ * backed by the server cookie (/api/session). UI route prefs use sessionStorage only.
  */
 
 (function () {
   'use strict';
 
-  var STORAGE_KEYS = {
-    users: 'andeco_crm_users',
-    session: 'andeco_crm_session'
-  };
+  /** In-memory auth cache — never persisted to localStorage. */
+  var memoryUsers = [];
+  var memorySession = null;
 
   var ROUTE_STORAGE_KEY = 'andeco_crm_route';
+
+  function purgeLegacyLocalStorage() {
+    if (typeof localStorage === 'undefined') return;
+    var keys = [
+      'andeco_crm_users',
+      'andeco_crm_session',
+      'employees',
+      'payrollData',
+      'companySettings',
+      'payrollSequences',
+      'andeco_shifts_data',
+      'andeco_lms_data',
+      'andeco_distribution_data',
+      'andeco_pm_terminal_data',
+      'andeco_hr_tools'
+    ];
+    var prefixes = ['andeco_inv_', 'andeco_fleet_', 'andeco_crew_', 'andeco_shifts_', 'andeco_lms_', 'andeco_hr_', 'andeco_pm_', 'andeco_dist_', 'andeco_'];
+    try {
+      keys.forEach(function (k) {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key) continue;
+        for (var p = 0; p < prefixes.length; p++) {
+          if (key.indexOf(prefixes[p]) === 0) {
+            toRemove.push(key);
+            break;
+          }
+        }
+      }
+      toRemove.forEach(function (k) {
+        try { localStorage.removeItem(k); } catch (e2) {}
+      });
+    } catch (e3) {}
+  }
 
   function isFileProtocol() {
     return typeof window !== 'undefined' && window.location && window.location.protocol === 'file:';
@@ -226,40 +263,24 @@
   };
 
   function getUsers() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEYS.users);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return [];
+    return Array.isArray(memoryUsers) ? memoryUsers.slice() : [];
   }
 
   function saveUsers(users) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));
-    } catch (e) {}
-    try {
-      if (window.AccountingData && window.AccountingData.persistAll) window.AccountingData.persistAll();
-    } catch (e) {}
+    memoryUsers = Array.isArray(users) ? users.slice() : [];
+    // Users are persisted via /api/users (Postgres). Do not mirror to localStorage.
   }
 
   function getSession() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEYS.session);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return null;
+    return memorySession ? Object.assign({}, memorySession) : null;
   }
 
   function setSession(session) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
-    } catch (e) {}
+    memorySession = session && typeof session === 'object' ? Object.assign({}, session) : null;
   }
 
   function clearSession() {
-    try {
-      localStorage.removeItem(STORAGE_KEYS.session);
-    } catch (e) {}
+    memorySession = null;
   }
 
   /** Pure-JS SHA-256 for contexts where crypto.subtle is unavailable (e.g. non-HTTPS). */
@@ -1894,6 +1915,8 @@
       }
     }
 
+    purgeLegacyLocalStorage();
+
     if (window.AccountingData && typeof window.AccountingData.init === 'function') {
       Promise.resolve(window.AccountingData.init()).then(showAuthScreen).catch(showAuthScreen);
     } else {
@@ -1910,6 +1933,9 @@
   window.AndecoUsers = {
     getUsers: getUsers,
     saveUsers: saveUsers,
+    getSession: getSession,
+    setSession: setSession,
+    clearSession: clearSession,
     hashPassword: hashPassword,
     modules: MODULES.filter(function (m) { return m.id !== 'settings'; }),
     allModuleIds: MODULE_IDS.slice(),
@@ -1925,4 +1951,9 @@
       applyVisibility(session);
     }
   };
+
+  // Compat alias used by accounting-data buildFullPayload.
+  window.AndecoApp = window.AndecoApp || {};
+  window.AndecoApp.getUsers = getUsers;
+  window.AndecoApp.getSession = getSession;
 })();

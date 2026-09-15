@@ -246,25 +246,37 @@
     return !!(profile && profile.role === 'instructor');
   }
 
+  var memoryData = null;
   function getData() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return normalizeData(JSON.parse(raw));
-    } catch (e) {}
+    if (memoryData) return normalizeData(memoryData);
     return emptyData();
   }
 
   function saveData(data) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeData(data)));
-    } catch (e) {}
+    memoryData = normalizeData(data);
     persistAllIfFile();
+  }
+
+  function getState() { return getData(); }
+  function applyRemote(data) {
+    if (!data || typeof data !== 'object') return false;
+    memoryData = normalizeData(data);
+    try {
+      if (typeof render === 'function' && !(typeof isInteractiveLmsFormOpen === 'function' && isInteractiveLmsFormOpen())) {
+        render();
+      }
+    } catch (e) {}
+    return true;
   }
 
   function getSession() {
     try {
-      var raw = localStorage.getItem('andeco_crm_session');
-      if (raw) return JSON.parse(raw);
+      if (window.AndecoUsers && typeof window.AndecoUsers.getSession === 'function') {
+        return window.AndecoUsers.getSession();
+      }
+      if (window.AndecoApp && typeof window.AndecoApp.getSession === 'function') {
+        return window.AndecoApp.getSession();
+      }
     } catch (e) {}
     return null;
   }
@@ -286,8 +298,12 @@
 
   function getUsers() {
     try {
-      var raw = localStorage.getItem('andeco_crm_users');
-      if (raw) return JSON.parse(raw);
+      if (window.AndecoUsers && typeof window.AndecoUsers.getUsers === 'function') {
+        return window.AndecoUsers.getUsers() || [];
+      }
+      if (window.AndecoApp && typeof window.AndecoApp.getUsers === 'function') {
+        return window.AndecoApp.getUsers() || [];
+      }
     } catch (e) {}
     return [];
   }
@@ -3877,6 +3893,8 @@
     renderCareersPortal: renderCareersPortal,
     getData: getData,
     saveData: saveData,
+    getState: getState,
+    applyRemote: applyRemote,
     normalizeData: normalizeData,
     normalizeDiscussion: normalizeDiscussion,
     printCertificate: printCertificate,

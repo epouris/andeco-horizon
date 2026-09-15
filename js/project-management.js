@@ -244,20 +244,16 @@
     return { calls: calls, people: people, seeded: !!d.seeded };
   }
 
+  var memoryData = null;
+
   function getData() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return normalizeData(JSON.parse(raw));
-    } catch (e) {}
-    var seeded = normalizeData({ calls: sampleCalls(), people: defaultPeople(), seeded: true });
-    saveData(seeded);
-    return seeded;
+    if (memoryData) return normalizeData(memoryData);
+    memoryData = normalizeData({ calls: sampleCalls(), people: defaultPeople(), seeded: true });
+    return normalizeData(memoryData);
   }
 
   function saveData(data) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeData(data)));
-    } catch (e) {}
+    memoryData = normalizeData(data);
     persistAllIfFile();
   }
 
