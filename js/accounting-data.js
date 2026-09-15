@@ -1576,9 +1576,9 @@ window.AccountingData = (function () {
     }
   }
 
-  function persistAll() {
+  function persistAll(opts) {
     if (supabasePendingAuth) return Promise.resolve(false);
-    if (useFileStorage || sharedFileHandle || useSupabase) return persistToFile();
+    if (useFileStorage || sharedFileHandle || useSupabase) return persistToFile(opts || {});
     return Promise.resolve(false);
   }
 
