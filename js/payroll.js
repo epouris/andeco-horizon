@@ -2111,53 +2111,63 @@ function printBulkPayslips() {
         showMessage('Payslip template not found. Please generate a payslip first.', 'error');
         return;
     }
-    
-    // Create a container for bulk printing
-    let bulkPrintContainer = document.getElementById('bulkPrintContainer');
-    if (!bulkPrintContainer) {
-        bulkPrintContainer = document.createElement('div');
-        bulkPrintContainer.id = 'bulkPrintContainer';
-        bulkPrintContainer.style.display = 'none';
-        document.body.appendChild(bulkPrintContainer);
-    }
-    
-    // Clear previous content
-    bulkPrintContainer.innerHTML = '';
-    
-    // Clone and populate each payslip
-    filteredPayslips.forEach((payslip, index) => {
+
+    // Build HTML for each payslip (same path as single print — dedicated window).
+    // window.print() on the Horizon shell prints blank pages.
+    const pagesHtml = filteredPayslips.map((payslip, index) => {
         const containerClone = originalContainer.cloneNode(true);
         containerClone.style.pageBreakAfter = index < filteredPayslips.length - 1 ? 'always' : 'auto';
-        
-        // Populate the cloned container with payslip data
+        containerClone.style.breakAfter = index < filteredPayslips.length - 1 ? 'page' : 'auto';
         populatePayslipInContainer(containerClone, payslip);
-        
-        bulkPrintContainer.appendChild(containerClone);
-    });
-    
-    // Show the bulk print container and hide everything else temporarily
-    const originalDisplay = bulkPrintContainer.style.display;
-    bulkPrintContainer.style.display = 'block';
-    
-    // Store original visibility of other elements
-    const payslipResult = document.getElementById('payslipResult');
-    const originalPayslipResultDisplay = payslipResult ? payslipResult.style.display : 'none';
-    
-    // Hide the main payslip result if visible
-    if (payslipResult) {
-        payslipResult.style.display = 'none';
+        return containerClone.outerHTML;
+    }).join('');
+
+    const printWin = window.open('', '_blank', 'width=800,height=600');
+    if (!printWin) {
+        showMessage('Please allow pop-ups to print payslips.', 'error');
+        return;
     }
-    
-    // Print
-    window.print();
-    
-    // Restore original state after a short delay
-    setTimeout(() => {
-        bulkPrintContainer.style.display = originalDisplay;
-        if (payslipResult) {
-            payslipResult.style.display = originalPayslipResultDisplay;
-        }
-    }, 100);
+
+    var baseHref = '';
+    if (window.location.protocol === 'file:') {
+        var path = window.location.pathname || '';
+        baseHref = 'file://' + path.replace(/[^/]*$/, '');
+    } else {
+        baseHref = window.location.href.replace(/[#?].*$/, '').replace(/[^/]+$/, '') || window.location.origin + '/';
+    }
+    var inlineStyles = typeof window.PAYSLIP_PRINT_STYLES === 'string' ? window.PAYSLIP_PRINT_STYLES : '';
+    var bulkExtra =
+        '.payslip-container{page-break-after:always;break-after:page;}' +
+        '.payslip-container:last-child{page-break-after:auto;break-after:auto;}';
+
+    printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Payslips ' +
+        String(monthFilter) + '/' + String(yearFilter) + '</title>');
+    printWin.document.write('<base href="' + baseHref.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">');
+    if (inlineStyles) {
+        printWin.document.write('<style>' + inlineStyles.replace(/<\/style/gi, '<\\/style') + bulkExtra + '</style>');
+    } else {
+        printWin.document.write('<link rel="stylesheet" href="css/payslip-print.css">');
+        printWin.document.write('<style>' + bulkExtra + '</style>');
+    }
+    printWin.document.write('</head><body>');
+    printWin.document.write(pagesHtml);
+    printWin.document.write('</body></html>');
+    printWin.document.close();
+
+    var printDone = false;
+    function doPrint() {
+        if (printDone || printWin.closed) return;
+        printDone = true;
+        printWin.focus();
+        printWin.print();
+        printWin.onafterprint = function () { if (!printWin.closed) printWin.close(); };
+    }
+    if (inlineStyles) {
+        doPrint();
+    } else {
+        printWin.onload = function () { doPrint(); };
+        setTimeout(function () { if (!printDone) doPrint(); }, 800);
+    }
 }
 
 function populatePayslipInContainer(container, payslip) {
