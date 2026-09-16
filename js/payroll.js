@@ -2522,6 +2522,9 @@ function collectYTDBalanceRows(year, employeeIdFilter) {
             employeeEmployerContribution += payslipEmployerContributionTotal(data);
         }
 
+        // Skip employees with no payslips in the selected year
+        if (monthsWithPayslips === 0) return;
+
         const employeeSalaryCost = employeeGross + employeeAdditionalPay + employeeExpenses + employeeEmployerContribution;
 
         rows.push({
