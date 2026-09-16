@@ -2456,75 +2456,406 @@ function calculateYTDForPayslip(employeeId, year, month) {
     return ytd;
 }
 
-function updateYTDDisplay() {
-    const year = document.getElementById('ytdYear').value;
-    const employeeId = document.getElementById('ytdEmployee').value;
-    
-    let totalGross = 0;
-    let totalTax = 0;
-    let totalSocialInsurance = 0;
-    let totalHolidayFund = 0;
-    
-    const ytdTableBody = document.getElementById('ytdTableBody');
-    ytdTableBody.innerHTML = '';
-    
-    const filteredEmployees = employeeId ? 
-        employees.filter(emp => emp.employeeId === employeeId) : 
-        employees;
-    
-    filteredEmployees.forEach(employee => {
+function payslipActualPaidAmount(data) {
+    if (!data || typeof data !== 'object') return 0;
+    if (typeof data.totalPayable === 'number') return data.totalPayable;
+    return (data.netPay || 0) + (data.additionalPay || 0) + (data.expenses || 0);
+}
+
+function collectYTDBalanceRows(year, employeeIdFilter) {
+    const y = String(year || '');
+    const filteredEmployees = employeeIdFilter
+        ? employees.filter((emp) => emp.employeeId === employeeIdFilter)
+        : employees.slice();
+
+    const rows = [];
+    const totals = {
+        gross: 0,
+        tax: 0,
+        socialInsurance: 0,
+        holidayFund: 0,
+        nhs: 0,
+        net: 0
+    };
+
+    filteredEmployees.forEach((employee) => {
         let employeeGross = 0;
         let employeeTax = 0;
         let employeeSocialInsurance = 0;
         let employeeHolidayFund = 0;
         let employeeNHS = 0;
         let employeeNet = 0;
-        
-        // Calculate year-to-date for this employee - only from actual payslip data
+        let monthsWithPayslips = 0;
+
         for (let month = 1; month <= 12; month++) {
             const monthStr = month.toString().padStart(2, '0');
-            const payrollKey = `${employee.employeeId}_${year}_${monthStr}`;
-            
-            if (payrollData[payrollKey]) {
-                const data = payrollData[payrollKey];
-                employeeGross += data.grossSalary || 0;
-                employeeTax += data.incomeTax || 0;
-                employeeSocialInsurance += data.socialInsurance || 0;
-                employeeHolidayFund += data.holidayFund || 0;
-                employeeNHS += data.nhs || 0;
-                // Actual amount paid to the employee (includes additional pay + expenses)
-                const paid = (typeof data.totalPayable === 'number')
-                    ? data.totalPayable
-                    : (data.netPay || 0) + (data.additionalPay || 0) + (data.expenses || 0);
-                employeeNet += parseFloat(Number(paid).toFixed(2));
-            }
-            // Only use actual payslip data - no estimates for missing months
+            const payrollKey = `${employee.employeeId}_${y}_${monthStr}`;
+            if (!payrollData[payrollKey]) continue;
+            const data = payrollData[payrollKey];
+            monthsWithPayslips += 1;
+            employeeGross += data.grossSalary || 0;
+            employeeTax += data.incomeTax || 0;
+            employeeSocialInsurance += data.socialInsurance || 0;
+            employeeHolidayFund += data.holidayFund || 0;
+            employeeNHS += data.nhs || 0;
+            employeeNet += parseFloat(Number(payslipActualPaidAmount(data)).toFixed(2));
         }
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${escapeEmployeeHtml(employee.firstName)} ${escapeEmployeeHtml(employee.lastName)}</td>
-            <td>${escapeEmployeeHtml(formatMoney(employeeGross))}</td>
-            <td>${escapeEmployeeHtml(formatMoney(employeeTax))}</td>
-            <td>${escapeEmployeeHtml(formatMoney(employeeSocialInsurance))}</td>
-            <td>${escapeEmployeeHtml(formatMoney(employeeHolidayFund))}</td>
-            <td>${escapeEmployeeHtml(formatMoney(employeeNHS))}</td>
-            <td>${escapeEmployeeHtml(formatMoney(employeeNet))}</td>
-        `;
-        ytdTableBody.appendChild(row);
-        
-        totalGross += employeeGross;
-        totalTax += employeeTax;
-        totalSocialInsurance += employeeSocialInsurance;
-        totalHolidayFund += employeeHolidayFund;
+
+        rows.push({
+            employeeId: employee.employeeId || '',
+            name: `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.employeeId || 'Employee',
+            gross: employeeGross,
+            tax: employeeTax,
+            socialInsurance: employeeSocialInsurance,
+            holidayFund: employeeHolidayFund,
+            nhs: employeeNHS,
+            net: employeeNet,
+            monthsWithPayslips
+        });
+
+        totals.gross += employeeGross;
+        totals.tax += employeeTax;
+        totals.socialInsurance += employeeSocialInsurance;
+        totals.holidayFund += employeeHolidayFund;
+        totals.nhs += employeeNHS;
+        totals.net += employeeNet;
     });
-    
-    // Update summary cards
-    document.getElementById('totalGrossPay').textContent = `${formatMoney(totalGross)}`;
-    document.getElementById('totalTaxDeducted').textContent = `${formatMoney(totalTax)}`;
-    document.getElementById('totalSocialInsurance').textContent = `${formatMoney(totalSocialInsurance)}`;
-    document.getElementById('totalHolidayFund').textContent = `${formatMoney(totalHolidayFund)}`;
+
+    return { year: y, rows, totals };
 }
+
+function updateYTDDisplay() {
+    const yearEl = document.getElementById('ytdYear');
+    const employeeEl = document.getElementById('ytdEmployee');
+    const ytdTableBody = document.getElementById('ytdTableBody');
+    if (!yearEl || !ytdTableBody) return;
+
+    const year = yearEl.value;
+    const employeeId = employeeEl ? employeeEl.value : '';
+    const data = collectYTDBalanceRows(year, employeeId);
+
+    ytdTableBody.innerHTML = '';
+    data.rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeEmployeeHtml(row.name)}</td>
+            <td>${escapeEmployeeHtml(formatMoney(row.gross))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(row.tax))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(row.socialInsurance))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(row.holidayFund))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(row.nhs))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(row.net))}</td>
+        `;
+        ytdTableBody.appendChild(tr);
+    });
+
+    const totalGrossEl = document.getElementById('totalGrossPay');
+    const totalTaxEl = document.getElementById('totalTaxDeducted');
+    const totalSiEl = document.getElementById('totalSocialInsurance');
+    const totalHfEl = document.getElementById('totalHolidayFund');
+    if (totalGrossEl) totalGrossEl.textContent = `${formatMoney(data.totals.gross)}`;
+    if (totalTaxEl) totalTaxEl.textContent = `${formatMoney(data.totals.tax)}`;
+    if (totalSiEl) totalSiEl.textContent = `${formatMoney(data.totals.socialInsurance)}`;
+    if (totalHfEl) totalHfEl.textContent = `${formatMoney(data.totals.holidayFund)}`;
+}
+
+function buildYTDBalancesReportHeaderHtml(year, scopeLabel, printedOn) {
+    const cs = (typeof getMergedCompanySettingsForReports === 'function')
+        ? getMergedCompanySettingsForReports()
+        : (typeof getPayrollCompanySettings === 'function' ? getPayrollCompanySettings() : {});
+    const name = cs.companyName || 'Company name';
+    const addressLines = (cs.companyAddress || '').split('\n').filter(Boolean)
+        .map(function (line) { return escapeEmployeeHtml(line); }).join('<br>');
+    const contactParts = [];
+    if (cs.companyPhone) contactParts.push('Tel: ' + escapeEmployeeHtml(cs.companyPhone));
+    if (cs.companyEmail) contactParts.push('Email: ' + escapeEmployeeHtml(cs.companyEmail));
+    if (cs.companyWebsite) contactParts.push('Web: ' + escapeEmployeeHtml(cs.companyWebsite));
+    const taxParts = [];
+    if (cs.companyTaxId) taxParts.push('TIN: ' + escapeEmployeeHtml(cs.companyTaxId));
+    if (cs.companyRegistration) taxParts.push('Reg: ' + escapeEmployeeHtml(cs.companyRegistration));
+
+    let logo = '';
+    try {
+        if (typeof window.AccountingData !== 'undefined' && window.AccountingData.getDocumentLogo) {
+            logo = window.AccountingData.getDocumentLogo('payslip') || '';
+        }
+    } catch (e) {}
+    if (!logo) logo = cs.logoData || '';
+    const logoHtml = logo
+        ? `<img src="${logo}" alt="" class="ytd-report-logo-img">`
+        : `<div class="ytd-report-logo-text">${escapeEmployeeHtml((name || 'CO').substring(0, 12).toUpperCase())}</div>`;
+
+    return `
+        <header class="ytd-report-header">
+            <div class="ytd-report-logo">${logoHtml}</div>
+            <div class="ytd-report-company">
+                <h1 class="ytd-report-company-name">${escapeEmployeeHtml(name)}</h1>
+                ${addressLines ? `<p class="ytd-report-meta">${addressLines}</p>` : ''}
+                ${contactParts.length ? `<p class="ytd-report-meta">${contactParts.join(' · ')}</p>` : ''}
+                ${taxParts.length ? `<p class="ytd-report-meta">${taxParts.join(' · ')}</p>` : ''}
+            </div>
+            <div class="ytd-report-doc">
+                <div class="ytd-report-doc-title">Year to Date Balances</div>
+                <div class="ytd-report-doc-year">Tax / payroll year ${escapeEmployeeHtml(String(year))}</div>
+                <div class="ytd-report-doc-scope">${escapeEmployeeHtml(scopeLabel)}</div>
+                <div class="ytd-report-doc-printed">Printed ${escapeEmployeeHtml(printedOn)}</div>
+            </div>
+        </header>`;
+}
+
+function printYTDBalancesReport() {
+    const yearEl = document.getElementById('ytdYear');
+    const employeeEl = document.getElementById('ytdEmployee');
+    if (!yearEl) {
+        showMessage('Year to Date panel is not available.', 'error');
+        return;
+    }
+
+    const year = yearEl.value;
+    const employeeId = employeeEl ? employeeEl.value : '';
+    const data = collectYTDBalanceRows(year, employeeId);
+
+    if (!data.rows.length) {
+        showMessage('No employees found to include in the report.', 'error');
+        return;
+    }
+
+    let scopeLabel = 'All employees';
+    if (employeeId) {
+        const emp = employees.find((e) => e.employeeId === employeeId);
+        if (emp) {
+            const fullName = ((emp.firstName || '') + ' ' + (emp.lastName || '')).trim();
+            scopeLabel = 'Employee: ' + (fullName || emp.employeeId) + ' (' + emp.employeeId + ')';
+        } else {
+            scopeLabel = 'Employee ID: ' + employeeId;
+        }
+    }
+
+    const printedOn = (window.AndecoDate && window.AndecoDate.formatDate)
+        ? window.AndecoDate.formatDate(new Date())
+        : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    const t = data.totals;
+    let bodyRows = '';
+    data.rows.forEach((row) => {
+        bodyRows += `
+            <tr>
+                <td>${escapeEmployeeHtml(row.name)}</td>
+                <td class="num">${escapeEmployeeHtml(row.employeeId || '—')}</td>
+                <td class="num">${escapeEmployeeHtml(formatMoney(row.gross))}</td>
+                <td class="num">${escapeEmployeeHtml(formatMoney(row.tax))}</td>
+                <td class="num">${escapeEmployeeHtml(formatMoney(row.socialInsurance))}</td>
+                <td class="num">${escapeEmployeeHtml(formatMoney(row.holidayFund))}</td>
+                <td class="num">${escapeEmployeeHtml(formatMoney(row.nhs))}</td>
+                <td class="num">${escapeEmployeeHtml(formatMoney(row.net))}</td>
+            </tr>`;
+    });
+
+    const headerHtml = buildYTDBalancesReportHeaderHtml(year, scopeLabel, printedOn);
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Year to Date Balances — ${escapeEmployeeHtml(String(year))}</title>
+  <style>
+    @page { size: A4 landscape; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      font-size: 10px;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 0;
+      line-height: 1.35;
+    }
+    .ytd-report-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #222;
+    }
+    .ytd-report-logo { flex: 0 0 78px; }
+    .ytd-report-logo-img {
+      display: block;
+      max-width: 78px;
+      max-height: 56px;
+      object-fit: contain;
+    }
+    .ytd-report-logo-text {
+      width: 78px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      font-size: 9px;
+      font-weight: 700;
+      text-align: center;
+      padding: 4px;
+    }
+    .ytd-report-company { flex: 1; min-width: 0; }
+    .ytd-report-company-name {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .ytd-report-meta {
+      margin: 0 0 2px;
+      font-size: 9px;
+      color: #333;
+    }
+    .ytd-report-doc {
+      flex: 0 0 210px;
+      text-align: right;
+    }
+    .ytd-report-doc-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .ytd-report-doc-year {
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .ytd-report-doc-scope,
+    .ytd-report-doc-printed {
+      margin-top: 3px;
+      font-size: 9px;
+      color: #444;
+    }
+    .ytd-report-intro {
+      margin: 0 0 10px;
+      font-size: 9px;
+      color: #444;
+    }
+    .ytd-report-summary {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .ytd-report-summary-card {
+      border: 1px solid #ccc;
+      background: #f7f7f7;
+      padding: 8px 10px;
+    }
+    .ytd-report-summary-card h3 {
+      margin: 0 0 4px;
+      font-size: 8px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #555;
+    }
+    .ytd-report-summary-card span {
+      font-size: 12px;
+      font-weight: 700;
+    }
+    table.ytd-report-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 9px;
+    }
+    table.ytd-report-table th,
+    table.ytd-report-table td {
+      border: 1px solid #bbb;
+      padding: 5px 6px;
+      vertical-align: top;
+    }
+    table.ytd-report-table thead th {
+      background: #ececec;
+      font-weight: 700;
+      text-align: left;
+    }
+    table.ytd-report-table td.num,
+    table.ytd-report-table th.num {
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    table.ytd-report-table tfoot td {
+      background: #f0f0f0;
+      font-weight: 700;
+    }
+    .ytd-report-footer {
+      margin-top: 14px;
+      padding-top: 8px;
+      border-top: 1px solid #ccc;
+      font-size: 8px;
+      color: #555;
+    }
+    .ytd-report-footer p { margin: 0 0 3px; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  ${headerHtml}
+  <p class="ytd-report-intro">Payroll year-to-date balances prepared for audit review. Amounts are taken from saved payslips for ${escapeEmployeeHtml(String(year))}. Net Pay is the amount paid to the employee (net pay + additional pay + expenses).</p>
+  <section class="ytd-report-summary">
+    <div class="ytd-report-summary-card"><h3>Total Gross Pay</h3><span>${escapeEmployeeHtml(formatMoney(t.gross))}</span></div>
+    <div class="ytd-report-summary-card"><h3>Total Tax</h3><span>${escapeEmployeeHtml(formatMoney(t.tax))}</span></div>
+    <div class="ytd-report-summary-card"><h3>Social Insurance</h3><span>${escapeEmployeeHtml(formatMoney(t.socialInsurance))}</span></div>
+    <div class="ytd-report-summary-card"><h3>Holiday Fund</h3><span>${escapeEmployeeHtml(formatMoney(t.holidayFund))}</span></div>
+    <div class="ytd-report-summary-card"><h3>NHS / GESI</h3><span>${escapeEmployeeHtml(formatMoney(t.nhs))}</span></div>
+    <div class="ytd-report-summary-card"><h3>Total Net Pay</h3><span>${escapeEmployeeHtml(formatMoney(t.net))}</span></div>
+  </section>
+  <table class="ytd-report-table">
+    <thead>
+      <tr>
+        <th style="width:22%">Employee</th>
+        <th class="num" style="width:10%">Employee ID</th>
+        <th class="num" style="width:11%">Gross Pay</th>
+        <th class="num" style="width:10%">Tax</th>
+        <th class="num" style="width:12%">Social Insurance</th>
+        <th class="num" style="width:11%">Holiday Fund</th>
+        <th class="num" style="width:10%">NHS</th>
+        <th class="num" style="width:14%">Net Pay</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${bodyRows}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2">Totals (${data.rows.length} employee${data.rows.length === 1 ? '' : 's'})</td>
+        <td class="num">${escapeEmployeeHtml(formatMoney(t.gross))}</td>
+        <td class="num">${escapeEmployeeHtml(formatMoney(t.tax))}</td>
+        <td class="num">${escapeEmployeeHtml(formatMoney(t.socialInsurance))}</td>
+        <td class="num">${escapeEmployeeHtml(formatMoney(t.holidayFund))}</td>
+        <td class="num">${escapeEmployeeHtml(formatMoney(t.nhs))}</td>
+        <td class="num">${escapeEmployeeHtml(formatMoney(t.net))}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <footer class="ytd-report-footer">
+    <p>Holiday Fund is shown for reference and is an employer contribution (not deducted from employee Net Pay).</p>
+    <p>This is a computer-generated payroll report from Andeco Horizon. Please contact the company if you have any questions.</p>
+  </footer>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank', 'width=1100,height=800');
+    if (!printWindow) {
+        showMessage('Allow pop-ups to print this report.', 'error');
+        return;
+    }
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = function () {
+        printWindow.focus();
+        printWindow.print();
+    };
+}
+window.printYTDBalancesReport = printYTDBalancesReport;
 
 function getEmployeePayrollYTDTotals(employeeId, year) {
     const y = String(year);
@@ -2546,9 +2877,9 @@ function getEmployeePayrollYTDTotals(employeeId, year) {
             totals.socialInsurance += data.socialInsurance || 0;
             totals.holidayFund += data.holidayFund || 0;
             totals.nhs += data.nhs || 0;
+            totals.netPay += parseFloat(Number(payslipActualPaidAmount(data)).toFixed(2));
         }
     }
-    totals.netPay = totals.grossSalary - totals.incomeTax - totals.socialInsurance - totals.nhs;
     return totals;
 }
 window.getEmployeePayrollYTDTotals = getEmployeePayrollYTDTotals;
