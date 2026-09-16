@@ -2623,9 +2623,12 @@ function printYTDBalancesReport() {
     let scopeLabel = 'All employees';
     if (employeeId) {
         const emp = employees.find((e) => e.employeeId === employeeId);
-        scopeLabel = emp
-            ? (`Employee: ${(emp.firstName || '')} ${(emp.lastName || '')}`.trim() + ` (${emp.employeeId})`)
-            : ('Employee ID: ' + employeeId);
+        if (emp) {
+            const fullName = ((emp.firstName || '') + ' ' + (emp.lastName || '')).trim();
+            scopeLabel = 'Employee: ' + (fullName || emp.employeeId) + ' (' + emp.employeeId + ')';
+        } else {
+            scopeLabel = 'Employee ID: ' + employeeId;
+        }
     }
 
     const printedOn = (window.AndecoDate && window.AndecoDate.formatDate)
