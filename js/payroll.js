@@ -2478,6 +2478,7 @@ function updateYTDDisplay() {
         let employeeSocialInsurance = 0;
         let employeeHolidayFund = 0;
         let employeeNHS = 0;
+        let employeeNet = 0;
         
         // Calculate year-to-date for this employee - only from actual payslip data
         for (let month = 1; month <= 12; month++) {
@@ -2486,16 +2487,19 @@ function updateYTDDisplay() {
             
             if (payrollData[payrollKey]) {
                 const data = payrollData[payrollKey];
-                employeeGross += data.grossSalary;
-                employeeTax += data.incomeTax;
-                employeeSocialInsurance += data.socialInsurance;
-                employeeHolidayFund += data.holidayFund;
+                employeeGross += data.grossSalary || 0;
+                employeeTax += data.incomeTax || 0;
+                employeeSocialInsurance += data.socialInsurance || 0;
+                employeeHolidayFund += data.holidayFund || 0;
                 employeeNHS += data.nhs || 0;
+                // Actual amount paid to the employee (includes additional pay + expenses)
+                const paid = (typeof data.totalPayable === 'number')
+                    ? data.totalPayable
+                    : (data.netPay || 0) + (data.additionalPay || 0) + (data.expenses || 0);
+                employeeNet += parseFloat(Number(paid).toFixed(2));
             }
             // Only use actual payslip data - no estimates for missing months
         }
-        
-        const employeeNet = employeeGross - employeeTax - employeeSocialInsurance - employeeNHS;
         
         const row = document.createElement('tr');
         row.innerHTML = `
