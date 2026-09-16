@@ -223,6 +223,13 @@
     margin-bottom: 2rem;
 }
 
+#accounting-payroll-content .ytd-summary-below {
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 320px));
+    justify-content: start;
+}
+
 .summary-card {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -230,6 +237,14 @@
     border-radius: 8px;
     text-align: center;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+#accounting-payroll-content .summary-card--employer {
+    background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+}
+
+#accounting-payroll-content .summary-card--total {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
 }
 
 .summary-card h3 {

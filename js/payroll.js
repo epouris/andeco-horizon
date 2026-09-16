@@ -2456,6 +2456,17 @@ function calculateYTDForPayslip(employeeId, year, month) {
     return ytd;
 }
 
+function payslipEmployerContributionTotal(data) {
+    if (!data || typeof data !== 'object') return 0;
+    const ec = data.employerContributions || {};
+    return (data.holidayFund || 0) +
+        (ec.socialInsurance || 0) +
+        (ec.nhs || 0) +
+        (ec.socialCohesion || 0) +
+        (ec.redundancy || 0) +
+        (ec.industrialTraining || 0);
+}
+
 function payslipActualPaidAmount(data) {
     if (!data || typeof data !== 'object') return 0;
     if (typeof data.totalPayable === 'number') return data.totalPayable;
@@ -2475,7 +2486,11 @@ function collectYTDBalanceRows(year, employeeIdFilter) {
         socialInsurance: 0,
         holidayFund: 0,
         nhs: 0,
-        net: 0
+        net: 0,
+        additionalPay: 0,
+        expenses: 0,
+        employerContribution: 0,
+        salaryCost: 0
     };
 
     filteredEmployees.forEach((employee) => {
@@ -2485,6 +2500,9 @@ function collectYTDBalanceRows(year, employeeIdFilter) {
         let employeeHolidayFund = 0;
         let employeeNHS = 0;
         let employeeNet = 0;
+        let employeeAdditionalPay = 0;
+        let employeeExpenses = 0;
+        let employeeEmployerContribution = 0;
         let monthsWithPayslips = 0;
 
         for (let month = 1; month <= 12; month++) {
@@ -2498,8 +2516,13 @@ function collectYTDBalanceRows(year, employeeIdFilter) {
             employeeSocialInsurance += data.socialInsurance || 0;
             employeeHolidayFund += data.holidayFund || 0;
             employeeNHS += data.nhs || 0;
+            employeeAdditionalPay += data.additionalPay || 0;
+            employeeExpenses += data.expenses || 0;
             employeeNet += parseFloat(Number(payslipActualPaidAmount(data)).toFixed(2));
+            employeeEmployerContribution += payslipEmployerContributionTotal(data);
         }
+
+        const employeeSalaryCost = employeeGross + employeeAdditionalPay + employeeExpenses + employeeEmployerContribution;
 
         rows.push({
             employeeId: employee.employeeId || '',
@@ -2510,6 +2533,10 @@ function collectYTDBalanceRows(year, employeeIdFilter) {
             holidayFund: employeeHolidayFund,
             nhs: employeeNHS,
             net: employeeNet,
+            additionalPay: employeeAdditionalPay,
+            expenses: employeeExpenses,
+            employerContribution: employeeEmployerContribution,
+            salaryCost: employeeSalaryCost,
             monthsWithPayslips
         });
 
@@ -2519,6 +2546,10 @@ function collectYTDBalanceRows(year, employeeIdFilter) {
         totals.holidayFund += employeeHolidayFund;
         totals.nhs += employeeNHS;
         totals.net += employeeNet;
+        totals.additionalPay += employeeAdditionalPay;
+        totals.expenses += employeeExpenses;
+        totals.employerContribution += employeeEmployerContribution;
+        totals.salaryCost += employeeSalaryCost;
     });
 
     return { year: y, rows, totals };
@@ -2540,9 +2571,9 @@ function updateYTDDisplay() {
         tr.innerHTML = `
             <td>${escapeEmployeeHtml(row.name)}</td>
             <td>${escapeEmployeeHtml(formatMoney(row.gross))}</td>
+            <td>${escapeEmployeeHtml(formatMoney(row.holidayFund))}</td>
             <td>${escapeEmployeeHtml(formatMoney(row.tax))}</td>
             <td>${escapeEmployeeHtml(formatMoney(row.socialInsurance))}</td>
-            <td>${escapeEmployeeHtml(formatMoney(row.holidayFund))}</td>
             <td>${escapeEmployeeHtml(formatMoney(row.nhs))}</td>
             <td>${escapeEmployeeHtml(formatMoney(row.net))}</td>
         `;
@@ -2553,10 +2584,14 @@ function updateYTDDisplay() {
     const totalTaxEl = document.getElementById('totalTaxDeducted');
     const totalSiEl = document.getElementById('totalSocialInsurance');
     const totalHfEl = document.getElementById('totalHolidayFund');
+    const totalEmployerEl = document.getElementById('totalEmployerContribution');
+    const totalSalaryCostEl = document.getElementById('totalSalaryCost');
     if (totalGrossEl) totalGrossEl.textContent = `${formatMoney(data.totals.gross)}`;
+    if (totalHfEl) totalHfEl.textContent = `${formatMoney(data.totals.holidayFund)}`;
     if (totalTaxEl) totalTaxEl.textContent = `${formatMoney(data.totals.tax)}`;
     if (totalSiEl) totalSiEl.textContent = `${formatMoney(data.totals.socialInsurance)}`;
-    if (totalHfEl) totalHfEl.textContent = `${formatMoney(data.totals.holidayFund)}`;
+    if (totalEmployerEl) totalEmployerEl.textContent = `${formatMoney(data.totals.employerContribution)}`;
+    if (totalSalaryCostEl) totalSalaryCostEl.textContent = `${formatMoney(data.totals.salaryCost)}`;
 }
 
 function buildYTDBalancesReportHeaderHtml(year, scopeLabel, printedOn) {
@@ -2643,9 +2678,9 @@ function printYTDBalancesReport() {
                 <td>${escapeEmployeeHtml(row.name)}</td>
                 <td class="num">${escapeEmployeeHtml(row.employeeId || '—')}</td>
                 <td class="num">${escapeEmployeeHtml(formatMoney(row.gross))}</td>
+                <td class="num">${escapeEmployeeHtml(formatMoney(row.holidayFund))}</td>
                 <td class="num">${escapeEmployeeHtml(formatMoney(row.tax))}</td>
                 <td class="num">${escapeEmployeeHtml(formatMoney(row.socialInsurance))}</td>
-                <td class="num">${escapeEmployeeHtml(formatMoney(row.holidayFund))}</td>
                 <td class="num">${escapeEmployeeHtml(formatMoney(row.nhs))}</td>
                 <td class="num">${escapeEmployeeHtml(formatMoney(row.net))}</td>
             </tr>`;
@@ -2740,10 +2775,24 @@ function printYTDBalancesReport() {
       gap: 8px;
       margin-bottom: 12px;
     }
+    .ytd-report-summary-below {
+      grid-template-columns: repeat(2, minmax(180px, 280px));
+      justify-content: start;
+      margin-top: 12px;
+      margin-bottom: 8px;
+    }
     .ytd-report-summary-card {
       border: 1px solid #ccc;
       background: #f7f7f7;
       padding: 8px 10px;
+    }
+    .ytd-report-summary-card--employer {
+      border-color: #9aa7b5;
+      background: #eef3f7;
+    }
+    .ytd-report-summary-card--total {
+      border-color: #8a9a7a;
+      background: #eef5ea;
     }
     .ytd-report-summary-card h3 {
       margin: 0 0 4px;
@@ -2802,9 +2851,9 @@ function printYTDBalancesReport() {
   <p class="ytd-report-intro">Payroll year-to-date balances prepared for audit review. Amounts are taken from saved payslips for ${escapeEmployeeHtml(String(year))}. Net Pay is the amount paid to the employee (net pay + additional pay + expenses).</p>
   <section class="ytd-report-summary">
     <div class="ytd-report-summary-card"><h3>Total Gross Pay</h3><span>${escapeEmployeeHtml(formatMoney(t.gross))}</span></div>
+    <div class="ytd-report-summary-card"><h3>Holiday Fund</h3><span>${escapeEmployeeHtml(formatMoney(t.holidayFund))}</span></div>
     <div class="ytd-report-summary-card"><h3>Total Tax</h3><span>${escapeEmployeeHtml(formatMoney(t.tax))}</span></div>
     <div class="ytd-report-summary-card"><h3>Social Insurance</h3><span>${escapeEmployeeHtml(formatMoney(t.socialInsurance))}</span></div>
-    <div class="ytd-report-summary-card"><h3>Holiday Fund</h3><span>${escapeEmployeeHtml(formatMoney(t.holidayFund))}</span></div>
     <div class="ytd-report-summary-card"><h3>NHS / GESI</h3><span>${escapeEmployeeHtml(formatMoney(t.nhs))}</span></div>
     <div class="ytd-report-summary-card"><h3>Total Net Pay</h3><span>${escapeEmployeeHtml(formatMoney(t.net))}</span></div>
   </section>
@@ -2814,9 +2863,9 @@ function printYTDBalancesReport() {
         <th style="width:22%">Employee</th>
         <th class="num" style="width:10%">Employee ID</th>
         <th class="num" style="width:11%">Gross Pay</th>
+        <th class="num" style="width:11%">Holiday Fund</th>
         <th class="num" style="width:10%">Tax</th>
         <th class="num" style="width:12%">Social Insurance</th>
-        <th class="num" style="width:11%">Holiday Fund</th>
         <th class="num" style="width:10%">NHS</th>
         <th class="num" style="width:14%">Net Pay</th>
       </tr>
@@ -2828,16 +2877,21 @@ function printYTDBalancesReport() {
       <tr>
         <td colspan="2">Totals (${data.rows.length} employee${data.rows.length === 1 ? '' : 's'})</td>
         <td class="num">${escapeEmployeeHtml(formatMoney(t.gross))}</td>
+        <td class="num">${escapeEmployeeHtml(formatMoney(t.holidayFund))}</td>
         <td class="num">${escapeEmployeeHtml(formatMoney(t.tax))}</td>
         <td class="num">${escapeEmployeeHtml(formatMoney(t.socialInsurance))}</td>
-        <td class="num">${escapeEmployeeHtml(formatMoney(t.holidayFund))}</td>
         <td class="num">${escapeEmployeeHtml(formatMoney(t.nhs))}</td>
         <td class="num">${escapeEmployeeHtml(formatMoney(t.net))}</td>
       </tr>
     </tfoot>
   </table>
+  <section class="ytd-report-summary ytd-report-summary-below">
+    <div class="ytd-report-summary-card ytd-report-summary-card--employer"><h3>Total Employer Contribution</h3><span>${escapeEmployeeHtml(formatMoney(t.employerContribution))}</span></div>
+    <div class="ytd-report-summary-card ytd-report-summary-card--total"><h3>Total Salary Cost</h3><span>${escapeEmployeeHtml(formatMoney(t.salaryCost))}</span></div>
+  </section>
   <footer class="ytd-report-footer">
-    <p>Holiday Fund is shown for reference and is an employer contribution (not deducted from employee Net Pay).</p>
+    <p>Employer Contribution = Holiday Fund + employer Social Insurance + employer NHS/GESI + Social Cohesion + Redundancy + Industrial Training.</p>
+    <p>Salary Cost = Gross Pay + additional pay + expenses + Employer Contribution.</p>
     <p>This is a computer-generated payroll report from Andeco Horizon. Please contact the company if you have any questions.</p>
   </footer>
 </body>
